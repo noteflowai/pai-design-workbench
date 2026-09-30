@@ -1,0 +1,68 @@
+{
+  "schema": "pai-native-e2e-1",
+  "checkedAt": "2026-09-30T12:29:41.813Z",
+  "result": "passed",
+  "source": "existing recorded simulation; no new inference",
+  "plannedTrials": 30,
+  "cameraDecision": "rejected",
+  "cameraSuccesses": 7,
+  "baselineSuccesses": 5,
+  "cameraLostPasses": 1,
+  "cameraHolmP": 1,
+  "rollbackDecision": "accepted-in-recorded-panel",
+  "feedbackStatus": "closed",
+  "feedbackHistory": [
+    "received",
+    "reproducible",
+    "assigned",
+    "fix-proposed",
+    "rechecked",
+    "closed"
+  ],
+  "nativeReceiptExitCodes": [
+    {
+      "adapter": "robot-reel-native",
+      "exitCode": 0
+    },
+    {
+      "adapter": "evalarc-native",
+      "exitCode": 1
+    },
+    {
+      "adapter": "robot-reel-native",
+      "exitCode": 0
+    },
+    {
+      "adapter": "evalarc-native",
+      "exitCode": 0
+    }
+  ],
+  "controller": {
+    "state": "not-configured",
+    "mode": "read-only-accounting",
+    "publicationApproved": false
+  },
+  "handoff": {
+    "valid": true,
+    "reviewId": "omitted-from-summary",
+    "files": 8,
+    "sourceAuthenticated": false,
+    "physicalValidated": false,
+    "scope": "retrospective-recorded-simulation",
+    "nativeEvalArcReexecuted": true,
+    "nativeExitCode": 1
+  },
+  "metrics": {
+    "independentParticipants": 0,
+    "independentEvents": 0,
+    "independentRepeatUsers": 0,
+    "maintainerEvents": 1,
+    "fixtureEvents": 0,
+    "conversionRate": null,
+    "scope": "Manually recorded, self-declared participant observations. No exposure denominator or automatic independence verification."
+  },
+  "freshSimulation": false,
+  "modelProposalExecuted": false,
+  "physicalValidated": false,
+  "campaignPublished": false
+}

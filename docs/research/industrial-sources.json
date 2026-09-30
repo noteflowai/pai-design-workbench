@@ -1,0 +1,185 @@
+{
+  "retrievedAt": "2026-09-30",
+  "sources": [
+    {
+      "id": "blender-api",
+      "url": "https://docs.blender.org/api/current/",
+      "finalUrl": "https://docs.blender.org/api/current/",
+      "status": 200,
+      "bytes": 343333,
+      "sha256": "7faa4d31773fefd601b2fd650a2ef72a5ace0f5918980dd49aa7408d2dbeb7c9",
+      "title": "Blender Python API"
+    },
+    {
+      "id": "blender-lts",
+      "url": "https://www.blender.org/download/lts/4-5/",
+      "finalUrl": "https://www.blender.org/releases/4-5/",
+      "status": 200,
+      "bytes": 183802,
+      "sha256": "5b9b41969bb6947b7f5a65543d70b46fd5252b340826ae1ff9fa2358c6e49735",
+      "title": "Blender 4.5 LTS &mdash; Blender"
+    },
+    {
+      "id": "freecad-features",
+      "url": "https://www.freecad.org/features.php",
+      "finalUrl": "https://www.freecad.org/features.php",
+      "status": 200,
+      "bytes": 54005,
+      "sha256": "3fe83d029f4e2a48202f3eff2f30d3e2a4db45ca7c62f3084073b2f0459c0803",
+      "title": "FreeCAD: Your own 3D parametric modeler"
+    },
+    {
+      "id": "freecad-developers",
+      "url": "https://freecad.github.io/DevelopersHandbook/",
+      "finalUrl": "https://freecad.github.io/DevelopersHandbook/",
+      "status": 200,
+      "bytes": 5001,
+      "sha256": "51d9c40ca2822358a610ac2c7ca8058e7c3b9f34a8dc8d002a675c2db5e83c31",
+      "title": "FreeCAD Developers Guide | FreeCAD Developers Handbook"
+    },
+    {
+      "id": "cadquery",
+      "url": "https://cadquery.readthedocs.io/en/latest/",
+      "finalUrl": "https://cadquery.readthedocs.io/en/latest/",
+      "status": 200,
+      "bytes": 34520,
+      "sha256": "931656ab3f9e2519192b496aec6ddac1bda06e42e7b5c55b3d975d2475bba2bf",
+      "title": "CadQuery Documentation &mdash; CadQuery Documentation"
+    },
+    {
+      "id": "cadquery-export",
+      "url": "https://cadquery.readthedocs.io/en/latest/importexport.html",
+      "finalUrl": "https://cadquery.readthedocs.io/en/latest/importexport.html",
+      "status": 200,
+      "bytes": 94903,
+      "sha256": "6602a05c77af6d55e9c04f02b9a7209d847795d9bccda36709ae71536d1e40a4",
+      "title": "Importing and Exporting Files &mdash; CadQuery Documentation"
+    },
+    {
+      "id": "openscad",
+      "url": "https://openscad.org/about.html",
+      "finalUrl": "https://openscad.org/about.html",
+      "status": 200,
+      "bytes": 6374,
+      "sha256": "25edb396335ba565b42f5a73bcc817716a4d54b4279b5802104dae082e5900dc",
+      "title": "OpenSCAD - About"
+    },
+    {
+      "id": "solvespace",
+      "url": "https://solvespace.com/features.pl",
+      "finalUrl": "https://solvespace.com/features.pl",
+      "status": 200,
+      "bytes": 6273,
+      "sha256": "43432a859720b05c52d73f576a85c063b2d55d0dfc66a75b45d48196cedc0266",
+      "title": "SolveSpace - Features"
+    },
+    {
+      "id": "onshape-api",
+      "url": "https://onshape-public.github.io/docs/",
+      "finalUrl": "https://onshape-public.github.io/docs/",
+      "status": 200,
+      "bytes": 32016,
+      "sha256": "c106c7ba70316c846c40c66ffc515fa1a74b0927970a243f20c0b5d05617bed2",
+      "title": "Welcome to the Onshape Developer Documentation |"
+    },
+    {
+      "id": "fusion-api",
+      "url": "https://help.autodesk.com/cloudhelp/ENU/Fusion-360-API/files/Introduction.htm",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "id": "solidworks-api",
+      "url": "https://help.solidworks.com/2026/english/api/sldworksapiprogguide/Welcome.htm",
+      "finalUrl": "https://help.solidworks.com/2026/english/api/sldworksapiprogguide/Welcome.htm",
+      "status": 200,
+      "bytes": 960900,
+      "sha256": "ed58654b9fda6c7ca6149094a599d5291c47e98dc9fb3363072dacd107be13f6",
+      "title": "Welcome to the SOLIDWORKS Web Help"
+    },
+    {
+      "id": "nx-open",
+      "url": "https://www.sw.siemens.com/en-US/technology/nx/",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "id": "rhino-compute",
+      "url": "https://developer.rhino3d.com/guides/compute/",
+      "finalUrl": "https://developer.rhino3d.com/guides/compute/",
+      "status": 200,
+      "bytes": 21271,
+      "sha256": "39080b96607e718bb64db53b0500c76a1b011a3d351223b82b2769d35f58b0e0",
+      "title": "Rhino - Compute Guides"
+    },
+    {
+      "id": "gazebo",
+      "url": "https://gazebosim.org/docs/latest/",
+      "finalUrl": "https://gazebosim.org/docs/latest/",
+      "status": 200,
+      "bytes": 28745,
+      "sha256": "3de849578c71582f10f9a4a0ca1ef0bcfd21274f52668dd35330d27a49bdaf5d",
+      "title": "Index &#8212; Gazebo jetty documentation"
+    },
+    {
+      "id": "isaac-sim",
+      "url": "https://docs.isaacsim.omniverse.nvidia.com/latest/overview/overview.html",
+      "finalUrl": "https://docs.isaacsim.omniverse.nvidia.com/latest/overview/overview.html",
+      "status": 200,
+      "bytes": 404,
+      "sha256": "dedfdfbbbbd523a95fdb486fc2b7483e5e914ace6f029882be62a85cef90e23f",
+      "title": "Isaac Sim Documentation"
+    },
+    {
+      "id": "fusion-features",
+      "url": "https://www.autodesk.com/products/fusion-360/features",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "id": "fusion-automation",
+      "url": "https://aps.autodesk.com/developer/overview/fusion-automation-api",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "id": "nx",
+      "url": "https://plm.sw.siemens.com/en-US/nx/",
+      "finalUrl": "https://www.siemens.com/en-us/products/cad-cam-software/",
+      "status": 200,
+      "sha256": "64add12777282acb900b2f66d0d653eb38685b2e6b1da18cd4020974a5a6aca4",
+      "bytes": 73686
+    },
+    {
+      "id": "catia",
+      "url": "https://www.3ds.com/products/catia",
+      "finalUrl": "https://www.3ds.com/products/catia",
+      "status": 200,
+      "sha256": "5f59f7b3fb696d51ca9897aaa1c28a0a18cc5cb745020bc9f5956413062dc328",
+      "bytes": 832222
+    },
+    {
+      "id": "solidworks",
+      "url": "https://www.solidworks.com/product/solidworks-3d-cad",
+      "error": "The read operation timed out"
+    },
+    {
+      "id": "fusion-api-intro",
+      "url": "https://help.autodesk.com/cloudhelp/ENU/Fusion-360-API/files/Introduction_UM.htm",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "id": "fusion-api-start",
+      "url": "https://help.autodesk.com/cloudhelp/ENU/Fusion-360-API/files/GettingStarted_UM.htm",
+      "error": "HTTP Error 404: Not Found"
+    },
+    {
+      "id": "creo",
+      "url": "https://www.ptc.com/en/products/creo",
+      "finalUrl": "https://www.ptc.com/en/products/creo",
+      "status": 200,
+      "sha256": "4ea2af40484759c6ab1915eba2b0248efe742aa4feb3afe58488ace0e4bd5dd9"
+    },
+    {
+      "id": "inventor",
+      "url": "https://www.autodesk.com/products/inventor/overview",
+      "error": "HTTP Error 403: Forbidden"
+    }
+  ]
+}

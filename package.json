@@ -1,0 +1,47 @@
+{
+  "name": "pai-design-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A TypeScript workbench connecting PAI design requirements, native validation, replay and feedback.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.21.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.state/demo.env --import tsx src/server.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "build": "tsc && vite build",
+    "start": "node --env-file-if-exists=.state/demo.env dist/src/server.js",
+    "test": "tsx --test tests/*.test.ts",
+    "test:native": "node --env-file-if-exists=.state/demo.env --import tsx scripts/native-e2e.ts",
+    "test:browser": "playwright test",
+    "test:existing": "node --env-file-if-exists=.state/demo.env --import tsx scripts/browser-existing.ts",
+    "verify:bundle": "node --env-file-if-exists=.state/demo.env --import tsx scripts/verify-bundle.ts",
+    "setup:demo": "tsx scripts/setup-demo.ts",
+    "setup:native": "python3 tools/setup_native_tools.py",
+    "test:blender": "node --env-file-if-exists=.state/demo.env --import tsx scripts/blender-e2e.ts",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.5",
+    "fastify": "5.12.5",
+    "proper-lockfile": "4.1.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.3",
+    "@types/proper-lockfile": "4.1.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

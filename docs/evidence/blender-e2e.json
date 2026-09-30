@@ -1,0 +1,30 @@
+{
+  "schema": "pai-blender-e2e-1",
+  "checkedAt": "2026-09-30T12:23:31.836Z",
+  "result": "passed",
+  "blenderVersion": "5.2.2 LTS",
+  "rejectedOcclusion": "rejected",
+  "blockingChanges": 1,
+  "correctedScene": "accepted-static-scene",
+  "feedbackStatus": "closed",
+  "preventedUnfixedClosure": true,
+  "nativeArtifactKinds": [
+    "editable-blend",
+    "glb",
+    "png",
+    "native-checks-json"
+  ],
+  "roundtrip": {
+    "schema": "pai-blender-reopen-1",
+    "version": "5.2.2 LTS",
+    "objectCount": 9,
+    "unitSystem": "METRIC",
+    "footprintArea": 12,
+    "rayFirstHit": "Visibility obstruction",
+    "storedScope": "generated-static-geometry; synthetic recipe; no dynamics or physical validation"
+  },
+  "physicalValidation": false,
+  "dynamicsValidated": false,
+  "manufacturabilityValidated": false,
+  "campaignPublished": false
+}

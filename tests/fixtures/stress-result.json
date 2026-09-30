@@ -1,0 +1,290 @@
+{
+  "planned_trials": 30,
+  "completed_trials": 30,
+  "attempts": 30,
+  "execution_errors": 0,
+  "conditions": [
+    {
+      "id": "reference",
+      "trials": 10,
+      "successes": 5,
+      "step_limits": 5,
+      "terminated": 0,
+      "wilson95": [
+        0.236593090512564,
+        0.7634069094874361
+      ],
+      "inference_calls": 122,
+      "mean_policy_seconds": 0.4995237503277674,
+      "simulation_seconds": 59.85
+    },
+    {
+      "id": "dim",
+      "trials": 10,
+      "successes": 4,
+      "step_limits": 6,
+      "terminated": 0,
+      "wilson95": [
+        0.16818032970623614,
+        0.6873262302663417
+      ],
+      "inference_calls": 129,
+      "mean_policy_seconds": 0.4871496561704977,
+      "simulation_seconds": 63.25
+    },
+    {
+      "id": "camera",
+      "trials": 10,
+      "successes": 7,
+      "step_limits": 3,
+      "terminated": 0,
+      "wilson95": [
+        0.39677814746114537,
+        0.8922087325936989
+      ],
+      "inference_calls": 109,
+      "mean_policy_seconds": 0.4864611498624155,
+      "simulation_seconds": 53.15
+    }
+  ],
+  "pairs": [
+    {
+      "seed": 0,
+      "condition": "dim",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 76,
+      "max_eef_distance_m": 0.025078649083086574,
+      "max_eef_frame": 75,
+      "first_action_l2": 0.028486573186026563
+    },
+    {
+      "seed": 0,
+      "condition": "camera",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 78,
+      "max_eef_distance_m": 0.04518983508302837,
+      "max_eef_frame": 39,
+      "first_action_l2": 0.06050789859024675
+    },
+    {
+      "seed": 1,
+      "condition": "dim",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.06051165757339766,
+      "max_eef_frame": 102,
+      "first_action_l2": 0.021134308934009263
+    },
+    {
+      "seed": 1,
+      "condition": "camera",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.09617385768301769,
+      "max_eef_frame": 102,
+      "first_action_l2": 0.12096104420152956
+    },
+    {
+      "seed": 2,
+      "condition": "dim",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.03315315305894149,
+      "max_eef_frame": 160,
+      "first_action_l2": 0.07725355805727696
+    },
+    {
+      "seed": 2,
+      "condition": "camera",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.08800228024829342,
+      "max_eef_frame": 111,
+      "first_action_l2": 0.14359260325157988
+    },
+    {
+      "seed": 3,
+      "condition": "dim",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.02868833952807513,
+      "max_eef_frame": 141,
+      "first_action_l2": 0.041100151107035986
+    },
+    {
+      "seed": 3,
+      "condition": "camera",
+      "reference_success": false,
+      "condition_success": true,
+      "shared_observations": 78,
+      "max_eef_distance_m": 0.10700651594638459,
+      "max_eef_frame": 57,
+      "first_action_l2": 0.11859288712699259
+    },
+    {
+      "seed": 4,
+      "condition": "dim",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.05997953344601735,
+      "max_eef_frame": 159,
+      "first_action_l2": 0.026287755916298637
+    },
+    {
+      "seed": 4,
+      "condition": "camera",
+      "reference_success": false,
+      "condition_success": true,
+      "shared_observations": 69,
+      "max_eef_distance_m": 0.09856671140580874,
+      "max_eef_frame": 50,
+      "first_action_l2": 0.15426321874823629
+    },
+    {
+      "seed": 5,
+      "condition": "dim",
+      "reference_success": false,
+      "condition_success": false,
+      "shared_observations": 161,
+      "max_eef_distance_m": 0.044914752811528416,
+      "max_eef_frame": 145,
+      "first_action_l2": 0.012220173806862456
+    },
+    {
+      "seed": 5,
+      "condition": "camera",
+      "reference_success": false,
+      "condition_success": true,
+      "shared_observations": 91,
+      "max_eef_distance_m": 0.08852756133103411,
+      "max_eef_frame": 59,
+      "first_action_l2": 0.06010809807938586
+    },
+    {
+      "seed": 6,
+      "condition": "dim",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 73,
+      "max_eef_distance_m": 0.038234830541987494,
+      "max_eef_frame": 72,
+      "first_action_l2": 0.03450211949807065
+    },
+    {
+      "seed": 6,
+      "condition": "camera",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 77,
+      "max_eef_distance_m": 0.06934379083683644,
+      "max_eef_frame": 56,
+      "first_action_l2": 0.1135870421318482
+    },
+    {
+      "seed": 7,
+      "condition": "dim",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 82,
+      "max_eef_distance_m": 0.019973276657404334,
+      "max_eef_frame": 56,
+      "first_action_l2": 0.03520740762805532
+    },
+    {
+      "seed": 7,
+      "condition": "camera",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 84,
+      "max_eef_distance_m": 0.07481171843060457,
+      "max_eef_frame": 60,
+      "first_action_l2": 0.14605320936784436
+    },
+    {
+      "seed": 8,
+      "condition": "dim",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 78,
+      "max_eef_distance_m": 0.011677729111951446,
+      "max_eef_frame": 68,
+      "first_action_l2": 0.0409365126121811
+    },
+    {
+      "seed": 8,
+      "condition": "camera",
+      "reference_success": true,
+      "condition_success": true,
+      "shared_observations": 73,
+      "max_eef_distance_m": 0.05871116602257927,
+      "max_eef_frame": 71,
+      "first_action_l2": 0.07099334964648014
+    },
+    {
+      "seed": 9,
+      "condition": "dim",
+      "reference_success": true,
+      "condition_success": false,
+      "shared_observations": 83,
+      "max_eef_distance_m": 0.0228473660692952,
+      "max_eef_frame": 61,
+      "first_action_l2": 0.04974787833153825
+    },
+    {
+      "seed": 9,
+      "condition": "camera",
+      "reference_success": true,
+      "condition_success": false,
+      "shared_observations": 83,
+      "max_eef_distance_m": 0.09478146426398308,
+      "max_eef_frame": 63,
+      "first_action_l2": 0.09032361918317204
+    }
+  ],
+  "paired_exact_test": {
+    "schema": "robot-reel-paired-exact-1",
+    "plan_sha256": "bac5fc24f6e96f84282fe185246a6f4239e081efc8b183a69be20cf13f6e7efa",
+    "comparisons": [
+      {
+        "condition": "dim",
+        "paired_seeds": 10,
+        "lost_success": 1,
+        "gained_success": 0,
+        "discordant": 1,
+        "net_success_difference": -1,
+        "p_numerator": 2,
+        "p_denominator": 2,
+        "exact_p_two_sided": 1.0,
+        "min_attainable_p": 1.0,
+        "conventional_0_05_attainable": false,
+        "direction": "lost",
+        "holm_adjusted_p": 1.0
+      },
+      {
+        "condition": "camera",
+        "paired_seeds": 10,
+        "lost_success": 1,
+        "gained_success": 3,
+        "discordant": 4,
+        "net_success_difference": 2,
+        "p_numerator": 10,
+        "p_denominator": 16,
+        "exact_p_two_sided": 0.625,
+        "min_attainable_p": 0.125,
+        "conventional_0_05_attainable": false,
+        "direction": "gained",
+        "holm_adjusted_p": 1.0
+      }
+    ],
+    "method": "exact two-sided binomial sign test on discordant paired seeds (exact McNemar); Holm across listed conditions",
+    "scope": "Recorded pairs in this locked plan only; no multi-level outcomes, sequential stopping, power analysis or causal attribution"
+  }
+}

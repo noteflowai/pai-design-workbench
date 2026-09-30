@@ -1,0 +1,48 @@
+Robot Reel / SmolVLA recorded simulation
+
+This bundle contains recordings, action traces and a replay viewer. It does
+not contain model weights or simulation meshes. Robot Reel is independent;
+Hugging Face and the LIBERO authors have not endorsed this demonstration.
+
+Policy: HuggingFaceVLA/smolvla_libero (Apache-2.0)
+https://huggingface.co/HuggingFaceVLA/smolvla_libero
+Revision: 6721902bc4d61e50a3bfdb11dfb4cb626f05d102
+Vision-language backbone: HuggingFaceTB/SmolVLM2-500M-Instruct (Apache-2.0)
+https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Instruct
+Revision: 7b375e1b73b11138ff12fe22c8f2822d8fe03467
+Inference and environment adapter: Hugging Face LeRobot 0.6.1 (Apache-2.0)
+https://github.com/huggingface/lerobot
+
+Simulation tasks: LIBERO / Lifelong Robot Learning (MIT)
+https://github.com/Lifelong-Robot-Learning/LIBERO
+Asset snapshot: https://huggingface.co/datasets/lerobot/libero-assets
+Revision: 0b3ea86be5fe169d0fd036ae63d1070ec09e90f6
+Adapter: hf-libero 0.1.4; robosuite 1.4.0; MuJoCo 3.8.1.
+LIBERO includes assets originating in robosuite and other sources. Keep their
+upstream attribution and applicable asset terms when reusing depicted models.
+The asset snapshot does not declare a dataset license in its model-card
+metadata. Robot Reel's Apache-2.0 code license does not relicense those assets.
+Keep this notice with the videos, preview images and downloaded episode.
+
+LIBERO license:
+MIT License
+
+Copyright (c) 2023 Lifelong Robot Learning
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

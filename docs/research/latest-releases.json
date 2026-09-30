@@ -1,0 +1,40 @@
+{
+  "retrievedAt": "2026-09-30",
+  "releases": [
+    {
+      "repo": "FreeCAD/FreeCAD",
+      "tag": "1.1.4",
+      "publishedAt": "2026-09-28T13:58:35Z",
+      "url": "https://github.com/FreeCAD/FreeCAD/releases/tag/1.1.4",
+      "prerelease": false
+    },
+    {
+      "repo": "CadQuery/cadquery",
+      "tag": "v2.8.0",
+      "publishedAt": "2026-06-20T17:53:53Z",
+      "url": "https://github.com/CadQuery/cadquery/releases/tag/v2.8.0",
+      "prerelease": false
+    },
+    {
+      "repo": "openscad/openscad",
+      "tag": "openscad-2021.01",
+      "publishedAt": "2021-02-07T00:14:34Z",
+      "url": "https://github.com/openscad/openscad/releases/tag/openscad-2021.01",
+      "prerelease": false
+    },
+    {
+      "repo": "solvespace/solvespace",
+      "tag": "v3.2",
+      "publishedAt": "2026-03-27T08:13:46Z",
+      "url": "https://github.com/solvespace/solvespace/releases/tag/v3.2",
+      "prerelease": false
+    },
+    {
+      "repo": "tauri-apps/tauri",
+      "tag": "tauri-driver-v3.0.0-alpha.1",
+      "publishedAt": "2026-09-26T21:15:03Z",
+      "url": "https://github.com/tauri-apps/tauri/releases/tag/tauri-driver-v3.0.0-alpha.1",
+      "prerelease": false
+    }
+  ]
+}

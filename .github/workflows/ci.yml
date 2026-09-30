@@ -1,0 +1,53 @@
+name: Workbench checks
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "native/**", "scripts/**", "tests/**", "tools/**", "web/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: workbench-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        node: ["24.21.0", "26.10.0"]
+    env:
+      PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+      - run: npm ci
+      - run: npm run check
+      - name: Fetch pinned native tools and original recording
+        run: npm run setup:demo
+      - name: Native recording, feedback and independent handoff
+        run: npm run test:native
+      - name: Current native Blender and generated editable geometry
+        if: matrix.node == '24.21.0'
+        run: npm run setup:native && npm run test:blender
+      - run: npx playwright install --with-deps chromium
+        if: matrix.node == '24.21.0'
+      - name: Desktop, mobile and real video decoding
+        if: matrix.node == '24.21.0'
+        run: npm run test:browser
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: workbench-verification-node-${{ matrix.node }}
+          path: |
+            .state/evidence/native-e2e.json
+            .state/evidence/blender-e2e.json
+            test-results/
+          retention-days: 14
