@@ -2,7 +2,7 @@
 
 部署目标是 WordPress 已使用的东京区域 `ap-northeast-1`、VPC `vpc-fb40619c` 和 `ai-srv-alb`。域名现有 CNAME 已指向该 ALB，HTTPS 使用现有 `*.oneai.host` 证书。本仓库只添加优先级 120 的主机路由，不修改 WordPress 的 100/110 路由、默认响应、HTTP 跳转或共享空闲超时。
 
-2026-09-30 已完成实际部署和更新，入口为 [https://pai.oneai.host](https://pai.oneai.host)。管理员账号 `qiangguo`，密码通过下述 `login-file` 命令读取至私人文件。线上发布摘要为 `718b9be27766baddf54d72d6d4f6511d6557d43766cc48f26c19c3297edb061c`，运行代码提交 `1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e`。[实际验收](VERIFICATION.md)包含 Cognito 登录、手机退出、真实原生任务、WordPress 200、旧路由逐项一致和服务重启持久化；快照恢复尚未演练。
+2026-09-30 已完成实际部署和更新，入口为 [https://pai.oneai.host](https://pai.oneai.host)。管理员账号 `qiangguo`，密码通过下述 `login-file` 命令读取至私人文件。线上发布摘要为 `0770c334c4eeb8eef2ecf1ddf6ed810673ef3864d392da268f2c513a4437b463`，运行代码提交 `4972bb4e0daf2ca7ae22ad3db04f1688e4cd1548`（AI 工作室、实时 Blender 视口与工厂孪生评审）。实时进度使用 SSE，每 15 秒心跳，低于共享 ALB 的 60 秒空闲超时，因此无需修改 ALB。[实际验收](VERIFICATION.md)包含 Cognito 登录、手机退出、真实原生任务、WordPress 200、旧路由逐项一致和服务重启持久化；快照恢复尚未演练。
 
 ## 运行架构
 

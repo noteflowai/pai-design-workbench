@@ -1,0 +1,99 @@
+{
+  "schema": "pai-aws-deployment-verification-2",
+  "site": "https://pai.oneai.host",
+  "checkedAt": "2026-09-30T22:28:20.580Z",
+  "before": {
+    "projects": 7,
+    "reviews": 5,
+    "scenes": 7,
+    "feedback": 4
+  },
+  "studio": {
+    "sceneId": "a0520c3c-4ef0-49a8-9db8-503bd0990724",
+    "verdict": "rejected",
+    "stages": {
+      "baseline": 3,
+      "candidate": 4
+    },
+    "rayFirstHit": {
+      "baseline": "Target",
+      "candidate": "Visibility obstruction"
+    },
+    "firstLiveGeometryMs": 1911,
+    "totalMs": 20609,
+    "liveTransitions": [
+      {
+        "ms": 201,
+        "state": "0|0|none|live"
+      },
+      {
+        "ms": 1642,
+        "state": "3|0|target|live"
+      },
+      {
+        "ms": 1911,
+        "state": "3|6|target|live"
+      },
+      {
+        "ms": 8852,
+        "state": "0|0|none|live"
+      },
+      {
+        "ms": 9658,
+        "state": "4|7|blocked|live"
+      },
+      {
+        "ms": 19064,
+        "state": "4|7|blocked|idle"
+      }
+    ],
+    "geometryBeforeCompletion": true,
+    "stageDigestVerified": true,
+    "planAuthority": "none",
+    "modelUsed": false,
+    "confirmation": "as-proposed",
+    "sseThroughSharedAlb": true
+  },
+  "factory": {
+    "reviewId": "7a689b85-83da-48eb-a870-f2d2321747bc",
+    "verdict": "rejected",
+    "pairs": 12,
+    "netGoodUnitsGain": 133,
+    "failingSeeds": {
+      "output-per-seed": [
+        3,
+        11
+      ],
+      "demand-intervals": [],
+      "hall-comfort": [],
+      "ev-service": [
+        10
+      ],
+      "closed-failures": []
+    },
+    "seedsSha256": "5c5a2ca8abb52dbe25fe30c13727e97278721ed02bed7b5e5d19b9fa23ef28c4",
+    "physicalValidation": false
+  },
+  "guards": {
+    "crossOriginWriteRejected": true,
+    "anonymousLiveStream": 302,
+    "anonymousStage": 302
+  },
+  "persistence": {
+    "priorProjectsRetained": 7,
+    "priorFeedbackUnchanged": true
+  },
+  "mobile": {
+    "width": 390,
+    "noHorizontalOverflow": true,
+    "logoutReturnedToLogin": true
+  },
+  "consoleErrors": 0,
+  "result": "passed",
+  "independentParticipants": 0,
+  "physicalValidated": false,
+  "modelProposalExecuted": false,
+  "testedCodeCommit": "4972bb4e0daf2ca7ae22ad3db04f1688e4cd1548",
+  "releaseSha256": "0770c334c4eeb8eef2ecf1ddf6ed810673ef3864d392da268f2c513a4437b463",
+  "ciRun": "https://github.com/noteflowai/pai-design-workbench/actions/runs/36784998513"
+}

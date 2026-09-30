@@ -16,6 +16,19 @@
 
 截图：[AI 工作室](evidence/studio-desktop.png)、[手机](evidence/studio-mobile.png)、[工厂评审](evidence/factory-desktop.png)。实时事件仅用于展示；结论仍以保存的记录、回执与摘要为准。未执行新的策略推理、工厂孪生重跑或模型调用。
 
+## 线上发布验收（AI 工作室版本）
+
+提交 `4972bb4` 经 [GitHub Actions](https://github.com/noteflowai/pai-design-workbench/actions/runs/36784998513) 三个作业全部通过（LTS 作业含原生、Blender 与 5 组浏览器检查），发布包 `0770c334…b463` 经 CDK（仅更新 S3 读取授权与输出）和受控 SSM 原子切换上线，旧版本保留。实际 Cognito 登录后在 `https://pai.oneai.host`：
+
+- 对话生成计划（确定性解析、无模型调用、权限无）→ 确认 → 主机上的 Blender 5.2.2 原生构建；视口从空开始，经共享 ALB 的 SSE 在 1.9 s 出现基准几何，9.7 s 出现候选遮挡物与被阻挡射线，约 20 s 完成；阶段 3/4、Cycles 12/12，阶段 GLB 摘要复核；计划确认记为“与计划一致”。
+- 工厂评审：先冻结标准再评估，12 个种子中 seed 3、11 产出、seed 10 EV 服务失败，结论拒绝；seeds.json 摘要与复核记录一致。
+- 跨源写入 403；未登录访问实时流与阶段文件被重定向到登录；既有任务与反馈状态不变；390px 无横向溢出，退出登录返回登录页，控制台无错误。
+- 基础设施：WordPress 路由 100/110/default 逐项不变，WordPress 公网 200，同一 VPC 与 ALB，目标健康，仅 ALB 可访问 4317。
+
+回执：[线上功能](evidence/deployment-result-v2.json)、[基础设施](evidence/deployment-infra.json)；截图：[桌面](evidence/cloud-studio.png)、[手机](evidence/cloud-studio-mobile.png)、[工厂](evidence/cloud-factory.png)。线上验收创建了维护者任务与检查记录，独立参与人数仍为 0；未执行新的策略推理、工厂孪生重跑或模型调用。
+
+发布过程中发现并修复两处问题：新任务的视口保留上一场景几何（会使实时计时失真），以及视口逐帧渲染导致软件 WebGL 下页面卡顿；改为无场景时清空、按需渲染后重新通过全部检查。
+
 ## 云端复核
 
 [GitHub Actions 实际运行](https://github.com/noteflowai/pai-design-workbench/actions/runs/36723476548)已成功，线上运行代码为 `1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e`，包含 AWS 登录、长任务轮询与手机退出按钮修复。后续运维助手提交修正 SSM 的 Bash 解释器，不改变线上业务代码。
