@@ -48,7 +48,7 @@ elif args.action in ("send", "apply-release"):
         source = Path(__file__).resolve().parents[1] / "infra/update_release.sh"
         variables = {"PAI_RELEASE_HASH": outputs["ReleaseHash"], "PAI_ASSET_BUCKET": outputs["ReleaseBucket"],
                      "PAI_ASSET_KEY": outputs["ReleaseKey"]}
-        script = "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
+        script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
         script = args.script.read_text()
     response = operator.client("ssm").send_command(
