@@ -101,7 +101,8 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
 
   useEffect(() => {
     const r = runtime.current;
-    if (!r || !url) return;
+    if (!r) return;
+    if (!url) { r.root.clear(); r.known.clear(); setObjects([]); setSelected(undefined); setLoaded(""); return; }
     let cancelled = false;
     r.loader.load(url, gltf => {
       if (cancelled) return;

@@ -104,6 +104,8 @@ test("AI studio turns intent into a confirmed native Blender run streamed into t
   const card = page.getByRole("article", { name: /计划 Blender 原生场景/ });
   await expect(page.getByText("确定性解析 · 无模型调用").first()).toBeVisible();
   await expect(card.getByText("— → occluded")).toBeVisible();
+  // A new project starts with an empty viewport; geometry must come from this run's stream.
+  await expect(page.locator(".viewport")).toHaveAttribute("data-objects", "0");
   await card.getByRole("button", { name: "确认执行" }).click();
   // Live native progress: staged geometry and the native ray appear while Blender is still running.
   await expect(page.locator(".live-dot.on")).toBeVisible({ timeout: 60_000 });
