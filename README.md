@@ -43,6 +43,10 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 
 证据见 [验证报告](docs/VERIFICATION.md)。维护者验证、测试夹具和独立试用分别计量。没有独立试用或曝光分母时，独立采用数保持 0，转化率保持未知。
 
+[云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/36716935336)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、边界测试和原生记录闭环。详见报告中的环境与范围。
+
+![Blender 原生场景与反馈复测工作台](docs/evidence/blender-desktop.png)
+
 ## 工具边界
 
 | 环节 | 实现与职责 |

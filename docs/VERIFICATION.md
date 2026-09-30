@@ -2,6 +2,25 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 云端复核
+
+[GitHub Actions 实际运行](https://github.com/noteflowai/pai-design-workbench/actions/runs/36716935336)已成功，验证代码提交为 `c88fea213956c59af4d9430c2a65882c05709bcc`。本报告后续补入的回执和文档不改变该代码。
+
+| 运行环境 | 通过的检查 |
+|---|---|
+| Node 24.21.0 LTS / Python 3.14 | 锁定依赖安装、类型检查、12 组边界测试、生产构建、原生记录及反馈闭环、独立证据交接、Blender 原生生成与文件重开、2 组浏览器端到端 |
+| Node 26.10.0 Current / Python 3.14 | 锁定依赖安装、类型检查、12 组边界测试、生产构建、原生记录及反馈闭环、独立证据交接 |
+
+Blender 和浏览器检查只在 LTS 作业中执行；Current 作业跳过这两项。Blender 使用其随发行版提供的 Python。CI 没有连接私人 NoteFlow 控制器或模型预算账本。
+
+云端下载回执：
+
+- [工作流与逐步骤结果](evidence/ci-result.json)
+- [云端原生记录闭环](evidence/ci-native-e2e.json)
+- [云端 Blender 与文件重开](evidence/ci-blender-e2e.json)
+
+## 已验收的行为
+
 | 检查 | 实际结果 |
 |---|---|
 | 严格类型检查、生产构建 | 通过 |
@@ -19,6 +38,8 @@
 - [原生 Blender 与文件重开](evidence/blender-e2e.json)
 
 完整私人记录、原生文件和交付包保存在本仓库 `.state`，不提交到 Git。公开记录依赖固定为本次远程最新提交：Robot Reel `6124cee3cba5`、EvalArc `6af26bf0184d`、Radar `c7cd75d3cca6`。原生生成的 Blender 软件版本为 5.2.2 LTS。
+
+本工作区的 `http://127.0.0.1:4317` 已加载两个完成的维护者场景：记录评审和 Blender 静态场景。它们保留原始任务、请求身份和原生回执；导入已完成场景没有新增推理、仿真或用户活动。两个反馈均已关闭，独立试用人数仍为 0。运行状态和来源说明保存在被忽略的 `.state/demo-origin.json`；新 checkout 不包含这些私人状态。
 
 浏览器端到端实际发现过反馈更新误用 POST，已修为 PATCH 并重新验收。修复与所有失败记录可追溯，未把错误操作计为成功。
 
