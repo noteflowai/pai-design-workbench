@@ -7,3 +7,5 @@ playwright-report/
 test-results/
 *.sqlite*
 *.log
+infra/cdk.out/
+infra/cdk.context.json

@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@fastify/static": "10.1.5",
+    "aws-jwt-verify": "5.2.1",
     "fastify": "5.12.5",
     "proper-lockfile": "4.1.2",
     "react": "19.3.0",

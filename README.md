@@ -70,7 +70,7 @@ export PAI_CONTROLLER_DATABASE=/absolute/path/to/existing-reviewed-ledger.sqlite
 
 提案端点不授予验收或发布权限；未知效果返回 `reconcile`，不会自动重试。未连接时仍可完成记录评审。`budget-status` 是只读会计观察，不是对验证命令的预算预留。
 
-服务绑定 loopback，拒绝外部 Host 与跨源写入，面向单人本地使用。没有多租户认证、云部署或匿名公开上传功能。
+默认服务绑定 loopback，拒绝外部 Host 与跨源写入。AWS 模式配置精确 HTTPS Origin，并验证指定 ALB 的 Cognito 登录令牌；面向单个管理工作区，没有用户间数据隔离或匿名公开上传功能。部署复用 WordPress 的 VPC 与 ALB，见 [AWS 部署说明](docs/DEPLOYMENT.md)。
 
 ## 开发
 
@@ -89,5 +89,6 @@ TypeScript 7.0.2 与当前稳定依赖锁定在 `package-lock.json`。Node 24.21
 - [后续领域接入和试用计划](docs/NEXT.md)
 - [主流工业软件与开源方案](docs/INDUSTRIAL_SOFTWARE.md)
 - [多端与最新版本策略](docs/MULTIPLATFORM.md)
+- [AWS 部署、登录与备份](docs/DEPLOYMENT.md)
 
 本仓库新代码使用 MIT；Robot Reel 派生测试数据保留 Apache-2.0 与原始 NOTICE。见 [第三方说明](THIRD_PARTY_NOTICE.md)。

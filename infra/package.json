@@ -1,0 +1,20 @@
+{
+  "name": "pai-design-workbench-infra",
+  "private": true,
+  "type": "module",
+  "allowScripts": { "esbuild@0.28.2": true },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "synth": "npm run check && cdk synth --quiet",
+    "diff": "cdk diff",
+    "deploy": "npm run check && cdk deploy --require-approval never"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "aws-cdk": "2.1143.0",
+    "aws-cdk-lib": "2.271.0",
+    "constructs": "10.8.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

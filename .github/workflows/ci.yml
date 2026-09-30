@@ -2,7 +2,7 @@ name: Workbench checks
 on:
   push:
     branches: [main]
-    paths: ["src/**", "native/**", "scripts/**", "tests/**", "tools/**", "web/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
+    paths: ["src/**", "native/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -11,6 +11,21 @@ concurrency:
   group: workbench-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+        working-directory: infra
+      - run: npm run check
+        working-directory: infra
+      - run: bash -n infra/bootstrap.sh
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20

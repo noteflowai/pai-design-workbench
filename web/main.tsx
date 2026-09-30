@@ -7,10 +7,19 @@ import "./style.css";
 
 type State = { projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[];
   proposals: Proposal[]; scenes: SceneReview[]; metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { modelProposal: boolean; blender: boolean } };
+  capabilities: { modelProposal: boolean; blender: boolean; authenticatedWorkspace?: boolean } };
 async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
-  const r = await fetch(`/api${path}`, body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const data = await r.json();
+  let r = await fetch(`/api${path}`, body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let data = await r.json();
+  const deadline = Date.now() + 360_000;
+  while (r.status === 202) {
+    const location = r.headers.get("Location");
+    if (!location || !/^\/api\/(runs|scenes)\/[a-f0-9-]+$/.test(location)) throw new Error("检查任务未提供可核验状态地址");
+    if (Date.now() >= deadline) throw new Error("检查仍在运行；请刷新查看原请求回执。不要以新请求重复执行。");
+    await new Promise(resolve => setTimeout(resolve, 2_000));
+    r = await fetch(location);
+    data = await r.json();
+  }
   if (!r.ok) throw new Error(`${data.error}: ${data.message ?? "请求被拒绝"}`);
   return data as T;
 }
@@ -108,7 +117,7 @@ function App() {
       <p className="sidebar-footer">Radar → Design → EvalArc<br />Robot Reel → Feedback</p>
     </aside>
     <main>
-      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><span className="version">WORKBENCH · v0.1</span></header>
+      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><span className="version">WORKBENCH · v0.1{data?.capabilities.authenticatedWorkspace && <><br /><a href="/logout">退出登录</a></>}</span></header>
       <div className="scope-banner"><strong>当前验证范围</strong><span>历史策略记录核验 + 合成静态场景几何检查；尚未执行新的策略推理、动力学或现场验证。结论仅适用于各自证据范围。</span></div>
       {error && <div role="alert" className="alert error">{error}</div>}
       {notice && <div role="status" className="alert">{notice}</div>}

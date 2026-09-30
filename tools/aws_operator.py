@@ -1,0 +1,59 @@
+"""Scoped AWS operations; secret contents are written only to a mode-0600 local file."""
+import argparse
+import json
+import os
+from pathlib import Path
+import boto3
+
+REGION = "ap-northeast-1"
+ACCOUNT = "820674626047"
+
+
+def session(role):
+    c = boto3.client("sts").assume_role(
+        RoleArn=f"arn:aws:iam::{ACCOUNT}:role/{role}", RoleSessionName="pai-workbench-operator"
+    )["Credentials"]
+    return boto3.Session(aws_access_key_id=c["AccessKeyId"], aws_secret_access_key=c["SecretAccessKey"],
+                         aws_session_token=c["SessionToken"], region_name=REGION)
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("action", choices=["status", "login-file", "send", "result"])
+parser.add_argument("--script", type=Path)
+parser.add_argument("--command-id")
+args = parser.parse_args()
+lookup = session(f"cdk-hnb659fds-lookup-role-{ACCOUNT}-{REGION}")
+stack = lookup.client("cloudformation").describe_stacks(StackName="PAIDesignWorkbench")["Stacks"][0]
+outputs = {p["OutputKey"]: p["OutputValue"] for p in stack["Outputs"]}
+operator = session(f"cdk-hnb659fds-pai-operator-role-{ACCOUNT}-{REGION}")
+if args.action == "status":
+    result = operator.client("ssm").describe_instance_information(
+        Filters=[{"Key": "InstanceIds", "Values": [outputs["InstanceId"]]}]
+    )["InstanceInformationList"]
+    print(json.dumps({"stack": stack["StackStatus"], "outputs": outputs, "ssm": result}, default=str, indent=2))
+elif args.action == "login-file":
+    value = operator.client("secretsmanager").get_secret_value(SecretId=outputs["AdminSecretArn"])["SecretString"]
+    target = Path(__file__).resolve().parents[1] / ".state/deploy/admin-login.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as file:
+        file.write(value + "\n")
+    target.chmod(0o600)
+    print(f"Private administrator login saved to {target}; not printed or committed.")
+elif args.action == "send":
+    if not args.script:
+        parser.error("--script is required")
+    response = operator.client("ssm").send_command(
+        InstanceIds=[outputs["InstanceId"]], DocumentName="AWS-RunShellScript",
+        Parameters={"commands": [args.script.read_text()], "executionTimeout": ["600"]},
+        Comment="PAI workbench authorized deployment verification",
+    )
+    print(response["Command"]["CommandId"])
+elif args.action == "result":
+    if not args.command_id:
+        parser.error("--command-id is required")
+    response = operator.client("ssm").get_command_invocation(
+        CommandId=args.command_id, InstanceId=outputs["InstanceId"]
+    )
+    print(json.dumps({key: response.get(key) for key in
+                     ["Status", "ResponseCode", "StandardOutputContent", "StandardErrorContent"]}, indent=2))

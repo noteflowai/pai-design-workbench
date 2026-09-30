@@ -1,8 +1,9 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import staticPlugin from "@fastify/static";
 import { readFile, access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setImmediate as yieldTick } from "node:timers/promises";
 import { z, ZodError } from "zod";
 import { NativeAdapters, type Adapters } from "./adapters.js";
 import { configuration, type Config } from "./config.js";
@@ -15,6 +16,7 @@ import { Store } from "./store.js";
 import { reviewScene, type SceneReview } from "./scenes.js";
 import { toolCatalog } from "./tool-catalog.js";
 import { acquireRuntime } from "./runtime-lock.js";
+import { authentication } from "./auth.js";
 
 export async function createApp(config: Config, adapters: Adapters = new NativeAdapters(config)) {
   const app = Fastify({ logger: false, bodyLimit: 4_000_000, requestTimeout: 120_000 });
@@ -23,17 +25,24 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   try { store = new Store(join(config.state, "workbench.sqlite")); } catch (error) { await release(); throw error; }
   store.interruptPending();
   const workbench = new Workbench(store, adapters, config.state);
+  const authenticated = authentication(config);
+  const activeJobs = new Set<Promise<unknown>>();
+  app.addHook("preClose", async () => { await Promise.allSettled([...activeJobs]); });
   app.addHook("onClose", async () => { store.close(); await release(); });
   app.addHook("onRequest", async (request, reply) => {
+    const healthCheck = request.method === "GET" && request.url === "/healthz";
     const allowedHosts = new Set([`127.0.0.1:${config.port}`, `localhost:${config.port}`]);
-    if (!allowedHosts.has(request.headers.host ?? "")) return reply.code(403).send({ error: "LOCAL_HOST_REQUIRED" });
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.origin
-        && ![`http://127.0.0.1:${config.port}`, `http://localhost:${config.port}`].includes(request.headers.origin)) {
-      return reply.code(403).send({ error: "CROSS_ORIGIN_WRITE" });
-    }
-    if (request.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
+    if (config.publicOrigin) allowedHosts.add(new URL(config.publicOrigin).host);
+    if (!healthCheck && !allowedHosts.has(request.headers.host ?? "")) return reply.code(403).send({ error: "LOCAL_HOST_REQUIRED" });
+    reply.header("Cache-Control", "no-store");
     reply.header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer");
     reply.header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+    if (config.publicOrigin) reply.header("Strict-Transport-Security", "max-age=31536000");
+    if (!healthCheck && !await authenticated(request.headers)) return reply.code(401).send({ error: "AUTHENTICATION_REQUIRED" });
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.origin
+        && ![`http://127.0.0.1:${config.port}`, `http://localhost:${config.port}`, ...(config.publicOrigin ? [config.publicOrigin] : [])].includes(request.headers.origin)) {
+      return reply.code(403).send({ error: "CROSS_ORIGIN_WRITE" });
+    }
   });
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof DomainError) return reply.code(error.status).send({ error: error.code, message: error.message });
@@ -43,11 +52,49 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return reply.code(500).send({ error: "LOCAL_TOOL_UNAVAILABLE", message: "Check local configuration and retained receipts" });
   });
   const paramId = (p: unknown, field = "id") => Id.parse((p as Record<string, unknown>)[field]);
+  const nativeResponse = <T extends { id: string; state: string }>(record: T, reply: FastifyReply, route: string) => {
+    if (record.state === "running" && config.publicOrigin) reply.code(202).header("Location", `/api/${route}/${record.id}`).header("Retry-After", "2");
+    return record;
+  };
+  const executeNative = async <T extends { id: string; state: string }>(
+    reply: FastifyReply, input: unknown, kind: string, route: string, execute: () => Promise<T>,
+  ) => {
+    const requestId = Id.parse((input as Record<string, unknown>)?.requestId);
+    const operation = execute();
+    if (!config.publicOrigin) return await operation;
+    const early = await Promise.race([
+      operation.then(record => ({ done: true as const, record })),
+      yieldTick().then(() => ({ done: false as const })),
+    ]);
+    if (early.done) return nativeResponse(early.record, reply, route);
+    // Both native services atomically claim their request before their first await.
+    const id = store.requestRun(requestId);
+    if (!id) return await operation; // Validation failed before any side effect.
+    const tracked = operation.catch(() => {
+      const record = store.get<T & { error?: string }>(kind, id);
+      if (record?.state === "running") {
+        record.state = "interrupted";
+        record.error = "Background operation stopped; retain identity and reconcile without automatic replay.";
+        store.put(kind, record);
+      }
+    });
+    activeJobs.add(tracked);
+    void tracked.finally(() => activeJobs.delete(tracked));
+    return nativeResponse(store.get<T>(kind, id)!, reply, route);
+  };
+  app.get("/healthz", async () => ({ status: "ok" }));
+  app.get("/logout", async (_request, reply) => {
+    if (!config.authLogoutUrl) return reply.code(404).send({ error: "NOT_FOUND" });
+    const names = ["PAIAuthSession", ...Array.from({ length: 4 }, (_, i) => `PAIAuthSession-${i}`)];
+    reply.header("Set-Cookie", names.map(name => `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`));
+    return reply.redirect(config.authLogoutUrl);
+  });
   app.get("/api/state", async () => ({
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
+      authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));
@@ -58,13 +105,15 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const { expectedRevision, ...project } = input;
     return workbench.updateProject(paramId(request.params), expectedRevision, project);
   });
-  app.post("/api/projects/:id/reviews", async request => workbench.runReview(paramId(request.params), request.body));
+  app.post("/api/projects/:id/reviews", async (request, reply) =>
+    executeNative(reply, request.body, "review", "runs", () => workbench.runReview(paramId(request.params), request.body)));
   app.post("/api/projects/:id/proposals", async request => propose(store, config, workbench.project(paramId(request.params)), request.body));
-  app.post("/api/projects/:id/scenes", async request => reviewScene(store, config, workbench.project(paramId(request.params)), request.body));
-  app.get("/api/scenes/:id", async request => {
+  app.post("/api/projects/:id/scenes", async (request, reply) =>
+    executeNative(reply, request.body, "scene-review", "scenes", () => reviewScene(store, config, workbench.project(paramId(request.params)), request.body)));
+  app.get("/api/scenes/:id", async (request, reply) => {
     const scene = store.get<SceneReview>("scene-review", paramId(request.params));
     if (!scene) throw new DomainError("NOT_FOUND", "Scene not found", 404);
-    return scene;
+    return nativeResponse(scene, reply, "scenes");
   });
   app.get("/api/scenes/:id/files/:which/:file", async (request, reply) => {
     const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "checks.json"]) }).parse(request.params);
@@ -76,7 +125,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (p.file !== "preview.png") reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
     return reply.type(types[p.file]).send(content);
   });
-  app.get("/api/runs/:id", async request => workbench.review(paramId(request.params)));
+  app.get("/api/runs/:id", async (request, reply) => nativeResponse(workbench.review(paramId(request.params)), reply, "runs"));
   app.post("/api/feedback", async request => workbench.createFeedback(request.body));
   app.patch("/api/feedback/:id", async request => workbench.transitionFeedback(paramId(request.params), request.body));
   app.post("/api/campaigns", async request => workbench.createCampaign(request.body));
@@ -118,7 +167,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const config = configuration();
   const { app } = await createApp(config);
-  await app.listen({ port: config.port, host: "127.0.0.1" });
-  console.log(`PAI Design Workbench: http://127.0.0.1:${config.port}`);
+  await app.listen({ port: config.port, host: config.listenHost ?? "127.0.0.1" });
+  console.log(`PAI Design Workbench: ${config.publicOrigin ?? `http://127.0.0.1:${config.port}`}`);
   for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => void app.close().then(() => process.exit(0)));
 }

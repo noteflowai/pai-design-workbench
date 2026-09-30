@@ -1,0 +1,15 @@
+{
+  "app": "npx tsx app.ts",
+  "context": {
+    "domain": "pai.oneai.host",
+    "vpcId": "vpc-fb40619c",
+    "subnetId": "subnet-a414f7ec",
+    "availabilityZone": "ap-northeast-1a",
+    "routeTableId": "rtb-defd43b8",
+    "amiId": "ami-0722c84b91d123e55",
+    "listenerArn": "arn:aws:elasticloadbalancing:ap-northeast-1:820674626047:listener/app/ai-srv-alb/85690322c57d5d44/5337631549067f48",
+    "albArn": "arn:aws:elasticloadbalancing:ap-northeast-1:820674626047:loadbalancer/app/ai-srv-alb/85690322c57d5d44",
+    "albSecurityGroupId": "sg-03ced36779bb2a8fb",
+    "rulePriority": 120
+  }
+}

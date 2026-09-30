@@ -54,6 +54,37 @@ test("paired evidence rejects duplicate seeds, inconsistent reference and forged
   a.reference_success = false; b.reference_success = true;
   assert.throws(() => validatePanel(ref));
 });
+test("remote native work returns a durable polling identity and never relaunches duplicates", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pai-poll-"));
+  const fixture = fixtures(), original = fixture.adapters.stress;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  fixture.adapters.stress = async () => { await gate; return original(); };
+  const { app, store, workbench } = await createApp({ ...configuration(), state: dir, publicOrigin: "https://pai.oneai.host" }, fixture.adapters);
+  try {
+    const project = workbench.createProject(task);
+    const headers = { host: "pai.oneai.host", origin: "https://pai.oneai.host" };
+    const payload = { requestId: randomUUID(), projectRevision: 1, candidate: "camera" };
+    const url = `/api/projects/${project.id}/reviews`;
+    const response = await app.inject({ method: "POST", url, headers, payload });
+    assert.equal(response.statusCode, 202);
+    const id = response.json().id, location = response.headers.location as string;
+    assert.equal(store.requestRun(payload.requestId), id);
+    assert.equal((await app.inject({ url: location, headers })).statusCode, 202);
+    const duplicate = await app.inject({ method: "POST", url, headers, payload });
+    assert.equal(duplicate.statusCode, 202); assert.equal(duplicate.json().id, id);
+    const conflict = await app.inject({ method: "POST", url, headers, payload: { ...payload, candidate: "reference" } });
+    assert.equal(conflict.statusCode, 409);
+    release();
+    // Closing waits for background native work to retain its final receipt.
+    await app.close();
+    const retained = new Store(join(dir, "workbench.sqlite"));
+    try {
+      assert.equal(retained.get<Review>("review", id)?.state, "completed");
+      assert.equal(fixture.calls(), 1);
+    } finally { retained.close(); }
+  } finally { release(); await app.close(); await rm(dir, { recursive: true, force: true }); }
+});
 test("concurrent duplicate identity runs once; changing identity meaning conflicts", async () => {
   const s = await setup();
   try {

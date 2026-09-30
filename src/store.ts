@@ -50,6 +50,10 @@ export class Store {
       return existing?.run_id ?? record.id;
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
+  requestRun(requestId: string): string | undefined {
+    const row = this.db.prepare("SELECT run_id FROM requests WHERE request_id=?").get(requestId) as { run_id: string } | undefined;
+    return row?.run_id;
+  }
   interruptPending(): void {
     for (const kind of ["review", "proposal", "scene-review"]) for (const record of this.list<{ id: string; state: string; error?: string }>(kind)) {
       if (record.state === "running") {
