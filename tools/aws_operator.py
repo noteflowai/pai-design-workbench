@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import shlex
 from pathlib import Path
 import boto3
 
@@ -18,7 +19,7 @@ def session(role):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("action", choices=["status", "login-file", "send", "result"])
+parser.add_argument("action", choices=["status", "login-file", "send", "apply-release", "result"])
 parser.add_argument("--script", type=Path)
 parser.add_argument("--command-id")
 args = parser.parse_args()
@@ -40,12 +41,19 @@ elif args.action == "login-file":
         file.write(value + "\n")
     target.chmod(0o600)
     print(f"Private administrator login saved to {target}; not printed or committed.")
-elif args.action == "send":
-    if not args.script:
+elif args.action in ("send", "apply-release"):
+    if args.action == "send" and not args.script:
         parser.error("--script is required")
+    if args.action == "apply-release":
+        source = Path(__file__).resolve().parents[1] / "infra/update_release.sh"
+        variables = {"PAI_RELEASE_HASH": outputs["ReleaseHash"], "PAI_ASSET_BUCKET": outputs["ReleaseBucket"],
+                     "PAI_ASSET_KEY": outputs["ReleaseKey"]}
+        script = "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
+    else:
+        script = args.script.read_text()
     response = operator.client("ssm").send_command(
         InstanceIds=[outputs["InstanceId"]], DocumentName="AWS-RunShellScript",
-        Parameters={"commands": [args.script.read_text()], "executionTimeout": ["600"]},
+        Parameters={"commands": [script], "executionTimeout": ["600"]},
         Comment="PAI workbench authorized deployment verification",
     )
     print(response["Command"]["CommandId"])

@@ -84,7 +84,10 @@ export class WorkbenchStack extends cdk.Stack {
       assetHash: createHash("sha256").update(readFileSync(releasePath)).digest("hex"),
       assetHashType: cdk.AssetHashType.CUSTOM,
     });
-    asset.grantRead(role);
+    // Initial boot is immutable for this environment. Application updates use SSM.
+    // Avoid replacing/stopping the instance merely because a frontend asset changed.
+    asset.bucket.grantRead(role, context("bootstrapAssetKey"));
+    asset.bucket.grantRead(role, asset.s3ObjectKey);
     const data = new ec2.Volume(this, "Data", {
       availabilityZone: zone, size: cdk.Size.gibibytes(40), volumeType: ec2.EbsDeviceVolumeType.GP3,
       encrypted: true, removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -96,9 +99,9 @@ export class WorkbenchStack extends cdk.Stack {
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       `export PAI_VOLUME_ID='${data.volumeId}'`,
-      `export PAI_RELEASE_HASH='${createHash("sha256").update(readFileSync(releasePath)).digest("hex")}'`,
+      `export PAI_RELEASE_HASH='${context("bootstrapReleaseHash")}'`,
       `export PAI_ASSET_BUCKET='${asset.s3BucketName}'`,
-      `export PAI_ASSET_KEY='${asset.s3ObjectKey}'`,
+      `export PAI_ASSET_KEY='${context("bootstrapAssetKey")}'`,
       `export PAI_ALB_ARN='${context("albArn")}'`,
       `export PAI_ISSUER='https://cognito-idp.${this.region}.amazonaws.com/${pool.userPoolId}'`,
       `export PAI_CLIENT_ID='${client.userPoolClientId}'`,

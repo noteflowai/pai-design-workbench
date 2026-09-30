@@ -10,6 +10,8 @@
     "listenerArn": "arn:aws:elasticloadbalancing:ap-northeast-1:820674626047:listener/app/ai-srv-alb/85690322c57d5d44/5337631549067f48",
     "albArn": "arn:aws:elasticloadbalancing:ap-northeast-1:820674626047:loadbalancer/app/ai-srv-alb/85690322c57d5d44",
     "albSecurityGroupId": "sg-03ced36779bb2a8fb",
-    "rulePriority": 120
+    "rulePriority": 120,
+    "bootstrapReleaseHash": "e144d4bb155bfcae06508a10bc8bb0b401975356b5d53c011fcba6e00b86c772",
+    "bootstrapAssetKey": "7a39edd2dfd4d23a563b40f657e52afee2fa07dcc2084f37f80b1105dd181053.tgz"
   }
 }
