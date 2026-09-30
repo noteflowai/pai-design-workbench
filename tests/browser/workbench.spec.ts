@@ -1,4 +1,16 @@
 import { test, expect } from "@playwright/test";
+test("authenticated workspace keeps sign-out visible at phone width", async ({ page }) => {
+  // Layout-only fixture. No native outputs, observed users or commands are fabricated.
+  await page.route("**/api/state", route => route.fulfill({ json: {
+    projects: [], reviews: [], feedback: [], campaigns: [], proposals: [], scenes: [],
+    metrics: { independentParticipants: 0, independentEvents: 0, independentRepeatUsers: 0, maintainerEvents: 0, fixtureEvents: 0 },
+    capabilities: { modelProposal: false, blender: false, authenticatedWorkspace: true },
+  } }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "退出登录" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 test("real native review, video decoding, rollback feedback, handoff and mobile layout", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));

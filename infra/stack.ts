@@ -176,5 +176,7 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolId", { value: pool.userPoolId });
     new cdk.CfnOutput(this, "UserPoolClientId", { value: client.userPoolClientId });
     new cdk.CfnOutput(this, "ReleaseHash", { value: createHash("sha256").update(readFileSync(releasePath)).digest("hex") });
+    new cdk.CfnOutput(this, "ReleaseBucket", { value: asset.s3BucketName });
+    new cdk.CfnOutput(this, "ReleaseKey", { value: asset.s3ObjectKey });
   }
 }

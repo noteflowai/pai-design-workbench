@@ -117,7 +117,7 @@ function App() {
       <p className="sidebar-footer">Radar → Design → EvalArc<br />Robot Reel → Feedback</p>
     </aside>
     <main>
-      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><span className="version">WORKBENCH · v0.1{data?.capabilities.authenticatedWorkspace && <><br /><a href="/logout">退出登录</a></>}</span></header>
+      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><div className="account-actions"><span className="version">WORKBENCH · v0.1</span>{data?.capabilities.authenticatedWorkspace && <a className="session-logout" href="/logout">退出登录</a>}</div></header>
       <div className="scope-banner"><strong>当前验证范围</strong><span>历史策略记录核验 + 合成静态场景几何检查；尚未执行新的策略推理、动力学或现场验证。结论仅适用于各自证据范围。</span></div>
       {error && <div role="alert" className="alert error">{error}</div>}
       {notice && <div role="status" className="alert">{notice}</div>}
