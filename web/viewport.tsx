@@ -25,6 +25,8 @@ interface Runtime {
   renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls;
   root: THREE.Group; overlay: THREE.Group; grid: THREE.GridHelper; axes: THREE.AxesHelper; frame: number;
   animations: { start: number; duration: number; apply: (t: number) => void }[]; loader: GLTFLoader; known: Set<string>;
+  /** Render on demand: only when the camera moves, an animation runs or the scene changed. */
+  dirty: boolean;
 }
 
 /** Professional viewport over native Blender GLB snapshots. Presentation only; evidence stays in digests. */
@@ -61,6 +63,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     camera.position.set(6.5, 5.2, 7.5);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.target.set(0, 0.6, 0);
+    controls.addEventListener("change", () => { if (runtime.current) runtime.current.dirty = true; });
     scene.add(new THREE.HemisphereLight(0xdcefff, 0x1b2a2e, 1.4));
     const key = new THREE.DirectionalLight(0xffffff, 2.4);
     key.position.set(4, 8, 5); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
@@ -74,17 +77,19 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     const axes = new THREE.AxesHelper(0.6); axes.position.set(-2.4, 0.01, 1.9); scene.add(axes);
     const root = new THREE.Group(), overlay = new THREE.Group();
     scene.add(root, overlay);
-    const r: Runtime = { renderer, scene, camera, controls, root, overlay, grid, axes, frame: 0, animations: [], loader: new GLTFLoader(), known: new Set() };
+    const r: Runtime = { renderer, scene, camera, controls, root, overlay, grid, axes, frame: 0, animations: [], loader: new GLTFLoader(), known: new Set(), dirty: true };
     runtime.current = r;
     const resize = () => {
       const w = element.clientWidth, h = element.clientHeight;
-      renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix(); r.dirty = true;
     };
     const observer = new ResizeObserver(resize); observer.observe(element); resize();
     const tick = (now: number) => {
       r.frame = requestAnimationFrame(tick);
+      const animating = r.animations.length > 0;
       r.animations = r.animations.filter(a => { const t = Math.min(1, (now - a.start) / a.duration); a.apply(t); return t < 1; });
-      controls.update(); renderer.render(scene, camera);
+      const moved = controls.update();
+      if (animating || moved || r.dirty) { renderer.render(scene, camera); r.dirty = false; }
     };
     r.frame = requestAnimationFrame(tick);
     setWebgl("ok");
@@ -102,7 +107,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
-    if (!url) { r.root.clear(); r.known.clear(); setObjects([]); setSelected(undefined); setLoaded(""); return; }
+    if (!url) { r.root.clear(); r.known.clear(); r.dirty = true; setObjects([]); setSelected(undefined); setLoaded(""); return; }
     let cancelled = false;
     r.loader.load(url, gltf => {
       if (cancelled) return;
@@ -128,7 +133,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
         }
         return { name, visible: true, size: [size.x, size.y, size.z] as [number, number, number] };
       });
-      setObjects(list); setLoaded(url);
+      r.dirty = true; setObjects(list); setLoaded(url);
     }, undefined, () => { if (!cancelled) setLoaded(`error:${url}`); });
     return () => { cancelled = true; };
   }, [url]);
@@ -151,13 +156,13 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
         else if (standard.emissive && selected !== undefined) standard.emissive.setRGB(0, 0, 0);
       }
     });
-    r.grid.visible = showGrid; r.axes.visible = showGrid;
+    r.grid.visible = showGrid; r.axes.visible = showGrid; r.dirty = true;
   }, [objects, wire, xray, selected, showGrid, loaded]);
 
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
-    r.overlay.clear();
+    r.overlay.clear(); r.dirty = true;
     const ray = model?.ray;
     if (!ray || !showRay) return;
     const origin = vec(ray.origin), end = ray.hit ? vec(ray.hit) : vec(ray.target);
