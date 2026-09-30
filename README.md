@@ -2,6 +2,8 @@
 
 TypeScript 专业设计工作台：**需求 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 可核验交付与试用反馈**。
 
+AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复用 WordPress 的同一 VPC、ALB 和 HTTPS 证书，见 [部署说明](docs/DEPLOYMENT.md)。
+
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
 已实现**历史记录评审**与 **Blender 原生静态场景设计**两个闭环，提供响应式 Web/PWA。首版不执行新的策略推理，不包含参数化机械 CAD、现场安全认证或自动发布。受控模型提案接口已实现，但实际模型调用需要现有控制器入口与经过审查的预算账本；未配置时明确禁用。
@@ -20,7 +22,7 @@ npm run test:blender
 npm run start        # http://127.0.0.1:4317
 ```
 
-在本工作区直接使用相邻的 `robot-reel`、`evalarc`、`physical-ai-radar` 和 `noteflow-agent-control`，可省略 `setup:demo`。安装脚本只使用本仓库 `.state/deps`；如果既有依赖版本或工作区变化，停止并保留它们。
+本工作区使用 `.state/deps` 内已验证的固定版本副本，避免跟随 Kiro 正在修改的相邻工作区。安装脚本只使用本仓库 `.state/deps`；如果既有依赖版本或工作区变化，停止并保留它们。
 
 1. 创建任务，冻结最低成功率、保留基准和统计改善要求。
 2. 选择相机偏移，执行原生检查，查看失败与配对统计。
@@ -43,7 +45,7 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 
 证据见 [验证报告](docs/VERIFICATION.md)。维护者验证、测试夹具和独立试用分别计量。没有独立试用或曝光分母时，独立采用数保持 0，转化率保持未知。
 
-[云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/36716935336)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、边界测试和原生记录闭环。详见报告中的环境与范围。
+[云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/36723476548)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、17 组边界测试和原生记录闭环；CDK 基础设施检查也通过。详见报告中的环境与范围。
 
 ![Blender 原生场景与反馈复测工作台](docs/evidence/blender-desktop.png)
 
@@ -90,5 +92,6 @@ TypeScript 7.0.2 与当前稳定依赖锁定在 `package-lock.json`。Node 24.21
 - [主流工业软件与开源方案](docs/INDUSTRIAL_SOFTWARE.md)
 - [多端与最新版本策略](docs/MULTIPLATFORM.md)
 - [AWS 部署、登录与备份](docs/DEPLOYMENT.md)
+- [Robot Reel Factory Twin 最新复核与接入分工](docs/ROBOT_REEL_INTEGRATION.md)
 
 本仓库新代码使用 MIT；Robot Reel 派生测试数据保留 Apache-2.0 与原始 NOTICE。见 [第三方说明](THIRD_PARTY_NOTICE.md)。

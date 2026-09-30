@@ -1,0 +1,12 @@
+{
+  "result": "passed",
+  "sqliteIntegrity": "ok",
+  "restartPreservedEveryDocument": true,
+  "nativeRecords": 8,
+  "sceneArtifactDigestsValid": true,
+  "forgedIdentityRejected": true,
+  "snapshotRestoreTested": false,
+  "checkedAt": "2026-09-30T13:55:57.703486+00:00",
+  "schema": "pai-persistence-verification-1",
+  "runtimeSourceCommit": "1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e"
+}

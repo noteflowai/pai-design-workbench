@@ -1,0 +1,137 @@
+{
+  "schema": "pai-robot-reel-review-1",
+  "checkedAt": "2026-09-30T14:02:06.610195+00:00",
+  "result": "passed-for-reviewed-scope",
+  "sourceCommit": "b3ee5c7d2c5588ddc7e067869c049aad7e6951ce",
+  "sourceVersion": "0.18.0",
+  "isolatedSnapshot": true,
+  "originalWorktreeModified": false,
+  "manifestSha256": "9283923e03d18dd9fd35a5777b1d31a05aa3e644f53502730ad7549abe8dde42",
+  "commands": [
+    {
+      "command": "python3 -S -m robot_reel.cli factory-twin --output docs/factory-twin --verify --all-seeds",
+      "exitCode": 0,
+      "pairs": 12,
+      "plantAndTwinReexecuted": true,
+      "telemetryOnlyTwinReplay": true,
+      "samplesPerFeaturedRun": 2161
+    },
+    {
+      "command": "python3 -S -m unittest discover -s tests -p test_factory_twin.py -v",
+      "exitCode": 0,
+      "testsPassed": 17
+    },
+    {
+      "command": "node scripts/check_factory_twin.cjs",
+      "exitCode": 0,
+      "widths": [
+        1440,
+        390,
+        320
+      ],
+      "networkRequests": 0,
+      "pageErrors": 0,
+      "bothModes": true,
+      "csvSamplesChecked": true
+    },
+    {
+      "command": "Blender 5.2.2 LTS --background --factory-startup --python-exit-code 1 --python scripts/check_factory_twin_blender.py (closed and shadow; separate output directories)",
+      "exitCodes": {
+        "closed": 0,
+        "shadow": 0
+      }
+    }
+  ],
+  "seedSummary": {
+    "pairs": 12,
+    "good_units_gain": {
+      "min": -3,
+      "max": 20,
+      "mean": 11.08,
+      "pairs_improved": 10,
+      "pairs_worse": 2
+    },
+    "shadow_failures": 11,
+    "closed_failures": 0,
+    "shadow_intervals_over_limit": 8,
+    "closed_intervals_over_limit": 0,
+    "max_closed_hall_c": 24.816
+  },
+  "blender": {
+    "upstreamInputDigestChecked": true,
+    "upstreamFramesPerMode": 2161,
+    "nativeBlenderReexecutedThisReview": true,
+    "nativeUsdReadbackReexecutedThisReview": true,
+    "proceduralModelRebuiltThisReview": false,
+    "modes": {
+      "closed": {
+        "verified": true,
+        "blender_version": "5.2.2 LTS",
+        "frames_checked": 2161,
+        "channels": 313,
+        "channel_values_checked": 676393,
+        "usd_frames_checked": 2161,
+        "usd_animated_prims": 85,
+        "maximum_channel_error": 2.392578130638867e-05,
+        "maximum_usd_transform_error": 1.2780917707289063e-05,
+        "inputs": {
+          "lab.json": "ecc4a4d01327f8b0905bdec9d8adbd2cb1fdd121513f67a0b371dcf75d47d2f1",
+          "blend": "19b8c2ca1f8f8f37e19422330d3df6d8af260cb9c1f8d451250ff13a4ef02bbe",
+          "usd": "131cb1e3a4bb2c6350894050be6a61383577b86f03e24f5a2cbca8c2d37cdf4f"
+        },
+        "problems": []
+      },
+      "shadow": {
+        "verified": true,
+        "blender_version": "5.2.2 LTS",
+        "frames_checked": 2161,
+        "channels": 313,
+        "channel_values_checked": 676393,
+        "usd_frames_checked": 2161,
+        "usd_animated_prims": 85,
+        "maximum_channel_error": 3.0273437459982233e-05,
+        "maximum_usd_transform_error": 1.2780917707289063e-05,
+        "inputs": {
+          "lab.json": "ecc4a4d01327f8b0905bdec9d8adbd2cb1fdd121513f67a0b371dcf75d47d2f1",
+          "blend": "26742197a692315b0eaa5dbf2848cd7f4ddb8f8c973f097a432ada13fe1b5f5f",
+          "usd": "bc8e58278a314246fab1399aadb10375e5723b9fffa3ccffc03481b3c12e2e65"
+        },
+        "problems": []
+      }
+    }
+  },
+  "realFactoryCalibrated": false,
+  "physicalValidation": false,
+  "productionToolUpgraded": false,
+  "productionRobotReelCommit": "6124cee3cba53000eb46080422ed913b4439fb5f",
+  "publishedViewer": {
+    "checkedAt": "2026-09-30T13:58:08.780244+00:00",
+    "url": "https://noteflowai.github.io/robot-reel/factory-twin/",
+    "status": 200,
+    "sha256": "d7f194ed30b140de3711d7709d40af4a5ed52dc96f6544978fa228df511dd4bf",
+    "matchesReviewedIndex": true
+  },
+  "upstreamCI": {
+    "url": "https://github.com/noteflowai/robot-reel/actions/runs/36724599109",
+    "conclusion": "success"
+  },
+  "upstreamRelease": {
+    "tag": "v0.18.0",
+    "publishedAt": "2026-09-30T13:57:07Z",
+    "url": "https://github.com/noteflowai/robot-reel/releases/tag/v0.18.0",
+    "workflowConclusion": "success"
+  },
+  "nativeDelivery": {
+    "documentedUrl": "https://github.com/noteflowai/robot-reel/releases/latest/download/factory-twin-blender.zip",
+    "httpStatus": 404,
+    "factoryBlenderZipListedInRelease": false,
+    "availableForIndependentReopenLocally": true,
+    "publicArchiveAvailable": false
+  },
+  "localNativeArchive": {
+    "sha256": "e205a6e633784898e7db7b27ede00b572056c116f4a5cd62153a8ac869788baf",
+    "bytes": 3388112,
+    "originalNativeFilesMatchPublishedReceipt": true,
+    "scriptsMatchReviewedCommit": true
+  }
+}

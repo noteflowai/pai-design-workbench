@@ -2,6 +2,8 @@
 
 部署目标是 WordPress 已使用的东京区域 `ap-northeast-1`、VPC `vpc-fb40619c` 和 `ai-srv-alb`。域名现有 CNAME 已指向该 ALB，HTTPS 使用现有 `*.oneai.host` 证书。本仓库只添加优先级 120 的主机路由，不修改 WordPress 的 100/110 路由、默认响应、HTTP 跳转或共享空闲超时。
 
+2026-09-30 已完成实际部署和更新，入口为 [https://pai.oneai.host](https://pai.oneai.host)。管理员账号 `qiangguo`，密码通过下述 `login-file` 命令读取至私人文件。线上发布摘要为 `718b9be27766baddf54d72d6d4f6511d6557d43766cc48f26c19c3297edb061c`，运行代码提交 `1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e`。[实际验收](VERIFICATION.md)包含 Cognito 登录、手机退出、真实原生任务、WordPress 200、旧路由逐项一致和服务重启持久化；快照恢复尚未演练。
+
 ## 运行架构
 
 ```text
@@ -32,6 +34,9 @@ npm ci
 npm run synth
 npm run diff -- --no-change-set
 npm run deploy -- PAIDesignWorkbench
+# 回到仓库根目录；新版本通过受控 SSM 切换
+cd ..
+python3 tools/aws_operator.py apply-release
 ```
 
 部署包使用显式文件白名单，不包括 `.state`、数据库、提示词、私人控制器、浏览器会话或本地生成的证据。S3 上传包、Node 和 Blender 下载均验证 SHA-256。实例安装固定版本的公开依赖，不初始化模型预算账本。
@@ -49,7 +54,9 @@ python3 tools/aws_operator.py login-file
 
 数据位于 `/var/lib/pai/data/state`，单进程 SQLite WAL 数据库及同一卷上的原生文件共同快照。删除栈保留数据卷、备份 vault、登录用户池和管理员 Secret。运行实例的 systemd 服务失败后重启，并保留任务身份；EC2 状态与 ALB 不健康目标有 CloudWatch 告警，未配置外发通知。
 
-后续应用升级应先验证新发布包，将新版本安装到独立目录，停止服务、切换 `/opt/pai/current` 并复核；失败时切回旧目录，不覆盖数据库或原生回执。修改 EC2 UserData 不代表已经更新运行代码。AMI/实例替换必须先确认备份，并在同一可用区重新连接保留卷；不要并发挂载 SQLite 卷。
+后续应用升级先验证并打包，再部署 CDK 中新的发布对象和精确 S3 读取授权，随后执行 `python3 tools/aws_operator.py apply-release`。脚本验证 SHA-256，在独立目录安装依赖、停止服务、原子切换 `/opt/pai/current` 并复核健康；失败时自动切回旧目录，不覆盖数据库或原生回执。原生工具版本更新另需重新验证和显式安装。
+
+本环境的初始启动包固定在 `infra/cdk.json` 的 `bootstrapReleaseHash` / `bootstrapAssetKey`，不要随应用发布修改它们，也不要删除对应 S3 对象。这样前端更新不会因 EC2 UserData 变化而停止或替换实例；当前发布包由 `ReleaseHash` / `ReleaseKey` 输出指定。新建其他环境应选择经过验证的初始包。AMI/实例替换必须先确认备份，并在同一可用区重新连接保留卷；不要并发挂载 SQLite 卷。
 
 目前是单实例、单管理工作区，没有高可用或用户间数据隔离。后续多人试用需要独立工作区授权。新增费用主要是 EC2、公网 IPv4、EBS、快照和少量 Cognito 用量；复用既有 ALB，无新增 ALB 或 NAT 网关费用。
 

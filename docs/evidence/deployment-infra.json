@@ -1,0 +1,37 @@
+{
+  "schema": "pai-aws-infrastructure-verification-1",
+  "checkedAt": "2026-09-30T13:59:52.585477+00:00",
+  "result": "passed",
+  "region": "ap-northeast-1",
+  "stackStatus": "UPDATE_COMPLETE",
+  "site": "https://pai.oneai.host",
+  "instanceId": "i-064e7aea50176ad07",
+  "instanceType": "t3.medium",
+  "vpcId": "vpc-fb40619c",
+  "wordPressTaskVpcId": "vpc-fb40619c",
+  "sameVpc": true,
+  "sharedAlb": "ai-srv-alb",
+  "newAlb": false,
+  "newRulePriority": 120,
+  "existingRulesUnchanged": [
+    "100",
+    "110",
+    "default"
+  ],
+  "wordPressPublicStatus": 200,
+  "targetHealth": "healthy",
+  "dataVolume": {
+    "id": "vol-0f795222a2404ea0a",
+    "encrypted": true,
+    "sizeGiB": 40,
+    "type": "gp3"
+  },
+  "ingressOnlyFromAlb": true,
+  "backup": {
+    "schedule": "cron(0 18 * * ? *)",
+    "retentionDays": 14,
+    "snapshotRestoreTested": false
+  },
+  "releaseSha256": "718b9be27766baddf54d72d6d4f6511d6557d43766cc48f26c19c3297edb061c",
+  "runtimeSourceCommit": "1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e"
+}

@@ -1,6 +1,6 @@
 {
   "schema": "pai-blender-e2e-1",
-  "checkedAt": "2026-09-30T12:47:47.817Z",
+  "checkedAt": "2026-09-30T13:43:06.165Z",
   "result": "passed",
   "blenderVersion": "5.2.2 LTS",
   "rejectedOcclusion": "rejected",

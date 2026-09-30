@@ -1,9 +1,13 @@
-# Local API
+# Workbench API
 
 JSON requests; unknown command/path fields are rejected. Default origin is `http://127.0.0.1:4317`.
 
+AWS deployment uses the exact origin `https://pai.oneai.host` and requires signed ALB/Cognito claims for every workspace route. Native review and scene POSTs may return `202`, `Location: /api/runs/:id` or `/api/scenes/:id`, and `Retry-After: 2`. Poll that location until the saved state is no longer running. Polling and duplicate POSTs retain the original identity and do not launch another command. A restarted running task becomes interrupted and requires reconciliation, never automatic replay.
+
 | Endpoint | Purpose |
 |---|---|
+| `GET /healthz` | Minimal health status for the ALB; no workspace data |
+| `GET /logout` | Expires ALB session cookies and uses the configured Cognito logout |
 | `GET /api/state` | Projects, runs, feedback, proposal/campaign states, separated pilot metrics |
 | `POST /api/projects` | `{title,intendedDecision,requirements}`; freezes revision 1 |
 | `PATCH /api/projects/:id` | Same fields plus `expectedRevision`; compare-and-swap revision update |

@@ -45,9 +45,13 @@ The portable packet includes eight text files: review, native recording result, 
 
 ## Interface and operational scope
 
-Fastify / React / Vite / Zod / TypeScript; private local SQLite with WAL and full synchronization. API writes reject cross-origin requests, all requests require a local expected Host, uploads are bounded, CSP forbids foreign scripts, and local state is excluded from Git.
+Fastify / React / Vite / Zod / TypeScript; private SQLite with WAL and full synchronization. API writes reject cross-origin requests, workspace requests require a configured Host, uploads are bounded, CSP forbids foreign scripts, and runtime state is excluded from Git.
 
-Local trusted operators configure dependency paths through environment variables. No multi-user authentication, scheduled publication, credential browser automation or public upload service is implied.
+Local trusted operators configure dependency paths through environment variables. AWS mode adds a shared ALB host route, Cognito login and application verification of signed claims from that ALB, issuer and client. Only the ALB security group reaches the instance. A dedicated encrypted EBS volume holds state and artifacts; daily AWS Backup retention is 14 days.
+
+Long native work is claimed durably before returning HTTP 202. Clients poll the existing run; duplicate identities never relaunch it. Graceful shutdown waits for active native jobs, while forced restarts retain interrupted identities. Shared WordPress listener rules and idle timeout are unchanged.
+
+The deployment has one management workspace. It does not isolate data between users, schedule publication or accept anonymous public uploads. Native desktop/mobile packaging remains future work.
 
 ## Why this scope first
 
