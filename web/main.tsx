@@ -3,26 +3,20 @@ import { createRoot } from "react-dom/client";
 import type { Campaign, Feedback, Project, Review, CandidateId } from "../src/contracts";
 import type { Proposal } from "../src/proposals";
 import type { SceneReview } from "../src/scenes";
+import type { FactoryCriteria, FactoryCriteriaValues, FactoryReview } from "../src/factory";
+import type { AssistantPlan } from "../src/assistant";
+import { api, requestIdFor } from "./api";
+import { Studio, useLiveSession } from "./studio";
+import { CHECK_LABELS, FactoryPanel } from "./factory";
+import { Palette, type Command } from "./palette";
 import "./style.css";
 
 type State = { projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[];
-  proposals: Proposal[]; scenes: SceneReview[]; metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { modelProposal: boolean; blender: boolean; authenticatedWorkspace?: boolean } };
-async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
-  let r = await fetch(`/api${path}`, body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  let data = await r.json();
-  const deadline = Date.now() + 360_000;
-  while (r.status === 202) {
-    const location = r.headers.get("Location");
-    if (!location || !/^\/api\/(runs|scenes)\/[a-f0-9-]+$/.test(location)) throw new Error("检查任务未提供可核验状态地址");
-    if (Date.now() >= deadline) throw new Error("检查仍在运行；请刷新查看原请求回执。不要以新请求重复执行。");
-    await new Promise(resolve => setTimeout(resolve, 2_000));
-    r = await fetch(location);
-    data = await r.json();
-  }
-  if (!r.ok) throw new Error(`${data.error}: ${data.message ?? "请求被拒绝"}`);
-  return data as T;
-}
+  proposals: Proposal[]; scenes: SceneReview[]; factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[];
+  metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
+  capabilities: { modelProposal: boolean; blender: boolean; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues } } };
+const FALLBACK_CRITERIA: FactoryCriteriaValues = { maxOutputLossPerSeed: 0, maxClosedIntervalsOverLimit: 0, maxHallC: 25, minEvServiceRatio: 0.8, maxClosedFailures: 0, requireNetOutputGain: true };
+const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 const labels: Record<string, string> = {
   reference: "基准设置", camera: "相机偏移", dim: "弱光设置",
   "accepted-in-recorded-panel": "记录样本内通过", rejected: "拒绝采用", "needs-more-evidence": "需要更多证据",
@@ -54,6 +48,8 @@ function App() {
   const [sceneId, setSceneId] = useState("");
   const [area, setArea] = useState(12);
   const [envelope, setEnvelope] = useState(1.4);
+  const [factoryPrefill, setFactoryPrefill] = useState<Record<string, unknown>>();
+  const { session, track } = useLiveSession();
   async function refresh() { const s = await api<State>("/state"); setData(s); return s; }
   useEffect(() => { void refresh().catch(e => setError(String(e))); }, []);
   const project = data?.projects.find(p => p.id === projectId) ?? data?.projects.at(-1);
@@ -64,6 +60,7 @@ function App() {
   const proposals = data?.proposals.filter(p => p.projectId === project?.id) ?? [];
   const scenes = data?.scenes.filter(s => s.projectId === project?.id) ?? [];
   const scene = scenes.find(s => s.id === sceneId) ?? scenes.at(-1);
+  const factoryReviews = data?.factoryReviews ?? [];
   async function perform(action: () => Promise<unknown>, message: string) {
     setBusy(true); setError(""); setNotice("");
     try { await action(); await refresh(); setNotice(message); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -79,49 +76,76 @@ function App() {
   }
   async function review(selected: CandidateId, feedbackId?: string) {
     if (!project) return;
-    const key = `pai-request-${project.id}-${project.revision}-${selected}-${feedbackId ?? "initial"}`;
-    const requestId = sessionStorage.getItem(key) ?? crypto.randomUUID();
-    sessionStorage.setItem(key, requestId);
+    const requestId = requestIdFor(`pai-request-${project.id}-${project.revision}-${selected}-${feedbackId ?? "initial"}`);
     await perform(async () => {
-      const r = await api<Review>(`/projects/${project.id}/reviews`, { requestId, projectRevision: project.revision, candidate: selected, ...(feedbackId ? { feedbackId } : {}) });
+      const r = await track(requestId, `Robot Reel 记录评审 · ${labels[selected]}`, false, () =>
+        api<Review>(`/projects/${project.id}/reviews`, { requestId, projectRevision: project.revision, candidate: selected, ...(feedbackId ? { feedbackId } : {}) }));
       setRunId(r.id);
       if (r.state !== "completed") throw new Error(r.error ?? r.state);
     }, "原生检查已完成。重复点击会返回同一回执。");
   }
   async function nextFeedback(f: Feedback) {
-    const next = ({ received: "reproducible", "needs-context": "reproducible", reproducible: "assigned", assigned: "fix-proposed", rechecked: "closed" } as Record<string, string>)[f.status];
+    const next = ({ received: "reproducible", "needs-context": "reproducible", reproducible: "assigned",
+      assigned: f.evidenceKind === "factory-twin" ? "no-change-with-reason" : "fix-proposed", rechecked: "closed" } as Record<string, string>)[f.status];
     if (next) return perform(() => api(`/feedback/${f.id}`, { expectedRevision: f.revision, status: next, reason }, "PATCH"), "反馈状态已保存。");
     if (["fix-proposed", "no-change-with-reason"].includes(f.status)) {
       await perform(async () => {
         // One durable identity for this feedback's explicit rollback review.
-        const key = `pai-recheck-${f.id}-${project!.revision}-${f.revision}-${f.status}`;
-        const requestId = sessionStorage.getItem(key) ?? crypto.randomUUID();
-        sessionStorage.setItem(key, requestId);
+        const requestId = requestIdFor(`pai-recheck-${f.id}-${project!.revision}-${f.revision}-${f.status}`);
         const originalScene = data?.scenes.find(s => s.id === f.runId);
         const originalReview = data?.reviews.find(r => r.id === f.runId);
-        const r = f.evidenceKind === "blender-scene"
-          ? await api<SceneReview>(`/projects/${project!.id}/scenes`, { requestId, projectRevision: project!.revision, variant: f.status === "no-change-with-reason" ? originalScene!.request.variant : "clear", requirements: originalScene!.request.requirements, feedbackId: f.id })
-          : await api<Review>(`/projects/${project!.id}/reviews`, { requestId, projectRevision: project!.revision, candidate: f.status === "no-change-with-reason" ? originalReview!.candidate : "reference", feedbackId: f.id });
-        if (f.evidenceKind === "robot-review") setRunId(r.id); else setSceneId(r.id);
+        const originalFactory = factoryReviews.find(r => r.id === f.runId);
+        const r: { id: string; state: string; error?: string } = f.evidenceKind === "blender-scene"
+          ? await track(requestId, "Blender 反馈复测", true, () => api<SceneReview>(`/projects/${project!.id}/scenes`, { requestId, projectRevision: project!.revision, variant: f.status === "no-change-with-reason" ? originalScene!.request.variant : "clear", requirements: originalScene!.request.requirements, feedbackId: f.id }))
+          : f.evidenceKind === "factory-twin"
+            ? await track(requestId, "工厂孪生反馈复测", false, () => api<FactoryReview>(`/projects/${project!.id}/factory-reviews`, { requestId, projectRevision: project!.revision, criteriaId: originalFactory!.criteriaId, source: originalFactory!.request.source, feedbackId: f.id }))
+            : await track(requestId, "Robot Reel 反馈复测", false, () => api<Review>(`/projects/${project!.id}/reviews`, { requestId, projectRevision: project!.revision, candidate: f.status === "no-change-with-reason" ? originalReview!.candidate : "reference", feedbackId: f.id }));
+        if (f.evidenceKind === "robot-review") setRunId(r.id); else if (f.evidenceKind === "blender-scene") setSceneId(r.id);
         if (r.state !== "completed") throw new Error(r.error ?? r.state);
         await api(`/feedback/${f.id}`, { expectedRevision: f.revision, status: "rechecked", reason, recheckRunId: r.id }, "PATCH");
       }, "已按记录的处理方案重新检查，并绑定新复测回执。");
     }
   }
-  const fAction = (f: Feedback) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理", assigned: "提出回退方案", "fix-proposed": "回退基准并复测", "no-change-with-reason": "复测保留方案", rechecked: "关闭已复测反馈" } as Record<string, string>)[f.status];
+  const fAction = (f: Feedback) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
+    assigned: f.evidenceKind === "factory-twin" ? "记录保留原因" : "提出回退方案", "fix-proposed": "回退基准并复测", "no-change-with-reason": "复测保留方案", rechecked: "关闭已复测反馈" } as Record<string, string>)[f.status];
+  const runScene = (variant: "clear" | "occluded", req: { maxFootprintArea: number; targetEnvelopeRadius: number; requireTargetVisible: boolean }) => perform(async () => {
+    const requestId = requestIdFor(`pai-scene-${project!.id}-${project!.revision}-${variant}-${JSON.stringify(req)}`);
+    scrollTo("studio");
+    const s = await track(requestId, `Blender 原生场景 · ${variant === "occluded" ? "带遮挡候选" : "无遮挡布局"}`, true,
+      () => api<SceneReview>(`/projects/${project!.id}/scenes`, { requestId, projectRevision: project!.revision, variant, requirements: req }));
+    setSceneId(s.id);
+    if (s.state !== "completed") throw new Error(s.error ?? s.state);
+  }, "原生 Blender 场景和独立检查已生成。");
+  const commands: Command[] = [
+    { id: "chat", label: "聚焦 AI 对话", hint: "/", run: () => { scrollTo("studio"); window.dispatchEvent(new Event("pai-focus-chat")); } },
+    { id: "scene", label: "生成并检查 Blender 场景（当前参数）", run: () => { if (project && data?.capabilities.blender) void runScene(sceneVariant, { maxFootprintArea: area, targetEnvelopeRadius: envelope, requireTargetVisible: true }); else scrollTo("industrial"); } },
+    { id: "factory", label: "工厂维护与能源评审", run: () => scrollTo("factory") },
+    { id: "validate", label: `验证 ${labels[candidate]}`, run: () => { scrollTo("validation"); void review(candidate); } },
+    ...(["persp", "top", "front", "right", "camera"] as const).map(v => ({ id: `view-${v}`, label: `视图：${{ persp: "透视", top: "顶视", front: "前视", right: "右视", camera: "检查相机" }[v]}`,
+      hint: { persp: "5", top: "7", front: "1", right: "3", camera: "0" }[v], run: () => { scrollTo("studio"); window.dispatchEvent(new CustomEvent("pai-view", { detail: v })); } })),
+    { id: "wire", label: "切换线框显示", hint: "Z", run: () => window.dispatchEvent(new CustomEvent("pai-view", { detail: "wire" })) },
+    { id: "xray", label: "切换 X 光透视", hint: "Alt Z", run: () => window.dispatchEvent(new CustomEvent("pai-view", { detail: "xray" })) },
+    ...[["brief", "任务与验收"], ["industrial", "Blender 工业场景"], ["validation", "原生验证"], ["replay", "失败回放"], ["feedback", "反馈复测"], ["handoff", "推广与交付"]]
+      .map(([id, label]) => ({ id: `go-${id}`, label: `跳转：${label}`, run: () => scrollTo(id) })),
+  ];
   return <div className="shell">
     <aside className="sidebar"><a className="brand" href="/"><span className="brand-mark">P</span><span>PAI<span className="brand-sub">DESIGN WORKBENCH</span></span></a>
       <p className="workspace-label">专业设计工作台 · 01</p>
-      <nav aria-label="工作流程">{[["brief", "01", "任务与验收"], ["design", "02", "设计与证据"], ["validation", "03", "原生验证"], ["replay", "04", "失败回放"], ["feedback", "05", "反馈复测"], ["handoff", "06", "推广与交付"]].map(([href, num, text]) => <a key={href} href={`#${href}`}><span>{num}</span>{text}</a>)}</nav>
-      <div className="scope-note"><span className="status-dot" /> 记录仿真评审<p>30 条真实历史记录<br />1 个任务 · 10 个配对种子<br />尚未进行现场验证</p></div>
+      <nav aria-label="工作流程">{[["studio", "00", "AI 工作室"], ["brief", "01", "任务与验收"], ["design", "02", "设计与证据"], ["validation", "03", "原生验证"], ["replay", "04", "失败回放"], ["feedback", "05", "反馈复测"], ["handoff", "06", "推广与交付"], ["factory", "07", "工厂孪生"]].map(([href, num, text]) => <a key={href} href={`#${href}`}><span>{num}</span>{text}</a>)}</nav>
+      <button type="button" className="palette-trigger" onClick={() => window.dispatchEvent(new Event("pai-palette"))}>命令面板 <kbd>Ctrl K</kbd></button>
+      <div className="scope-note"><span className="status-dot" /> 记录仿真评审<p>30 条真实历史记录<br />Blender 合成静态场景<br />工厂孪生演示仿真<br />尚未进行现场验证</p></div>
       <p className="sidebar-footer">Radar → Design → EvalArc<br />Robot Reel → Feedback</p>
     </aside>
     <main>
-      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><div className="account-actions"><span className="version">WORKBENCH · v0.1</span>{data?.capabilities.authenticatedWorkspace && <a className="session-logout" href="/logout">退出登录</a>}</div></header>
-      <div className="scope-banner"><strong>当前验证范围</strong><span>历史策略记录核验 + 合成静态场景几何检查；尚未执行新的策略推理、动力学或现场验证。结论仅适用于各自证据范围。</span></div>
+      <header><div><div className="eyebrow">PHYSICAL AI / DESIGN REVIEW</div><h1>让设计决策有证据。</h1><p>从需求到失败案例，再到可复测的反馈闭环。</p></div><div className="account-actions"><span className="version">WORKBENCH · v0.2</span>{data?.capabilities.authenticatedWorkspace && <a className="session-logout" href="/logout">退出登录</a>}</div></header>
+      <div className="scope-banner"><strong>当前验证范围</strong><span>历史策略记录核验 + 合成静态场景几何检查 + 工厂孪生演示仿真评审；尚未执行新的策略推理、动力学或现场验证。AI 对话只生成计划，结论仅适用于各自证据范围。</span></div>
       {error && <div role="alert" className="alert error">{error}</div>}
       {notice && <div role="status" className="alert">{notice}</div>}
       {busy && <div role="status" className="busy">正在执行原生检查并保存回执…</div>}
+      <Studio project={project} plans={data?.assistantPlans ?? []} modelConfigured={Boolean(data?.capabilities.modelProposal)} busy={busy} session={session} scene={scene}
+        track={track} refresh={refresh} selectProject={id => { setProjectId(id); setRunId(""); }} onError={message => setError(message)}
+        onEditScene={payload => { const r = payload.requirements as { maxFootprintArea: number; targetEnvelopeRadius: number }; setSceneVariant(payload.variant as "clear" | "occluded"); setArea(r.maxFootprintArea); setEnvelope(r.targetEnvelopeRadius); scrollTo("industrial"); setNotice("计划参数已填入 Blender 专业面板，可调整后执行。"); }}
+        onEditFactory={payload => { setFactoryPrefill({ ...payload }); scrollTo("factory"); setNotice("计划标准已填入工厂专业面板，可调整后冻结。"); }} />
       <section id="brief" className="panel">
         <div className="section-top"><div><div className="eyebrow">01 / BRIEF</div><h2>任务与验收边界</h2></div><span className="pill">{project ? `需求 v${project.revision}` : "新任务"}</span></div>
         {data && data.projects.length > 0 && <label className="project-select">已有任务<select aria-label="选择已有任务" value={project?.id ?? ""} onChange={e => { setProjectId(e.target.value); setRunId(""); }} >{data.projects.map(p => <option key={p.id} value={p.id}>{p.title} · v{p.revision}</option>)}</select></label>}
@@ -135,14 +159,7 @@ function App() {
       <section id="industrial" className="panel">
         <div className="section-top"><div><div className="eyebrow">02B / NATIVE INDUSTRIAL SCENE</div><h2>Blender 工业场景设计</h2></div><span className="pill">{scene?.candidate?.blenderVersion ? `Blender ${scene.candidate.blenderVersion}` : "原生 Blender · 待执行"}</span></div>
         <p className="muted">显式合成工作单元：4m × 3m。检查静态占地、声明的目标包络与相机可见性；不代表真实机器人可达性、DFM 或动力学验证。</p>
-        <div className="event-form"><label>设计变体<select aria-label="Blender 设计变体" value={sceneVariant} onChange={e => setSceneVariant(e.target.value as typeof sceneVariant)}><option value="occluded">带遮挡的相机布局</option><option value="clear">移除遮挡的基准布局</option></select></label><label>最大占地 m²<input type="number" min={1} max={100} step={0.1} value={area} onChange={e => setArea(Number(e.target.value))} /></label><label>声明的目标包络半径 m<input type="number" min={0.1} max={10} step={0.1} value={envelope} onChange={e => setEnvelope(Number(e.target.value))} /></label><button disabled={busy || !project || !data?.capabilities.blender} onClick={() => perform(async () => {
-          const req = { maxFootprintArea: area, targetEnvelopeRadius: envelope, requireTargetVisible: true };
-          const key = `pai-scene-${project!.id}-${project!.revision}-${sceneVariant}-${JSON.stringify(req)}`;
-          const requestId = sessionStorage.getItem(key) ?? crypto.randomUUID(); sessionStorage.setItem(key, requestId);
-          const s = await api<SceneReview>(`/projects/${project!.id}/scenes`, { requestId, projectRevision: project!.revision, variant: sceneVariant, requirements: req });
-          setSceneId(s.id);
-          if (s.state !== "completed") throw new Error(s.error ?? s.state);
-        }, "原生 Blender 场景和独立检查已生成。")}>生成并检查 Blender 场景</button></div>
+        <div className="event-form"><label>设计变体<select aria-label="Blender 设计变体" value={sceneVariant} onChange={e => setSceneVariant(e.target.value as typeof sceneVariant)}><option value="occluded">带遮挡的相机布局</option><option value="clear">移除遮挡的基准布局</option></select></label><label>最大占地 m²<input type="number" min={1} max={100} step={0.1} value={area} onChange={e => setArea(Number(e.target.value))} /></label><label>声明的目标包络半径 m<input type="number" min={0.1} max={10} step={0.1} value={envelope} onChange={e => setEnvelope(Number(e.target.value))} /></label><button disabled={busy || !project || !data?.capabilities.blender} onClick={() => void runScene(sceneVariant, { maxFootprintArea: area, targetEnvelopeRadius: envelope, requireTargetVisible: true })}>生成并检查 Blender 场景</button></div>
         {!data?.capabilities.blender && <p className="muted">需安装原生 Blender 并配置 PAI_BLENDER；已有历史仿真闭环可独立使用。</p>}
         {scenes.length > 0 && <label className="project-select">场景检查记录<select aria-label="选择场景检查记录" value={scene?.id ?? ""} onChange={e => setSceneId(e.target.value)}>{scenes.map(s => <option key={s.id} value={s.id}>{s.request.variant === "occluded" ? "遮挡布局" : "基准布局"} · {s.verdict ?? s.state} · {s.id.slice(0, 8)}</option>)}</select></label>}
         {scene && <><div className={`decision ${scene.verdict === "rejected" ? "rejected" : ""}`}><div><span>原生几何评审</span><h3>{scene.state === "completed" ? scene.verdict === "rejected" ? "场景检查拒绝" : "静态场景检查通过" : scene.state}</h3><p>{scene.error ?? `EvalArc 检测到 ${scene.diff?.blocking_changes ?? "待定"} 项丢失的检查；静态几何结论不外推到动态执行。`}</p></div></div>
@@ -156,13 +173,15 @@ function App() {
                 : `相机射线首先命中${hit}；原生投影与射线检查${c.passed ? "通过" : "失败"}`;
               return <div key={c.id}><span className={`check-icon ${!c.passed ? "fail" : ""}`}>{c.passed ? "✓" : "×"}</span><div><strong>{{ "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "原生相机射线可见性" }[c.id]}</strong><p>{detail}</p></div></div>;
             })}</div>
-            <div className="artifact-links"><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.blend`}>下载可编辑 .blend</a><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.glb`}>下载 GLB</a><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/checks.json`}>下载原生检查</a>
+            <div className="artifact-links"><button type="button" className="secondary" onClick={() => { setSceneId(scene.id); scrollTo("studio"); }}>在三维视口查看</button><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.blend`}>下载可编辑 .blend</a><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.glb`}>下载 GLB</a><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/checks.json`}>下载原生检查</a>
               <button className="secondary" disabled={busy || scene.candidate?.checks.find(c => c.id === "camera-visibility")?.passed !== false || scene.baseline?.checks.find(c => c.id === "camera-visibility")?.passed !== true} onClick={() => perform(() => api("/feedback", { runId: scene.id, evidenceKind: "blender-scene", kind: "design-check", checkId: "camera-visibility", seed: null, expected: "相机射线首先命中目标", observed: "原生射线被遮挡物阻挡，需要移除遮挡并复测", actorKind: "maintainer" }), "原生场景反馈已绑定可见性检查。")}>记录遮挡反馈</button>
               <button className="secondary" disabled={busy} onClick={() => perform(() => api("/campaigns", { runId: scene.id, evidenceKind: "blender-scene", channel: "direct-pilot" }), "场景试用草稿已生成，尚未发送。")}>生成场景案例草稿</button>
             </div></>}
           <details><summary>原生场景回执</summary><pre>{JSON.stringify(scene, null, 2)}</pre></details></>}
         <details><summary>主流软件接入分工</summary><p className="muted">Blender：场景与资产；FreeCAD/CadQuery：工程几何与约束；Onshape/Fusion/SolidWorks/NX/CATIA：原生专业工作流与授权接口；Gazebo/Isaac Sim：机器人仿真。当前只将已执行的 Blender 与记录检查显示为可用。</p><a href="https://docs.blender.org/api/current/" target="_blank" rel="noreferrer">Blender 官方 API ↗</a> · <a href="https://www.freecad.org/features.php" target="_blank" rel="noreferrer">FreeCAD 官方功能 ↗</a> · <a href="https://cadquery.readthedocs.io/en/latest/importexport.html" target="_blank" rel="noreferrer">CadQuery 格式边界 ↗</a></details>
       </section>
+      <FactoryPanel project={project} criteria={data?.factoryCriteria ?? []} reviews={factoryReviews} defaults={data?.capabilities.factoryTwin?.defaultCriteria ?? FALLBACK_CRITERIA}
+        busy={busy} prefill={factoryPrefill} track={track} perform={perform} />
       <section id="design" className="panel">
         <div className="section-top"><div><div className="eyebrow">02 / DESIGN EVIDENCE</div><h2>候选设计与专业线索</h2></div><span className="pill">可复用的原生工具</span></div>
         <div className="candidates">{(["reference", "camera", "dim"] as CandidateId[]).map(c => <button disabled={busy} key={c} className={`candidate ${candidate === c ? "selected" : ""}`} onClick={() => setCandidate(c)}><span className="candidate-tag">{c.toUpperCase()}</span><strong>{labels[c]}</strong><span>{c === "reference" ? "固定原始视角与光照" : c === "camera" ? "相机平移 +0.12m" : "光照降为基准的 25%"}</span><small>设计条件对比 · 同一模型</small></button>)}</div>
@@ -200,7 +219,7 @@ function App() {
         <div className="form-grid"><label>预期结果<textarea value={expected} onChange={e => setExpected(e.target.value)} /></label><label>观察结果<textarea value={observed} onChange={e => setObserved(e.target.value)} /></label></div>
         <div className="form-footer"><p>绑定当前检查与 seed {seed}；此次操作记为维护者验证。</p><button className="secondary" disabled={busy || run?.state !== "completed"} onClick={() => perform(() => api("/feedback", { runId: run!.id, kind: "regression", seed, expected, observed, actorKind: "maintainer" }), "反馈已绑定原始证据。")}>记录案例反馈</button></div>
         <label>处理与复测说明<textarea minLength={5} value={reason} onChange={e => setReason(e.target.value)} /></label>
-        <div className="feedback-list">{feedback.map(f => <article key={f.id}><div className="feedback-heading"><strong>{f.evidenceKind === "blender-scene" ? `Blender · ${f.checkId}` : `seed ${f.seed}`} · {f.observed}</strong><span className="pill">{labels[f.status]}</span></div><p>来源：{f.actorKind} · 版本 {f.revision} · {f.id.slice(0, 8)}</p><div className="history">{f.history.map((h, i) => <span key={i}>{labels[h.status]}</span>)}</div><details><summary>处理记录</summary>{f.history.map((h, i) => <p key={i}>{labels[h.status]} · {h.reason}{h.recheckRunId && <small>复测 {h.recheckRunId}</small>}</p>)}</details>{f.status !== "closed" && <button disabled={busy} onClick={() => nextFeedback(f)}>{fAction(f)}</button>}</article>)}</div>
+        <div className="feedback-list">{feedback.map(f => <article key={f.id}><div className="feedback-heading"><strong>{f.evidenceKind === "blender-scene" ? `Blender · ${f.checkId}` : f.evidenceKind === "factory-twin" ? `工厂 · seed ${f.seed} · ${CHECK_LABELS[f.checkId ?? ""] ?? f.checkId}` : `seed ${f.seed}`} · {f.observed}</strong><span className="pill">{labels[f.status]}</span></div><p>来源：{f.actorKind} · 版本 {f.revision} · {f.id.slice(0, 8)}</p><div className="history">{f.history.map((h, i) => <span key={i}>{labels[h.status]}</span>)}</div><details><summary>处理记录</summary>{f.history.map((h, i) => <p key={i}>{labels[h.status]} · {h.reason}{h.recheckRunId && <small>复测 {h.recheckRunId}</small>}</p>)}</details>{f.status !== "closed" && <button disabled={busy} onClick={() => nextFeedback(f)}>{fAction(f)}</button>}</article>)}</div>
       </section>
       <section id="handoff" className="panel">
         <div className="section-top"><div><div className="eyebrow">06 / HANDOFF & PILOT</div><h2>可核验交付与推广反馈</h2></div><span className="pill">草稿 · 不自动发送</span></div>
@@ -210,7 +229,8 @@ function App() {
         <p className="muted">没有曝光分母，转化率不计算；维护者和自动测试不计入独立采用数据。</p>
         {campaign && <div className="event-form"><label>匿名参与者标识<input value={participant} onChange={e => setParticipant(e.target.value)} /></label><label>参与者类型<select value={actor} onChange={e => setActor(e.target.value as typeof actor)}><option value="maintainer">维护者测试</option><option value="independent">独立参与者（自报）</option><option value="fixture">自动测试</option></select></label><label>实际观察事件<select value={eventKind} onChange={e => setEventKind(e.target.value)}><option value="started">开始试用</option><option value="completed">完成试用</option><option value="evidence-reopened">重新打开证据</option><option value="feedback">提供反馈</option><option value="repeat-use">再次使用</option></select></label><button disabled={busy} onClick={() => perform(() => api("/events", { eventId: crypto.randomUUID(), campaignId: campaign.id, participantId: participant, actorKind: actor, kind: eventKind }), "观察事件已保存。")}>记录实际事件</button></div>}
       </section>
-      <footer>PAI Design Workbench · native evidence, reviewable decisions.<span>Web / PWA · 桌面与移动原生壳规划中 · CAD/DFM 待接入</span></footer>
+      <Palette commands={commands} />
+      <footer>PAI Design Workbench · native evidence, reviewable decisions.<span>Web / PWA · AI 工作室 + 专业面板 · CAD/DFM 待接入</span></footer>
     </main>
   </div>;
 }

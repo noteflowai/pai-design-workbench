@@ -2,7 +2,7 @@ name: Workbench checks
 on:
   push:
     branches: [main]
-    paths: ["src/**", "native/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
+    paths: ["src/**", "native/**", "data/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
   pull_request:
   workflow_dispatch:
 permissions:

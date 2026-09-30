@@ -6,7 +6,7 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
-已实现**历史记录评审**与 **Blender 原生静态场景设计**两个闭环，提供响应式 Web/PWA。首版不执行新的策略推理，不包含参数化机械 CAD、现场安全认证或自动发布。受控模型提案接口已实现，但实际模型调用需要现有控制器入口与经过审查的预算账本；未配置时明确禁用。
+已实现**历史记录评审**、**Blender 原生静态场景设计**与**工厂孪生维护/能源方案评审**三个闭环，以及 **AI 工作室**：对话生成类型化工具计划（显示约束收紧或放宽，无验收权），确认后调用原生工具；Blender 每完成一个构建阶段即通过 SSE 推送原生几何、射线与 Cycles 采样进度，在 three.js 专业视口（轨道、视图预设、大纲、检查器、线框/X 光、阶段时间轴、Ctrl+K 命令面板）实时呈现。提供响应式 Web/PWA。首版不执行新的策略推理，不包含参数化机械 CAD、现场安全认证或自动发布。受控模型提案接口已实现，但实际模型调用需要现有控制器入口与经过审查的预算账本；未配置时明确禁用。
 
 ## 快速启动
 
@@ -47,7 +47,11 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 
 [云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/36723476548)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、17 组边界测试和原生记录闭环；CDK 基础设施检查也通过。详见报告中的环境与范围。
 
-![Blender 原生场景与反馈复测工作台](docs/evidence/blender-desktop.png)
+![AI 工作室：对话计划驱动 Blender 原生构建，实时视口显示遮挡射线](docs/evidence/studio-desktop.png)
+
+工厂孪生：先冻结标准，再逐种子评估 Robot Reel v0.18.0 的真实结果；默认标准下 seed 3、11 产出下降、seed 10 EV 服务 74%，方案被拒绝。
+
+![工厂孪生维护与能源方案评审](docs/evidence/factory-desktop.png)
 
 ## 工具边界
 
@@ -57,6 +61,8 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 | 领域设计 | 冻结需求、比较条件；Blender 原生场景、射线/投影与几何检查；参数化 CAD/动力学待接入 |
 | 运行控制 | NoteFlow 原生 text-proposal flow；使用既有预算账本，不初始化或重置预算 |
 | 原生验收 | Robot Reel 核验记录与配对统计；生成稳定种子 ID 的 JUnit，交由 EvalArc 对照 |
+| AI 工作室 | 确定性意图解析为 Zod 校验的计划；确认后走同一 API；受控模型仅作为显式计划步骤 |
+| 工厂孪生 | Robot Reel v0.18.0 逐字节 seeds/manifest；预冻结标准、摘要重算、逐种子保留；不执行上游工具 |
 | 回放与交付 | 与已核验 manifest 匹配的原始视频；8 文件证据包、哈希与语义核验 |
 | 推广反馈 | 案例草稿、匿名事件、反馈状态及新复测回执；不自动发送或发布 |
 

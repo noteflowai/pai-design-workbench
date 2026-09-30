@@ -8,6 +8,12 @@ New workbench code: MIT, Copyright (c) 2026 Qiang Guo.
 The original license and recording attribution are retained at
 `tests/fixtures/LICENSE` and `tests/fixtures/NOTICE.txt`.
 
+`data/robot-reel-factory-twin-v0.18.0/seeds.json` and `manifest.json` are byte-identical copies from
+Robot Reel `docs/factory-twin/` at commit `b3ee5c7d2c5588ddc7e067869c049aad7e6951ce` (v0.18.0), Apache-2.0,
+with the original LICENSE and a NOTICE.txt describing provenance and scope in the same directory.
+
+The web viewport bundles [three.js](https://github.com/mrdoob/three.js) 0.186.1 (MIT) in the built assets.
+
 The demo setup downloads original Robot Reel recordings with their own LICENSE/NOTICE/METHODS in a private ignored dependency folder. This repository does not redistribute videos, policy weights or simulation assets. Original recording attribution identifies Hugging Face SmolVLA, LeRobot, LIBERO and applicable asset terms. Upstream code licenses do not relicense third-party simulated assets.
 
 Native EvalArc and Radar are fetched at pinned upstream commits; their original licenses remain in those checkouts. Private NoteFlow controller code and credentials are not copied into this repository.

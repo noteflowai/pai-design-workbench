@@ -14,6 +14,9 @@ import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
 import { reviewScene, type SceneReview } from "./scenes.js";
+import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
+import { LiveBus, type Stamped } from "./live.js";
+import { confirmPlan, createPlan } from "./assistant.js";
 import { toolCatalog } from "./tool-catalog.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
@@ -24,10 +27,12 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   let store: Store;
   try { store = new Store(join(config.state, "workbench.sqlite")); } catch (error) { await release(); throw error; }
   store.interruptPending();
-  const workbench = new Workbench(store, adapters, config.state);
+  const live = new LiveBus();
+  const workbench = new Workbench(store, adapters, config.state, live);
+  const streams = new Set<() => void>();
   const authenticated = authentication(config);
   const activeJobs = new Set<Promise<unknown>>();
-  app.addHook("preClose", async () => { await Promise.allSettled([...activeJobs]); });
+  app.addHook("preClose", async () => { for (const end of [...streams]) end(); await Promise.allSettled([...activeJobs]); });
   app.addHook("onClose", async () => { store.close(); await release(); });
   app.addHook("onRequest", async (request, reply) => {
     const healthCheck = request.method === "GET" && request.url === "/healthz";
@@ -91,11 +96,16 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   app.get("/api/state", async () => ({
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
-    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), metrics: workbench.metrics(),
+    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"),
+    factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
+    assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
+      factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
+      assistant: { mode: "deterministic intent to typed plans; confirmation required", modelInvocation: Boolean(config.controllerEntrypoint && config.controllerDatabase) },
+      liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));
   app.get("/api/tools", async () => toolCatalog);
@@ -109,7 +119,45 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     executeNative(reply, request.body, "review", "runs", () => workbench.runReview(paramId(request.params), request.body)));
   app.post("/api/projects/:id/proposals", async request => propose(store, config, workbench.project(paramId(request.params)), request.body));
   app.post("/api/projects/:id/scenes", async (request, reply) =>
-    executeNative(reply, request.body, "scene-review", "scenes", () => reviewScene(store, config, workbench.project(paramId(request.params)), request.body)));
+    executeNative(reply, request.body, "scene-review", "scenes", () => reviewScene(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.get("/api/scenes/:id/stages/:which/:index", async (request, reply) => {
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), index: z.coerce.number().int().min(1).max(16) }).parse(request.params);
+    const scene = store.get<SceneReview>("scene-review", p.id);
+    const stage = scene?.stages?.[p.which]?.find(s => s.index === p.index);
+    if (!scene || !stage || !/^stages\/\d{2}-[a-z-]{1,24}\.glb$/.test(stage.file)) throw new DomainError("NOT_FOUND", "Stage not recorded", 404);
+    const content = await readFile(join(config.state, "scenes", p.id, p.which, stage.file));
+    if (sha256(content) !== stage.sha256) throw new DomainError("SCENE_FILE_CHANGED", "Stage geometry differs from its recorded digest", 422);
+    return reply.type("model/gltf-binary").header("X-PAI-Evidence", "presentation-stage").send(content);
+  });
+  app.get("/api/live/:requestId", async (request, reply) => {
+    const key = paramId(request.params, "requestId");
+    const headers = { ...reply.getHeaders(), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no", connection: "keep-alive" };
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, headers as Record<string, string>);
+    let ended = false;
+    const write = (event: Stamped) => { if (!ended) raw.write(`id: ${event.seq}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`); };
+    const end = () => { if (ended) return; ended = true; clearInterval(heartbeat); subscription.close(); streams.delete(end); raw.end(); };
+    const subscription = live.subscribe(key, event => { write(event); if (event.kind === "done") end(); });
+    raw.write("retry: 3000\n: presentation-only progress; durable records remain authoritative\n\n");
+    for (const event of subscription.replay) write(event);
+    // Shared ALB idle timeout is 60 s; comment heartbeats keep the stream open without data.
+    const heartbeat = setInterval(() => { if (!ended) raw.write(": heartbeat\n\n"); }, 15_000);
+    streams.add(end);
+    request.raw.on("close", end);
+    if (subscription.done) end();
+  });
+  app.post("/api/projects/:id/factory-criteria", async request =>
+    freezeFactoryCriteria(store, workbench.project(paramId(request.params)), request.body));
+  app.post("/api/projects/:id/factory-reviews", async request =>
+    reviewFactory(store, config.repository, workbench.project(paramId(request.params)), request.body, live));
+  app.get("/api/factory-reviews/:id", async request => {
+    const review = store.get<FactoryReview>("factory-review", paramId(request.params));
+    if (!review) throw new DomainError("NOT_FOUND", "Factory review not found", 404);
+    return review;
+  });
+  app.post("/api/assistant/plans", async request => createPlan(store, request.body, Boolean(config.controllerEntrypoint && config.controllerDatabase)));
+  app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {
     const scene = store.get<SceneReview>("scene-review", paramId(request.params));
     if (!scene) throw new DomainError("NOT_FOUND", "Scene not found", 404);

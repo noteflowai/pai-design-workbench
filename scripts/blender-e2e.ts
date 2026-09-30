@@ -26,6 +26,22 @@ try {
   assert.equal(scene.state, "completed", scene.error ?? "Native scene failed"); assert.equal(scene.verdict, "rejected");
   assert.equal(scene.diff?.blocking_changes, 1);
   assert.equal(scene.candidate?.checks.find(c => c.id === "camera-visibility")?.passed, false);
+  // Live native progress: staged geometry, native ray and Cycles samples, replayed over SSE.
+  assert.deepEqual(scene.stages?.baseline?.map(s => s.id), ["footprint", "robot", "fixtures"]);
+  assert.deepEqual(scene.stages?.candidate?.map(s => s.id), ["footprint", "robot", "fixtures", "occluder"]);
+  assert.equal(scene.rays?.candidate?.firstHit, "Visibility obstruction"); assert.equal(scene.rays?.candidate?.visible, false);
+  assert.equal(scene.rays?.baseline?.firstHit, "Target"); assert.equal(scene.rays?.baseline?.visible, true);
+  for (const stage of scene.stages!.candidate!) {
+    const r = await app.inject({ url: `/api/scenes/${scene.id}/stages/candidate/${stage.index}`, headers: { host: `127.0.0.1:${config.port}` } });
+    assert.equal(r.statusCode, 200); assert.equal(r.rawPayload.subarray(0, 4).toString(), "glTF");
+  }
+  const stream = await app.inject({ url: `/api/live/${originalRequest.requestId}`, headers: { host: `127.0.0.1:${config.port}` } });
+  const events = stream.body.split("\n").filter(l => l.startsWith("data: ")).map(l => JSON.parse(l.slice(6)) as { kind: string; which?: string; sample?: number; samples?: number });
+  assert.equal(events.filter(e => e.kind === "stage").length, 7);
+  assert.equal(events.filter(e => e.kind === "ray").length, 2);
+  const rendered = events.filter(e => e.kind === "render");
+  assert.ok(rendered.length === 2 && rendered.every(e => e.sample === e.samples), "Cycles sample progress reached completion in both modes");
+  assert.equal(events.at(-1)?.kind, "done");
   assert.equal((await request<SceneReview>("POST", `/api/projects/${project.id}/scenes`, originalRequest)).id, scene.id);
   let f = await request<Feedback>("POST", "/api/feedback", { runId: scene.id, evidenceKind: "blender-scene",
     kind: "design-check", checkId: "camera-visibility", seed: null, expected: "Native camera ray reaches target", observed: "Occluder blocks target", actorKind: "maintainer" });
@@ -63,6 +79,9 @@ try {
     blenderVersion: scene.candidate!.blenderVersion, rejectedOcclusion: scene.verdict, blockingChanges: scene.diff!.blocking_changes,
     correctedScene: fixed.verdict, feedbackStatus: f.status, preventedUnfixedClosure: true,
     nativeArtifactKinds: ["editable-blend", "glb", "png", "native-checks-json"], roundtrip,
+    liveProgress: { stages: { baseline: scene.stages!.baseline!.length, candidate: scene.stages!.candidate!.length },
+      nativeRay: { baseline: scene.rays!.baseline!.firstHit, candidate: scene.rays!.candidate!.firstHit },
+      renderSamplesObserved: rendered.map(e => `${e.which}:${e.sample}/${e.samples}`), stageDigestsChecked: true, presentationOnly: true },
     physicalValidation: false, dynamicsValidated: false, manufacturabilityValidated: false, campaignPublished: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence/blender-e2e.json"), JSON.stringify(report, null, 2), { mode: 0o600 });

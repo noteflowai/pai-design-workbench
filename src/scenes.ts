@@ -7,6 +7,17 @@ import type { Config } from "./config.js";
 import { Id, type Feedback, type Project, type Receipt, type DiffResult } from "./contracts.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
 import { Store } from "./store.js";
+import type { LiveBus } from "./live.js";
+
+export interface SceneStage { index: number; id: string; label: string; file: string; sha256: string; objects: string[] }
+export interface SceneRay { origin: number[]; target: number[]; hit: number[] | null; firstHit: string | null; visible: boolean; frame: "gltf-y-up" }
+const NativeEvent = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("stage"), index: z.number().int().min(1).max(16), id: z.string().regex(/^[a-z-]{1,24}$/),
+    label: z.string().max(80), file: z.string().regex(/^stages\/\d{2}-[a-z-]{1,24}\.glb$/), objects: z.array(z.string().max(80)).max(32) }).strict(),
+  z.object({ type: z.literal("ray"), origin: z.array(z.number()).length(3), target: z.array(z.number()).length(3),
+    hit: z.array(z.number()).length(3).nullable(), firstHit: z.string().max(80).nullable(), visible: z.boolean() }).strict(),
+  z.object({ type: z.literal("render"), sample: z.number().int().min(0), samples: z.number().int().positive() }).strict(),
+]);
 
 export const SceneRequirements = z.object({
   maxFootprintArea: z.number().min(1).max(100),
@@ -29,6 +40,7 @@ export interface SceneReview {
   createdAt: string; finishedAt?: string; feedbackId?: string; verdict?: "accepted-static-scene" | "rejected";
   baseline?: z.infer<typeof SceneChecks>; candidate?: z.infer<typeof SceneChecks>; diff?: DiffResult;
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
+  stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>; rays?: Partial<Record<"baseline" | "candidate", SceneRay>>;
   scope: "generated-static-geometry"; physicalValidation: false;
 }
 export function sceneCaseText(run: SceneReview) {
@@ -45,8 +57,9 @@ function checksXml(value: z.infer<typeof SceneChecks>) {
       `<testcase classname="workcell.static" name="${c.id}">${c.passed ? "" : '<failure message="Native static geometry check failed"/>'}</testcase>`).join("")
     + "</testsuite>\n";
 }
-export async function reviewScene(store: Store, config: Config, project: Project, input: unknown): Promise<SceneReview> {
+export async function reviewScene(store: Store, config: Config, project: Project, input: unknown, live?: LiveBus): Promise<SceneReview> {
   const request = SceneRequest.parse(input);
+  const publish: LiveBus["publish"] = (key, event) => live?.publish(key, event);
   if (!config.blender) throw new DomainError("BLENDER_NOT_CONFIGURED", "Set PAI_BLENDER to a native Blender executable", 503);
   const record: SceneReview = { id: randomUUID(), projectId: project.id, projectRevision: request.projectRevision,
     request, requirementDigest: sha256(canonical({ projectRequirements: project.requirements, sceneRequirements: request.requirements })),
@@ -54,6 +67,7 @@ export async function reviewScene(store: Store, config: Config, project: Project
     receipts: [], sourceDigests: {}, files: {}, scope: "generated-static-geometry", physicalValidation: false };
   const claimed = store.claim(request.requestId, sha256(canonical({ kind: "blender-scene", projectId: project.id, request })), record, "scene-review");
   if (claimed !== record.id) return store.get<SceneReview>("scene-review", claimed)!;
+  publish(request.requestId, { kind: "record", recordKind: "scene-review", recordId: record.id });
   const directory = join(config.state, "scenes", record.id);
   try {
     if (project.revision !== request.projectRevision) throw new DomainError("REVISION_CONFLICT", "Freeze the current requirement revision");
@@ -74,15 +88,44 @@ export async function reviewScene(store: Store, config: Config, project: Project
     record.sourceDigests = { ...nativeBefore, "blender-workcell.py": scriptHash, "blender-binary": sha256(await readFile(config.blender)) };
     for (const [name, variant] of [["baseline", "clear"], ["candidate", request.variant]] as const) {
       const target = join(directory, name);
+      const label = `Blender ${name === "baseline" ? "基准" : "候选"}场景（${variant === "occluded" ? "遮挡" : "无遮挡"}）`;
+      publish(request.requestId, { kind: "step", id: `blender-${name}`, label, status: "running", which: name });
+      let observed = Promise.resolve();
+      const observe = (line: string) => {
+        if (!line.startsWith("PAI_EVENT ")) return;
+        observed = observed.then(async () => {
+          const parsed = NativeEvent.safeParse((() => { try { return JSON.parse(line.slice(10)); } catch { return undefined; } })());
+          if (!parsed.success) return;
+          const e = parsed.data;
+          if (e.type === "stage") {
+            const digest = sha256(await readFile(join(target, e.file)));
+            const stage: SceneStage = { index: e.index, id: e.id, label: e.label, file: e.file, sha256: digest, objects: e.objects };
+            record.stages = { ...record.stages, [name]: [...(record.stages?.[name] ?? []), stage] };
+            store.put("scene-review", record);
+            publish(request.requestId, { kind: "stage", which: name, index: e.index, id: e.id, label: e.label, objects: e.objects,
+              url: `/api/scenes/${record.id}/stages/${name}/${e.index}`, sha256: digest });
+          } else if (e.type === "ray") {
+            const { type: _type, ...ray } = e;
+            record.rays = { ...record.rays, [name]: { ...ray, frame: "gltf-y-up" } };
+            store.put("scene-review", record);
+            publish(request.requestId, { kind: "ray", which: name, origin: e.origin, target: e.target, hit: e.hit, firstHit: e.firstHit, visible: e.visible });
+          } else {
+            publish(request.requestId, { kind: "render", which: name, sample: e.sample, samples: e.samples });
+          }
+        }).catch(() => { /* Presentation events never fail the native review. */ });
+      };
       await writePrivate(join(directory, `${name}-input.json`), JSON.stringify({ variant, requirements: request.requirements }));
       const args = ["--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "2", "--python", script,
         "--", "--input", join(directory, `${name}-input.json`), "--output", target];
-      const r = await command(config.blender, args, config.repository, undefined, 120_000);
+      const r = await command(config.blender, args, config.repository, undefined, 120_000, observe);
+      await observed;
       await writePrivate(join(directory, `${name}.stdout.log`), r.stdout);
       await writePrivate(join(directory, `${name}.stderr.log`), r.stderr);
       record.receipts.push({ adapter: "blender-native", command: ["blender", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt,
         exitCode: r.exitCode, stdoutSha256: sha256(r.stdout), sourceDigests: { "script": scriptHash } });
       store.put("scene-review", record);
+      publish(request.requestId, { kind: "step", id: `blender-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name,
+        detail: `exit ${r.exitCode}` });
       if (r.exitCode !== 0) throw new DomainError("BLENDER_FAILED", "Native scene production failed; retain receipts and inspect local artifacts", 422);
       record[name] = SceneChecks.parse(JSON.parse(await readFile(join(target, "checks.json"), "utf8")));
       if (record[name]!.variant !== variant) throw new DomainError("SCENE_CONTEXT", "Native scene variant mismatch");
@@ -92,7 +135,9 @@ export async function reviewScene(store: Store, config: Config, project: Project
       }
       store.put("scene-review", record);
     }
+    publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选", status: "running" });
     const diff = await adapters.diff(directory);
+    publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选", status: "done", detail: `blocking ${diff.value.blocking_changes}` });
     const lost = record.baseline!.checks.filter(c => c.passed && !record.candidate!.checks.find(n => n.id === c.id)!.passed).length;
     if (diff.value.blocking_changes !== lost || diff.value.gate_passed !== (lost === 0)) throw new DomainError("SCENE_DIFF_MISMATCH", "Native geometry and independent comparison disagree");
     if (sha256(await readFile(script)) !== scriptHash || canonical(nativeBefore) !== canonical(await adapters.sourceDigests())
@@ -102,5 +147,6 @@ export async function reviewScene(store: Store, config: Config, project: Project
     record.state = "completed";
   } catch (e) { record.state = "failed"; record.error = e instanceof DomainError ? `${e.code}: ${e.message}` : "BLENDER_FAILED: check native configuration and retained local receipts"; }
   record.finishedAt = new Date().toISOString(); store.put("scene-review", record);
+  publish(request.requestId, { kind: "done", state: record.state, recordId: record.id, verdict: record.verdict, detail: record.error });
   return record;
 }

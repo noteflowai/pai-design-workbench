@@ -53,6 +53,31 @@ Long native work is claimed durably before returning HTTP 202. Clients poll the 
 
 The deployment has one management workspace. It does not isolate data between users, schedule publication or accept anonymous public uploads. Native desktop/mobile packaging remains future work.
 
+## AI-native interaction inside professional contracts
+
+The studio follows the pattern used by feature-level CAD agents (for example SolidPilot's intent IR and deterministic compiler) and copilot panels docked beside the model: the conversation produces an intermediate representation, a deterministic layer executes it, and native checks decide.
+
+```mermaid
+flowchart LR
+  Chat[Message] --> Planner[Deterministic intent parser]
+  Planner --> Plan[Typed plan: Zod-valid payload + requirement diff]
+  Plan -->|user confirms or edits in pro panel| Route[Same API route as forms]
+  Route --> Native[Blender / Robot Reel / Factory Twin review]
+  Native --> Checks[Native checks + EvalArc / frozen criteria]
+  Native -. SSE step/stage/ray/render .-> Viewport[three.js pro viewport]
+  Checks --> Record[Durable record and receipts]
+  Record --> Plan
+```
+
+- Plans have `authority: none`. Relaxations are labelled and create a new frozen version; old verdicts stay unchanged.
+- Confirmation records whether the executed payload matched the plan or was edited first.
+- A model is used only as an explicit `model-proposal` step through the existing controller and reviewed ledger. Otherwise no model call happens.
+- The same live session feeds from chat actions and classic buttons, so both paths look and behave the same.
+
+**Live native viewport.** The Blender script exports a GLB after each construction stage and prints `PAI_EVENT` lines for stages, the native ray (converted to glTF Y-up) and Cycles `Sample n/m` from the `render_stats` handler. `command()` observes complete stdout lines without changing the retained result. Stage files are hashed into the scene record and served only if their digest matches. A bounded in-memory `LiveBus` replays events per request identity over server-sent events with 15 s heartbeats, below the shared ALB 60 s idle timeout. The viewport offers orbit, view presets (numpad-style keys), outliner visibility, inspector bounds, wireframe/X-ray, ray overlay and a stage scrubber. Events are presentation only.
+
+**Factory Twin.** Evidence is byte-identical upstream `seeds.json` + `manifest.json` (bundled from Robot Reel `b3ee5c7`, Apache-2.0, extracted from git objects). Criteria are a separate frozen record that must exist before import. Consistency is checked by recomputing the upstream summary; acceptance is computed per seed from frozen criteria only. With default criteria the real panel is rejected: seeds 3 and 11 lose output, seed 10 delivers 74% EV service. No upstream tool is executed and the hosted Robot Reel verifier stays at `6124cee3cba5`.
+
 ## Why this scope first
 
 A verifiable robotics review is feasible with existing real recordings and native checks. Mechanical CAD, DFM and industrial deployment need different native artifacts, evaluators and measurements. The contracts can support them, but labeling a generic text proposal as an industrial design solution would hide missing capabilities.

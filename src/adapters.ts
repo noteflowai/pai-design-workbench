@@ -13,12 +13,25 @@ export interface Adapters {
   diff(directory: string): Promise<AdapterResult<DiffResult>>;
   controller(): Promise<{ state: string; mode: "read-only-accounting"; publicationApproved: false }>;
 }
-export async function command(command: string, args: string[], cwd: string, pythonPath?: string, timeout = 45_000) {
+/**
+ * Run a fixed native executable without a shell. `onLine` observes complete stdout lines as they
+ * arrive (used for presentation-only live progress); it never changes the retained result.
+ */
+export async function command(command: string, args: string[], cwd: string, pythonPath?: string, timeout = 45_000,
+  onLine?: (line: string) => void) {
   const startedAt = new Date().toISOString();
   const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((accept, reject) => {
     const child = spawn(command, args, { cwd, shell: false, detached: process.platform !== "win32",
-      env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", ...(pythonPath ? { PYTHONPATH: pythonPath } : {}) } });
-    let stdout = "", stderr = "", stopped = false;
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", PYTHONUNBUFFERED: "1", ...(pythonPath ? { PYTHONPATH: pythonPath } : {}) } });
+    let stdout = "", stderr = "", stopped = false, pending = "";
+    const emit = (text: string) => {
+      if (!onLine) return;
+      pending += text;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      if (pending.length > 65_536) pending = "";
+      for (const line of lines) { try { onLine(line); } catch { /* Observers cannot affect native execution. */ } }
+    };
     const terminate = () => {
       if (child.pid) {
         try { process.kill(process.platform === "win32" ? child.pid : -child.pid, "SIGKILL"); } catch { /* Already exited. */ }
@@ -26,7 +39,8 @@ export async function command(command: string, args: string[], cwd: string, pyth
     };
     const timer = setTimeout(() => { stopped = true; terminate(); }, timeout);
     child.stdout.on("data", chunk => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text; emit(text);
       if (Buffer.byteLength(stdout) > 4_000_000) { stopped = true; terminate(); }
     });
     child.stderr.on("data", chunk => {

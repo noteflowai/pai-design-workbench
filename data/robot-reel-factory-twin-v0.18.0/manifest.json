@@ -1,0 +1,57 @@
+{
+  "schema": "robot-reel-factory-twin-1",
+  "files": {
+    "lab.json": {
+      "sha256": "ecc4a4d01327f8b0905bdec9d8adbd2cb1fdd121513f67a0b371dcf75d47d2f1",
+      "bytes": 1526483
+    },
+    "index.html": {
+      "sha256": "d7f194ed30b140de3711d7709d40af4a5ed52dc96f6544978fa228df511dd4bf",
+      "bytes": 1571608
+    },
+    "METHODS.md": {
+      "sha256": "ac8b75f5517d3e84d9c8eacbd562c34a74310aeaf21b4a2d3f9c78b3e087a058",
+      "bytes": 6321
+    },
+    "LICENSE": {
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357
+    },
+    "trace-shadow.json": {
+      "sha256": "ada04cfba079413afb9e2f664cf1a1a5dbdec9b76c7dacd7c93073b640554dcf",
+      "bytes": 2634281
+    },
+    "trace-closed.json": {
+      "sha256": "041e9c847f90165cd0066c3727264fd27377e7bd04bb9729e4c393f759e5a1d2",
+      "bytes": 2631690
+    },
+    "seeds.json": {
+      "sha256": "5c5a2ca8abb52dbe25fe30c13727e97278721ed02bed7b5e5d19b9fa23ef28c4",
+      "bytes": 9430
+    },
+    "blender-check.json": {
+      "sha256": "e0185fe6eb8bb67bddba6cae9c66058ff857df891b1ef31604cd59049b65e748",
+      "bytes": 4501
+    },
+    "poster.png": {
+      "sha256": "e362692843dbb5f1ff45293b792377be9e22922ae5e566a2c78a0b81ab18175d",
+      "bytes": 1511101
+    },
+    "render-aerial.jpg": {
+      "sha256": "3f770a4f5c5c5dd8a5b2bd88d82ba0c25e4832a282ce172cbb1a55dfd44c893e",
+      "bytes": 201387
+    },
+    "render-hall.jpg": {
+      "sha256": "7a6f42bf0b5977eb970702a369a8132a4c89c22ebc29ce8f93cd5539f8da186b",
+      "bytes": 281320
+    },
+    "render-cnc.jpg": {
+      "sha256": "90e47f1b5b5c55c77f7011ec99db73d05be6aadc02b6a406f3eae15ef85078ae",
+      "bytes": 164334
+    },
+    "render-energy.jpg": {
+      "sha256": "a9897bf80f0cbd5c30f43f5ec4ca6adf260908afa2c09c928907ca9070301d3a",
+      "bytes": 205686
+    }
+  }
+}

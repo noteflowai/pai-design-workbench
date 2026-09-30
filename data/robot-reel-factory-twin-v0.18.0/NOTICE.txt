@@ -1,0 +1,14 @@
+Robot Reel Factory Twin Lab — reviewed evidence extract
+
+Files seeds.json, manifest.json and LICENSE are byte-identical copies of
+docs/factory-twin/ in https://github.com/noteflowai/robot-reel at commit
+b3ee5c7d2c5588ddc7e067869c049aad7e6951ce (release v0.18.0), Apache-2.0.
+
+They were extracted from git objects of that commit, not from a working tree.
+seeds.json    sha256 5c5a2ca8abb52dbe25fe30c13727e97278721ed02bed7b5e5d19b9fa23ef28c4
+manifest.json sha256 9283923e03d18dd9fd35a5777b1d31a05aa3e644f53502730ad7549abe8dde42
+
+Scope: illustrative simulation. The plant, its parameters and the twin's cost
+weights are demonstration settings, not calibrated to a real site. No physical
+validation, PLC/device control or measured site benefit is implied.
+The independent review of this commit is docs/evidence/robot-reel-factory-review.json.

@@ -1,0 +1,391 @@
+{
+ "seeds": [
+  {
+   "seed": 1,
+   "shadow": {
+    "good_units": 186,
+    "scrap_units": 7,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 34.15,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 502.88,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 452.22,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.431,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 199,
+    "scrap_units": 3,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 475.41,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 449.63,
+    "ev_kwh": 208.27,
+    "max_hall_c": 24.732,
+    "import_kwh_per_good_unit": 2.259,
+    "commands_actuated": 5
+   }
+  },
+  {
+   "seed": 2,
+   "shadow": {
+    "good_units": 184,
+    "scrap_units": 9,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 32.27,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 523.28,
+    "intervals_over_limit": 1,
+    "grid_import_kwh": 408.34,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.219,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 200,
+    "scrap_units": 3,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 448.42,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 383.2,
+    "ev_kwh": 187.61,
+    "max_hall_c": 24.734,
+    "import_kwh_per_good_unit": 1.916,
+    "commands_actuated": 13
+   }
+  },
+  {
+   "seed": 3,
+   "shadow": {
+    "good_units": 197,
+    "scrap_units": 6,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 13.57,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 541.58,
+    "intervals_over_limit": 1,
+    "grid_import_kwh": 434.28,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.204,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 194,
+    "scrap_units": 8,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 444.03,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 393.17,
+    "ev_kwh": 190.54,
+    "max_hall_c": 24.777,
+    "import_kwh_per_good_unit": 2.027,
+    "commands_actuated": 11
+   }
+  },
+  {
+   "seed": 4,
+   "shadow": {
+    "good_units": 185,
+    "scrap_units": 5,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 45.0,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 521.37,
+    "intervals_over_limit": 1,
+    "grid_import_kwh": 406.08,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.195,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 204,
+    "scrap_units": 0,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 440.39,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 383.79,
+    "ev_kwh": 183.33,
+    "max_hall_c": 24.743,
+    "import_kwh_per_good_unit": 1.881,
+    "commands_actuated": 13
+   }
+  },
+  {
+   "seed": 5,
+   "shadow": {
+    "good_units": 184,
+    "scrap_units": 12,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 45.0,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 476.57,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 442.81,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.407,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 203,
+    "scrap_units": 1,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 476.76,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 468.52,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.582,
+    "import_kwh_per_good_unit": 2.308,
+    "commands_actuated": 3
+   }
+  },
+  {
+   "seed": 6,
+   "shadow": {
+    "good_units": 192,
+    "scrap_units": 12,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 5.37,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 466.61,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 421.5,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.195,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 201,
+    "scrap_units": 2,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 466.61,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 416.59,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.073,
+    "commands_actuated": 1
+   }
+  },
+  {
+   "seed": 7,
+   "shadow": {
+    "good_units": 190,
+    "scrap_units": 6,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 45.0,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 469.09,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 372.55,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 1.961,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 203,
+    "scrap_units": 1,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 478.45,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 395.24,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 1.947,
+    "commands_actuated": 1
+   }
+  },
+  {
+   "seed": 8,
+   "shadow": {
+    "good_units": 196,
+    "scrap_units": 7,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 537.12,
+    "intervals_over_limit": 2,
+    "grid_import_kwh": 476.72,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.432,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 198,
+    "scrap_units": 4,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 445.62,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 418.53,
+    "ev_kwh": 177.34,
+    "max_hall_c": 24.816,
+    "import_kwh_per_good_unit": 2.114,
+    "commands_actuated": 15
+   }
+  },
+  {
+   "seed": 9,
+   "shadow": {
+    "good_units": 191,
+    "scrap_units": 8,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 21.68,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 484.19,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 419.29,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.195,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 203,
+    "scrap_units": 0,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 461.74,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 407.09,
+    "ev_kwh": 209.73,
+    "max_hall_c": 24.763,
+    "import_kwh_per_good_unit": 2.005,
+    "commands_actuated": 5
+   }
+  },
+  {
+   "seed": 10,
+   "shadow": {
+    "good_units": 182,
+    "scrap_units": 10,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 45.0,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 560.3,
+    "intervals_over_limit": 2,
+    "grid_import_kwh": 476.59,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.619,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 202,
+    "scrap_units": 2,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 466.28,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 438.68,
+    "ev_kwh": 162.8,
+    "max_hall_c": 24.799,
+    "import_kwh_per_good_unit": 2.172,
+    "commands_actuated": 5
+   }
+  },
+  {
+   "seed": 11,
+   "shadow": {
+    "good_units": 198,
+    "scrap_units": 5,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 14.48,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 553.63,
+    "intervals_over_limit": 1,
+    "grid_import_kwh": 453.2,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.289,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 197,
+    "scrap_units": 5,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 444.85,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 409.49,
+    "ev_kwh": 183.21,
+    "max_hall_c": 24.777,
+    "import_kwh_per_good_unit": 2.079,
+    "commands_actuated": 9
+   }
+  },
+  {
+   "seed": 12,
+   "shadow": {
+    "good_units": 188,
+    "scrap_units": 11,
+    "cnc2_failures": 1,
+    "cnc2_unplanned_down_min": 20.65,
+    "cnc2_planned_service_min": 0.0,
+    "peak_demand_kw": 471.55,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 401.17,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 2.134,
+    "commands_actuated": 0
+   },
+   "closed": {
+    "good_units": 202,
+    "scrap_units": 2,
+    "cnc2_failures": 0,
+    "cnc2_unplanned_down_min": 0.0,
+    "cnc2_planned_service_min": 15.0,
+    "peak_demand_kw": 480.15,
+    "intervals_over_limit": 0,
+    "grid_import_kwh": 401.69,
+    "ev_kwh": 220.0,
+    "max_hall_c": 24.2,
+    "import_kwh_per_good_unit": 1.989,
+    "commands_actuated": 1
+   }
+  }
+ ],
+ "summary": {
+  "pairs": 12,
+  "good_units_gain": {
+   "min": -3,
+   "max": 20,
+   "mean": 11.08,
+   "pairs_improved": 10,
+   "pairs_worse": 2
+  },
+  "shadow_failures": 11,
+  "closed_failures": 0,
+  "shadow_intervals_over_limit": 8,
+  "closed_intervals_over_limit": 0,
+  "max_closed_hall_c": 24.816
+ }
+}

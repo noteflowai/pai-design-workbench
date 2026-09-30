@@ -1,8 +1,14 @@
-"""Controlled native scene recipe and geometry checks. No user Python/Blend uploads."""
+"""Controlled native scene recipe and geometry checks. No user Python/Blend uploads.
+
+Emits one `PAI_EVENT {json}` stdout line per construction stage, the native ray result and
+Cycles sample progress. Staged GLBs are presentation snapshots of the same native scene; the
+authoritative artifacts remain scene.blend, scene.glb, preview.png and checks.json.
+"""
 import argparse
 import json
 import math
 from pathlib import Path
+import re
 import sys
 
 import bpy
@@ -16,6 +22,27 @@ args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 spec = json.loads(Path(args.input).read_text())
 output = Path(args.output)
 output.mkdir(parents=True, exist_ok=True)
+(output / "stages").mkdir(exist_ok=True)
+stage_index = [0]
+
+
+def event(payload):
+    print("PAI_EVENT " + json.dumps(payload, sort_keys=True), flush=True)
+
+
+def gltf(v):
+    """Blender Z-up world coordinates to glTF/three.js Y-up coordinates."""
+    return [round(float(v[0]), 5), round(float(v[2]), 5), round(float(-v[1]), 5)]
+
+
+def stage(stage_id, label, objects):
+    stage_index[0] += 1
+    name = f"{stage_index[0]:02d}-{stage_id}.glb"
+    bpy.ops.export_scene.gltf(filepath=str(output / "stages" / name), export_format="GLB")
+    event({"type": "stage", "index": stage_index[0], "id": stage_id, "label": label,
+           "file": "stages/" + name, "objects": [o.name for o in objects]})
+
+
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 scene = bpy.context.scene
@@ -52,16 +79,19 @@ def box(name, location, dimensions, mat):
 
 
 floor = box("Workcell footprint", (0, 0, -0.08), (4, 3, 0.16), floor_mat)
-box("Robot pedestal", (-0.6, 0, 0.35), (0.6, 0.6, 0.7), steel)
-box("Robot column illustration", (-0.6, 0, 0.95), (0.23, 0.23, 0.55), green)
-box("Robot arm illustration", (-0.1, 0, 1.22), (1.12, 0.18, 0.18), green)
-box("Work table", (0.6, 0, 0.4), (1.0, 0.8, 0.8), steel)
+stage("footprint", "工作单元占地 4m × 3m", [floor])
+robot = [box("Robot pedestal", (-0.6, 0, 0.35), (0.6, 0.6, 0.7), steel),
+         box("Robot column illustration", (-0.6, 0, 0.95), (0.23, 0.23, 0.55), green),
+         box("Robot arm illustration", (-0.1, 0, 1.22), (1.12, 0.18, 0.18), green)]
+stage("robot", "机器人示意（非 URDF/关节模型）", robot)
+table = box("Work table", (0.6, 0, 0.4), (1.0, 0.8, 0.8), steel)
 target = box("Target", (0.6, 0, 0.95), (0.22, 0.22, 0.3), target_mat)
+stage("fixtures", "工作台与目标", [table, target])
 camera_location = Vector((3.6, -4.8, 3.4))
 target_point = target.location.copy()
 if spec["variant"] == "occluded":
     middle = camera_location.lerp(target_point, 0.48)
-    box("Visibility obstruction", middle, (1.8, 0.45, 1.9), wall_mat)
+    stage("occluder", "候选布局中的遮挡物", [box("Visibility obstruction", middle, (1.8, 0.45, 1.9), wall_mat)])
 
 bpy.ops.object.camera_add(location=camera_location)
 camera = bpy.context.object
@@ -92,6 +122,8 @@ direction = (target_point - camera.location).normalized()
 hit, location, normal, index, obj, matrix = scene.ray_cast(depsgraph, camera.location, direction)
 screen = world_to_camera_view(scene, camera, target_point)
 visible = bool(hit and obj and obj.name == target.name and screen.z > 0 and 0 <= screen.x <= 1 and 0 <= screen.y <= 1)
+event({"type": "ray", "origin": gltf(camera.location), "target": gltf(target_point),
+       "hit": gltf(location) if hit else None, "firstHit": obj.name if hit and obj else None, "visible": visible})
 area = float(floor.dimensions.x * floor.dimensions.y)
 distance = math.dist((-0.6, 0), (target.location.x, target.location.y))
 requirements = spec["requirements"]
@@ -110,7 +142,19 @@ scene["pai_requirements"] = json.dumps(requirements, sort_keys=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(output / "scene.blend"))
 bpy.ops.export_scene.gltf(filepath=str(output / "scene.glb"), export_format="GLB")
 scene.render.filepath = str(output / "preview.png")
+last_sample = [-1]
+
+
+def render_progress(text):
+    match = re.search(r"Sample (\d+)/(\d+)", text or "")
+    if match and int(match.group(1)) != last_sample[0]:
+        last_sample[0] = int(match.group(1))
+        event({"type": "render", "sample": int(match.group(1)), "samples": int(match.group(2))})
+
+
+bpy.app.handlers.render_stats.append(render_progress)
 bpy.ops.render.render(write_still=True)
+bpy.app.handlers.render_stats.remove(render_progress)
 result = {
     "schema": "pai-blender-checks-1", "blenderVersion": bpy.app.version_string,
     "variant": spec["variant"], "units": "metres", "checks": checks,

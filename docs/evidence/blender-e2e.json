@@ -1,6 +1,6 @@
 {
   "schema": "pai-blender-e2e-1",
-  "checkedAt": "2026-09-30T12:23:31.836Z",
+  "checkedAt": "2026-09-30T16:07:34.870Z",
   "result": "passed",
   "blenderVersion": "5.2.2 LTS",
   "rejectedOcclusion": "rejected",
@@ -22,6 +22,22 @@
     "footprintArea": 12,
     "rayFirstHit": "Visibility obstruction",
     "storedScope": "generated-static-geometry; synthetic recipe; no dynamics or physical validation"
+  },
+  "liveProgress": {
+    "stages": {
+      "baseline": 3,
+      "candidate": 4
+    },
+    "nativeRay": {
+      "baseline": "Target",
+      "candidate": "Visibility obstruction"
+    },
+    "renderSamplesObserved": [
+      "baseline:12/12",
+      "candidate:12/12"
+    ],
+    "stageDigestsChecked": true,
+    "presentationOnly": true
   },
   "physicalValidation": false,
   "dynamicsValidated": false,

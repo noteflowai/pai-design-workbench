@@ -5,6 +5,8 @@ export default defineConfig({
   testDir: "./tests/browser", workers: 1, timeout: 120_000,
   use: { baseURL: remote ?? "http://127.0.0.1:4318", browserName: "chromium",
     storageState: remote ? process.env.PAI_AUTH_STATE : undefined,
-    launchOptions: process.env.PAI_BROWSER ? { executablePath: process.env.PAI_BROWSER } : {}, trace: "retain-on-failure" },
+    // Software WebGL so the three.js viewport renders in headless CI; production browsers use the GPU.
+    launchOptions: { args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"], ...(process.env.PAI_BROWSER ? { executablePath: process.env.PAI_BROWSER } : {}) },
+    trace: "retain-on-failure" },
   webServer: remote ? undefined : { command: "PORT=4318 PAI_STATE=.state/browser npm run start", url: "http://127.0.0.1:4318/api/state", timeout: 30_000, reuseExistingServer: false },
 });

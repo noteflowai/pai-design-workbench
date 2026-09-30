@@ -24,9 +24,11 @@ export const ReviewRequest = z.object({
 export const CreateFeedback = z.object({
   runId: Id,
   kind: z.enum(["regression", "design-check", "usability", "evidence", "value"]),
-  evidenceKind: z.enum(["robot-review", "blender-scene"]).default("robot-review"),
-  checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility"]).optional(),
-  seed: z.number().int().min(0).max(9).nullable(),
+  evidenceKind: z.enum(["robot-review", "blender-scene", "factory-twin"]).default("robot-review"),
+  checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility",
+    "output-per-seed", "demand-intervals", "hall-comfort", "ev-service", "closed-failures"]).optional(),
+  // Robot panels use seeds 0–9; Factory Twin panels use their own recorded seed IDs.
+  seed: z.number().int().min(0).max(1000).nullable(),
   expected: z.string().trim().min(1).max(2000),
   observed: z.string().trim().min(1).max(2000),
   actorKind: z.enum(["maintainer", "independent", "fixture"]),
@@ -43,7 +45,7 @@ export const TransitionFeedback = z.object({
 }).strict();
 export const CreateCampaign = z.object({
   runId: Id,
-  evidenceKind: z.enum(["robot-review", "blender-scene"]).default("robot-review"),
+  evidenceKind: z.enum(["robot-review", "blender-scene", "factory-twin"]).default("robot-review"),
   channel: z.enum(["hugging-face", "github", "website", "bilibili", "youtube", "direct-pilot"]),
 }).strict();
 export const TrackEvent = z.object({
