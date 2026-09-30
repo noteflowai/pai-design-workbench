@@ -1,0 +1,117 @@
+import { lazy, Suspense, useState } from "react";
+import { CANDIDATES, KIND_LABEL, useApp, type RunKind } from "../context";
+import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, time, verdictOf, type RunItem } from "../ui";
+import { LiveSteps, viewportModel } from "../studio";
+import { FactoryResult } from "../factory";
+import { recordCaseFeedback } from "../actions";
+import { FEEDBACK_STATUS } from "../context";
+import type { Review } from "../../src/contracts";
+import type { SceneReview } from "../../src/scenes";
+
+const Viewport = lazy(() => import("../viewport"));
+
+export function CaseList({ runId }: { runId: string }) {
+  const c = useApp();
+  const cases = (c.lifecycle?.failingCases ?? []).filter(x => x.runId === runId);
+  if (!cases.length) return null;
+  return <Card title="保留的失败案例" aside={<small>失败案例须绑定反馈并复测</small>}>
+    <ul className="cases">{cases.map(fc => <li key={`${fc.checkId ?? ""}-${fc.seed}`}>
+      <span className="case-label">{fc.label}</span>
+      <span className="case-actions">
+        {fc.kind === "robot-review" && <button type="button" className="secondary" onClick={() => c.navigate("evidence", { kind: fc.kind, id: fc.runId, seed: String(fc.seed) })}>回放</button>}
+        {fc.feedbackId ? <button type="button" className="link" onClick={() => c.navigate("feedback", { id: fc.feedbackId })}><Chip tone={fc.feedbackStatus === "closed" ? "ok" : "warn"}>反馈 · {FEEDBACK_STATUS[fc.feedbackStatus!]}</Chip></button>
+          : <button type="button" disabled={c.busy} aria-label={`记录反馈：${fc.label}`} onClick={() => void recordCaseFeedback(c, fc)}>记录反馈</button>}
+      </span></li>)}</ul>
+  </Card>;
+}
+
+function Receipts({ value }: { value: unknown }) {
+  return <details className="receipts"><summary>原生回执与来源指纹</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>;
+}
+
+function robotDetail(run: Review, id: string, passed: boolean | null): string {
+  const r = run.project.requirements, c = run.stress?.conditions.find(x => x.id === run.candidate);
+  const t = run.stress?.paired_exact_test.comparisons.find(x => x.condition === run.candidate);
+  if (id === "minimum-recorded-success") return `记录成功 ${c?.successes ?? "—"}/${c?.trials ?? "—"}；要求不低于 ${r.minSuccessRate * 100}%`;
+  if (id === "preserve-baseline-success") return passed === null ? `丢失 ${run.diff?.blocking_changes ?? "—"} 个基准成功样本；本任务未要求保留` : `EvalArc 检测到丢失 ${run.diff?.blocking_changes ?? "—"} 个基准成功样本`;
+  return t ? `Holm 调整 p=${t.holm_adjusted_p}，α=${r.alpha}；${passed === null ? "本任务未要求显著改善" : passed ? "显著改善" : "不支持显著改善"}` : "基准设置不是改善比较";
+}
+function ReviewDetail({ run }: { run: Review }) {
+  const v = verdictOf("robot-review", run.decision?.verdict, run.state);
+  const lost = run.diff?.blocking_changes;
+  return <>
+    <Verdict tone={v.tone} eyebrow={`Robot Reel 记录评审 · ${CANDIDATES[run.candidate]} · 需求 v${run.projectRevision}`} title={v.label}
+      detail={run.error ?? (lost ? `配对记录丢失 ${lost} 个基准成功案例；${run.project.requirements.preserveBaselineSuccess ? "当前需求要求保留这些案例。" : "此任务未把保留基准设为硬约束。"}` : "记录检查已保存；结论不外推到真实环境。")} />
+    {run.stress && <div className="metrics">{run.stress.conditions.map(x => <div key={x.id} className={x.id === run.candidate ? "current" : ""}>
+      <span>{CANDIDATES[x.id]}</span><strong>{x.successes}<small>/{x.trials}</small></strong><p>Wilson 95% {x.wilson95.map(n => `${(n * 100).toFixed(0)}%`).join("–")}</p></div>)}</div>}
+    {run.decision && <ul className="checks">{run.decision.checks.map(x => <Check key={x.id} passed={x.passed} detail={robotDetail(run, x.id, x.passed)}
+      title={{ "minimum-recorded-success": "最低成功率", "preserve-baseline-success": "基准成功保留", "independent-improvement": "统计改善要求" }[x.id] ?? x.id} />)}</ul>}
+    <Receipts value={{ request: run.request, requirementDigest: run.requirementDigest, sourceDigests: run.sourceDigests, receipts: run.receipts, controller: run.controller }} />
+  </>;
+}
+
+const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "原生相机射线可见性" };
+function SceneDetail({ scene }: { scene?: SceneReview }) {
+  const c = useApp();
+  const [which, setWhich] = useState<"baseline" | "candidate">("candidate");
+  const live = c.session?.kind === "blender-scene" && c.session.running;
+  const model = viewportModel(c.session, scene, live ? c.session!.current ?? which : which);
+  const v = scene ? verdictOf("blender-scene", scene.verdict, scene.state) : { label: "Blender 原生构建中", tone: "live" as const };
+  return <>
+    <Verdict tone={v.tone} eyebrow={`Blender 原生几何评审${scene ? ` · ${scene.request.variant === "occluded" ? "带遮挡候选" : "无遮挡布局"} · ${scene.candidate?.blenderVersion ?? "Blender"}` : ""}`} title={v.label}
+      detail={scene?.error ?? (scene?.state === "completed" ? `EvalArc 检测到 ${scene.diff?.blocking_changes ?? "—"} 项丢失的检查；静态几何结论不外推到动态执行。` : "每完成一个构建阶段，原生几何即推送到视口。")} />
+    <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={model} /></Suspense>
+    <div className="segmented" role="group" aria-label="布局">{(["baseline", "candidate"] as const).map(w =>
+      <button key={w} type="button" aria-pressed={which === w} className={which === w ? "active" : ""} onClick={() => setWhich(w)}>{w === "baseline" ? "基准布局" : "候选布局"}</button>)}</div>
+    {scene?.state === "completed" && <>
+      <ul className="checks">{scene.candidate?.checks.map(x => {
+        const observed = typeof x.observed === "number" ? x.observed.toFixed(2) : "—", required = typeof x.required === "number" ? x.required.toFixed(2) : "—";
+        const hit = x.firstHit === "Target" ? "目标中心" : x.firstHit === "Visibility obstruction" ? "遮挡物" : "其他物体";
+        const detail = x.id === "footprint-area" ? `占地 ${observed} m²；允许上限 ${required} m²` : x.id === "declared-target-envelope" ? `目标平面距离 ${observed} m；声明包络半径 ${required} m，不代表关节可达性`
+          : `相机射线首先命中${hit}；原生投影与射线检查${x.passed ? "通过" : "失败"}`;
+        return <Check key={x.id} passed={x.passed} title={SCENE_CHECK[x.id]} detail={detail} />;
+      })}</ul>
+      <div className="scene-previews">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}合成工作单元原生 Cycles 渲染`} src={`/api/scenes/${scene.id}/files/${w}/preview.png`} />
+        <figcaption>{w === "baseline" ? "基准" : "候选"} · 原生 Cycles 渲染</figcaption></figure>)}</div>
+      <Receipts value={{ request: scene.request, requirementDigest: scene.requirementDigest, receipts: scene.receipts, files: scene.files, rays: scene.rays }} />
+    </>}
+  </>;
+}
+
+export function Validate() {
+  const c = useApp();
+  const { project, route, session } = c;
+  const runs = projectRuns(c.data, project?.id);
+  const kind = route.params.get("kind") as RunKind | null, id = route.params.get("id");
+  const live = session?.running ? session : undefined;
+  const selected: RunItem | undefined = runs.find(r => r.id === id) ?? (live && !id ? undefined : runs.find(r => !kind || r.kind === kind));
+  const liveKind = live && !selected ? live.kind : undefined;
+  if (!project) return <><ViewHeader step="阶段 3 / 6 · 原生验证" title="原生验证" /><Empty title="先冻结需求" action={<button type="button" onClick={() => c.navigate("requirements", { new: "1" })}>新建评审任务</button>} /></>;
+  const detailKind = selected?.kind ?? liveKind;
+  return <>
+    <ViewHeader step="阶段 3 / 6 · 原生验证" title="原生验证" description="原生工具执行，独立检查对照；失败案例原样保留。实时事件只用于展示，结论以保存的记录为准。"
+      actions={<button type="button" className="secondary" onClick={() => c.navigate("design")}>新候选</button>} />
+    <div className="master-detail">
+      <nav className="run-list" aria-label="检查记录">
+        {runs.length === 0 && !live && <Empty title="还没有检查记录" action={<button type="button" onClick={() => c.navigate("design")}>提交候选</button>} />}
+        {live && <button type="button" className={`run ${!selected ? "selected" : ""}`} aria-pressed={!selected} onClick={() => c.navigate("validate", { kind: live.kind })}>
+          <span className="run-kind">{KIND_LABEL[live.kind]}</span><strong>{live.title}</strong><Chip tone="live">运行中</Chip></button>}
+        {runs.map(r => { const v = verdictOf(r.kind, r.verdict, r.state); return <button key={r.id} type="button" className={`run ${selected?.id === r.id ? "selected" : ""}`}
+          aria-pressed={selected?.id === r.id} aria-label={`${KIND_LABEL[r.kind]} ${r.title} ${v.label}`} onClick={() => c.navigate("validate", { kind: r.kind, id: r.id })}>
+          <span className="run-kind">{KIND_LABEL[r.kind]}{r.recheck ? " · 复测" : ""}</span><strong>{r.title}</strong><Chip tone={v.tone}>{v.label}</Chip>
+          <small>{time(r.createdAt)} · 需求 v{r.revision} · {r.id.slice(0, 8)}</small></button>; })}
+      </nav>
+      <div className="detail">
+        {session && (session.running || session.recordId === selected?.id) && <Card><LiveSteps session={session} /></Card>}
+        {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
+        {detailKind === "blender-scene" && <SceneDetail scene={selected ? c.data.scenes.find(s => s.id === selected.id) : undefined} />}
+        {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
+        {liveKind && liveKind !== "blender-scene" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
+        {selected && selected.state === "completed" && <>
+          <CaseList runId={selected.id} />
+          <div className="button-row end"><button type="button" className="secondary" onClick={() => c.navigate("evidence", { kind: selected.kind, id: selected.id })}>查看证据与回放 →</button></div>
+        </>}
+      </div>
+    </div>
+  </>;
+}

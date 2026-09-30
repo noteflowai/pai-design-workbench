@@ -1,5 +1,5 @@
 // Static application shell only. Native work, private API data and videos stay network-only.
-const VERSION = "pai-shell-0.1.0";
+const VERSION = "pai-shell-0.3.0";
 self.addEventListener("install", event => event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"]))));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("pai-shell-") && key !== VERSION).map(key => caches.delete(key))))));
 self.addEventListener("fetch", event => {

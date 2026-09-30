@@ -1,5 +1,22 @@
-import { test, expect } from "@playwright/test";
-test("authenticated workspace keeps sign-out visible at phone width", async ({ page }) => {
+import { test, expect, type Page } from "@playwright/test";
+
+const rail = (page: Page, name: RegExp) => page.getByRole("navigation", { name: "生命周期" }).getByRole("link", { name });
+async function createProject(page: Page) {
+  await page.goto("/#/requirements?new=1");
+  await page.getByRole("button", { name: "创建评审任务" }).click();
+  await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("SmolVLA 相机布局设计评审");
+}
+async function advance(page: Page, names: string[], timeout = 60_000) {
+  for (const name of names) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator(".busy")).toHaveCount(0, { timeout });
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  }
+}
+const noOverflow = (page: Page) => expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+test("authenticated workspace keeps sign-out and lifecycle navigation usable at phone width", async ({ page }) => {
   // Layout-only fixture. No native outputs, observed users or commands are fabricated.
   await page.route("**/api/state", route => route.fulfill({ json: {
     projects: [], reviews: [], feedback: [], campaigns: [], proposals: [], scenes: [],
@@ -9,167 +26,185 @@ test("authenticated workspace keeps sign-out visible at phone width", async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByRole("link", { name: "退出登录" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByText("还没有评审任务")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "AI 助手" })).toHaveCount(0);
+  await noOverflow(page);
 });
-test("real native review, video decoding, rollback feedback, handoff and mobile layout", async ({ page }, testInfo) => {
+
+test("full lifecycle: requirement, native review, replay, feedback recheck, handoff and revision", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
-  await page.goto("/");
-  await page.getByRole("button", { name: /创建.*任务/ }).click();
-  await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
-  await page.getByRole("button", { name: "验证 相机偏移 ↗" }).click();
+  await createProject(page);
+  await expect(page.getByRole("region", { name: "下一步" })).toContainText("提交第一个候选进行原生验证");
+  await rail(page, /候选设计/).click();
+  await page.getByRole("button", { name: "提交验证：相机偏移" }).click();
   await expect(page.getByRole("heading", { name: "拒绝采用", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("EvalArc 检测到丢失 1 个基准成功样本")).toBeVisible();
+  await expect(rail(page, /失败回放/)).toHaveClass(/s-attention/);
+  await page.getByRole("button", { name: "回放", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "配对种子" })).toHaveValue("9");
   await expect(page.locator("video")).toHaveCount(2);
   await expect.poll(() => page.locator("video").evaluateAll(videos =>
     videos.every(v => (v as HTMLVideoElement).videoWidth > 0 && (v as HTMLVideoElement).duration > 0))).toBe(true);
   await page.locator("video").first().evaluate(async v => { const video = v as HTMLVideoElement; video.muted = true; await video.play(); });
   await expect.poll(() => page.locator("video").first().evaluate(v => (v as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
   await page.locator("video").first().evaluate(v => (v as HTMLVideoElement).pause());
-  await page.getByRole("button", { name: "记录案例反馈" }).click();
-  for (const name of ["记录复现", "分配处理", "提出回退方案", "回退基准并复测", "关闭已复测反馈"]) {
-    await page.getByRole("button", { name, exact: true }).last().click();
-    await expect(page.locator(".busy")).toHaveCount(0, { timeout: 60_000 });
-    await expect(page.getByRole("alert")).toHaveCount(0);
-    await expect(page.getByRole("status")).toBeVisible();
-  }
-  await expect(page.getByText("已关闭", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "生成试用案例草稿" }).click();
-  await expect(page.getByText("试用邀请草稿已生成，尚未发送。")).toBeVisible();
+  await page.getByRole("button", { name: /记录反馈：seed 9/ }).click();
+  await expect(page.getByRole("heading", { name: "反馈复测", level: 1 })).toBeVisible();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "回退基准并复测", "关闭已复测反馈"]);
+  await page.getByRole("button", { name: /已关闭 1/ }).click();
+  await expect(page.locator(".run-list").getByText("已关闭", { exact: true })).toBeVisible();
+  await rail(page, /项目总览/).click();
+  await expect(page.getByRole("region", { name: "下一步" })).toContainText("生成可核验交付与案例草稿");
+  await rail(page, /交付试用/).click();
+  await page.getByRole("button", { name: "生成案例草稿" }).click();
+  await expect(page.getByText("案例草稿已生成，尚未发送。")).toBeVisible();
+  await expect(page.locator("details pre")).toContainText("Not sent or published by this workbench");
   const state = await (await page.request.get("/api/state")).json();
   expect(state.metrics.independentParticipants).toBe(0);
-  const run = state.reviews.find((r: { candidate: string; projectId: string }) => r.candidate === "camera" && r.projectId === state.projects.at(-1).id);
+  const projectId = state.projects.at(-1).id;
+  expect(state.lifecycles[projectId].stages.map((s: { status: string }) => s.status)).toEqual(["done", "done", "done", "done", "done", "done"]);
+  const run = state.reviews.find((r: { candidate: string; projectId: string }) => r.candidate === "camera" && r.projectId === projectId);
   const packet = await (await page.request.get(`/api/runs/${run.id}/bundle`)).json();
   const checked = await page.request.post("/api/bundles/verify", { data: packet });
   expect(checked.status()).toBe(200); expect((await checked.json()).valid).toBe(true);
   const range = await page.request.get(`/api/runs/${run.id}/media/camera/9/main`, { headers: { Range: "bytes=0-99" } });
   expect(range.status()).toBe(206); expect((await range.body()).length).toBe(100);
-  await page.getByRole("combobox", { name: "选择检查记录" }).selectOption(run.id);
-  await page.locator("#validation").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("desktop.png"), fullPage: true });
+  await rail(page, /项目总览/).click();
+  await page.screenshot({ path: testInfo.outputPath("overview-desktop.png"), fullPage: true });
+  await rail(page, /需求冻结/).click();
+  await page.getByRole("button", { name: "修订需求" }).click();
+  await page.getByRole("combobox", { name: "样本最低成功率" }).selectOption("0.7");
+  await page.getByRole("button", { name: "保存为 v2" }).click();
+  await expect(page.getByText(/需求已修订为 v2/)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "选择已有任务" })).toContainText("v2");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("mobile.png"), fullPage: true });
+  await rail(page, /原生验证/).click();
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("validate-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
   const manifest = await (await page.request.get("/manifest.webmanifest")).json();
   expect(manifest.display).toBe("standalone");
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "让设计决策有证据。" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "生命周期" })).toBeVisible();
   const cached = await page.evaluate(async () => (await Promise.all((await caches.keys()).map(async key =>
     (await (await caches.open(key)).keys()).map(request => new URL(request.url).pathname)))).flat());
   expect(cached.some(path => path.startsWith("/api/"))).toBe(false);
 });
-test("native Blender artifacts, rendering and scene feedback in browser", async ({ page }, testInfo) => {
+
+test("native Blender scene from the professional form: rejection, evidence files and occlusion recheck", async ({ page }, testInfo) => {
   test.setTimeout(360_000);
   const state = await (await page.request.get("/api/state")).json();
   if (!state.capabilities.blender) throw new Error("Native Blender is required for this integration check");
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
-  await page.goto("/");
-  await page.getByRole("button", { name: /创建.*任务/ }).click();
-  await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "Blender 场景" }).click();
   await page.getByRole("button", { name: "生成并检查 Blender 场景" }).click();
   await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible({ timeout: 150_000 });
   await expect.poll(() => page.locator(".scene-previews img").evaluateAll(images => images.length === 2 && images.every(i => (i as HTMLImageElement).naturalWidth === 640))).toBe(true);
-  await page.getByRole("button", { name: "记录遮挡反馈" }).click();
-  for (const name of ["记录复现", "分配处理", "提出回退方案", "回退基准并复测", "关闭已复测反馈"]) {
-    await page.getByRole("button", { name, exact: true }).last().click();
-    await expect(page.locator(".busy")).toHaveCount(0, { timeout: 150_000 });
-    await expect(page.getByRole("alert")).toHaveCount(0);
-  }
-  await expect(page.getByRole("heading", { name: "静态场景检查通过" })).toBeVisible();
-  await expect(page.getByText("已关闭", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "查看证据与回放 →" }).click();
+  await expect(page.getByRole("link", { name: "下载可编辑 .blend" })).toBeVisible();
+  await expect(page.locator(".data-table tbody tr")).toHaveCount(7);
+  await page.getByRole("button", { name: /记录反馈：Blender 相机可见性/ }).click();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "移除遮挡并复测", "关闭已复测反馈"], 150_000);
   const latest = await (await page.request.get("/api/state")).json();
-  const rejected = latest.scenes.find((s: { projectId: string; verdict: string }) => s.projectId === latest.projects.at(-1).id && s.verdict === "rejected");
-  await page.getByRole("combobox", { name: "选择场景检查记录" }).selectOption(rejected.id);
+  const mine = latest.scenes.filter((s: { projectId: string }) => s.projectId === latest.projects.at(-1).id);
+  expect(mine.map((s: { verdict: string }) => s.verdict).sort()).toEqual(["accepted-static-scene", "rejected"]);
+  expect(latest.feedback.at(-1).status).toBe("closed");
+  await rail(page, /原生验证/).click();
+  await page.getByRole("button", { name: /Blender 场景 带遮挡候选布局 场景检查拒绝/ }).click();
   await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible();
-  await page.locator("#industrial").scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("blender-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("blender-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
-test("AI studio turns intent into a confirmed native Blender run streamed into the pro viewport", async ({ page }, testInfo) => {
+
+test("AI assistant plan runs native Blender live in the professional viewport", async ({ page }, testInfo) => {
   test.setTimeout(360_000);
-  const state = await (await page.request.get("/api/state")).json();
-  if (!state.capabilities.blender) throw new Error("Native Blender is required for this integration check");
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
-  await page.goto("/");
-  await page.getByRole("button", { name: /创建.*任务/ }).click();
-  await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
-  await page.locator("#studio-input").fill("生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m");
-  await page.getByRole("button", { name: "生成计划 ↵" }).click();
-  const card = page.getByRole("article", { name: /计划 Blender 原生场景/ });
-  await expect(page.getByText("确定性解析 · 无模型调用").first()).toBeVisible();
+  await createProject(page);
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await expect(assistant).toBeVisible();
+  await assistant.locator("#studio-input").fill("生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m");
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  const card = assistant.getByRole("article", { name: /计划 Blender 原生场景/ });
+  await expect(assistant.getByText("确定性解析 · 无模型调用").first()).toBeVisible();
   await expect(card.getByText("— → occluded")).toBeVisible();
-  // A new project starts with an empty viewport; geometry must come from this run's stream.
-  await expect(page.locator(".viewport")).toHaveAttribute("data-objects", "0");
   await card.getByRole("button", { name: "确认执行" }).click();
-  // Live native progress: staged geometry and the native ray appear while Blender is still running.
-  await expect(page.locator(".live-dot.on")).toBeVisible({ timeout: 60_000 });
-  await expect.poll(() => page.locator(".viewport").getAttribute("data-objects"), { timeout: 120_000 }).not.toBe("0");
-  await expect(page.getByLabel("实时工具步骤").getByText("Blender 基准场景（无遮挡）")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "原生验证", level: 1 })).toBeVisible();
+  const viewport = page.locator(".viewport");
+  // Geometry must appear while the native run is still live, not only after completion.
+  await expect.poll(async () => (await viewport.getAttribute("data-objects")) !== "0" && await page.locator(".viewport .live-dot.on").count() === 1,
+    { timeout: 120_000 }).toBe(true);
+  await expect(page.getByLabel("实时工具步骤").first().getByText("Blender 基准场景（无遮挡）")).toBeVisible();
   await expect(card.getByText(/已执行 · 与计划一致/)).toBeVisible({ timeout: 200_000 });
-  await expect(page.locator(".viewport")).toHaveAttribute("data-webgl", "ok");
-  await expect(page.locator(".viewport")).toHaveAttribute("data-ray", "blocked");
-  await expect(page.locator(".viewport")).toHaveAttribute("data-objects", "7");
+  await expect(viewport).toHaveAttribute("data-webgl", "ok");
+  await expect(viewport).toHaveAttribute("data-ray", "blocked");
+  await expect(viewport).toHaveAttribute("data-objects", "7");
   await expect(page.getByText("原生射线首个命中：Visibility obstruction · 被遮挡")).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Cycles 渲染采样" })).toHaveAttribute("aria-valuenow", "12");
   await page.getByRole("button", { name: "顶视" }).click();
   await page.getByRole("slider", { name: "构建阶段时间轴" }).fill("0");
-  await expect(page.locator(".viewport")).toHaveAttribute("data-stage", "1");
-  await expect.poll(() => page.locator(".viewport").getAttribute("data-objects")).toBe("1");
+  await expect(viewport).toHaveAttribute("data-stage", "1");
+  await expect.poll(() => viewport.getAttribute("data-objects")).toBe("1");
   await page.getByRole("button", { name: "基准布局" }).click();
-  await expect(page.locator(".viewport")).toHaveAttribute("data-ray", "target");
+  await expect(viewport).toHaveAttribute("data-ray", "target");
   const latest = await (await page.request.get("/api/state")).json();
   const plan = latest.assistantPlans.at(-1);
   expect(plan.authority).toBe("none"); expect(plan.model.used).toBe(false);
   expect(plan.confirmations.find((c: { recordKind: string }) => c.recordKind === "scene-review").match).toBe("as-proposed");
-  await page.locator("#studio").scrollIntoViewIfNeeded();
-  await page.locator("#studio").screenshot({ path: testInfo.outputPath("studio-desktop.png") });
+  await page.screenshot({ path: testInfo.outputPath("studio-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.locator("#studio").screenshot({ path: testInfo.outputPath("studio-mobile.png") });
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("studio-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
+
 test("factory criteria are frozen first; real Factory Twin seeds stay failed through feedback", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
-  await page.goto("/");
-  await page.getByRole("button", { name: /创建.*任务/ }).click();
-  await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
-  await page.locator("#studio-input").fill("评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C");
+  await createProject(page);
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await assistant.locator("#studio-input").fill("评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C");
   await page.keyboard.press("Control+Enter");
-  const review = page.getByRole("article", { name: /计划 导入已复核/ });
+  const review = assistant.getByRole("article", { name: /计划 导入已复核/ });
   await review.getByRole("button", { name: "确认执行" }).click();
   await expect(page.getByRole("alert")).toContainText("请先确认前置计划");
-  await page.getByRole("article", { name: "计划 先冻结工厂验收标准" }).getByRole("button", { name: "确认执行" }).click();
-  await expect(page.getByRole("article", { name: "计划 先冻结工厂验收标准" }).getByText(/已执行/)).toBeVisible();
+  await page.getByRole("alert").getByRole("button", { name: "关闭通知" }).click();
+  await assistant.getByRole("article", { name: "计划 先冻结工厂验收标准" }).getByRole("button", { name: "确认执行" }).click();
+  await expect(assistant.getByRole("article", { name: "计划 先冻结工厂验收标准" }).getByText(/已执行/)).toBeVisible();
   await review.getByRole("button", { name: "确认执行" }).click();
   await expect(page.getByRole("heading", { name: "维护方案拒绝" })).toBeVisible();
   await expect(page.locator(".seed-table tbody tr")).toHaveCount(12);
   await expect(page.locator(".seed-table td.fail")).toHaveCount(3);
-  await page.getByRole("button", { name: "记录 seed 10 · EV 充电服务反馈" }).click();
-  for (const name of ["记录复现", "分配处理", "记录保留原因", "复测保留方案", "关闭已复测反馈"]) {
-    await page.getByRole("button", { name, exact: true }).last().click();
-    await expect(page.locator(".busy")).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.getByRole("alert")).toHaveCount(0);
-  }
-  await expect(page.getByText(/工厂 · seed 10 · EV 充电服务/)).toBeVisible();
+  await expect(page.locator(".cases li")).toHaveCount(3);
+  await page.getByRole("button", { name: /记录反馈：工厂 seed 10/ }).click();
+  await advance(page, ["记录复现", "分配处理", "记录保留原因", "复测保留方案", "关闭已复测反馈"], 30_000);
+  await page.getByRole("button", { name: /全部/ }).click();
+  await expect(page.locator(".run-list").getByText(/工厂 · seed 10 · EV 充电服务/)).toBeVisible();
   const state = await (await page.request.get("/api/state")).json();
   const f = state.feedback.find((x: { evidenceKind: string }) => x.evidenceKind === "factory-twin");
   expect(f.status).toBe("closed");
   expect(state.factoryReviews.every((r: { verdict: string; physicalValidation: boolean }) => r.verdict === "rejected" && r.physicalValidation === false)).toBe(true);
+  await rail(page, /需求冻结/).click();
+  await expect(page.locator("#factory-criteria tbody tr")).toHaveCount(1);
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("dialog", { name: "命令面板" })).toBeVisible();
   await page.keyboard.type("工厂");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "命令面板" })).toHaveCount(0);
-  await page.locator("#factory").screenshot({ path: testInfo.outputPath("factory-desktop.png") });
+  await expect(page.getByRole("tab", { name: "工厂孪生" })).toHaveAttribute("aria-selected", "true");
+  await rail(page, /原生验证/).click();
+  await page.getByRole("button", { name: /工厂孪生 .* 维护方案拒绝/ }).first().click();
+  await page.screenshot({ path: testInfo.outputPath("factory-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.locator("#factory").screenshot({ path: testInfo.outputPath("factory-mobile.png") });
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("factory-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
 });

@@ -137,7 +137,7 @@ export class Workbench {
     }
     const feedback: Feedback = {
       ...parsed, id: randomUUID(), projectId: run.projectId, revision: 1, status: "received",
-      history: [{ status: "received", reason: "Evidence-linked feedback recorded", at: new Date().toISOString() }],
+      history: [{ status: "received", reason: "已绑定原始证据的反馈已记录", at: new Date().toISOString() }],
     };
     this.store.insert("feedback", feedback); return feedback;
   }

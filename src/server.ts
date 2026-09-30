@@ -16,7 +16,11 @@ import { Store } from "./store.js";
 import { reviewScene, type SceneReview } from "./scenes.js";
 import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
 import { LiveBus, type Stamped } from "./live.js";
-import { confirmPlan, createPlan } from "./assistant.js";
+import { confirmPlan, createPlan, type AssistantPlan } from "./assistant.js";
+import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
+import type { Campaign, Feedback, Project, Review } from "./contracts.js";
+import type { Proposal } from "./proposals.js";
+import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
@@ -94,7 +98,19 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     reply.header("Set-Cookie", names.map(name => `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`));
     return reply.redirect(config.authLogoutUrl);
   });
+  const lifecycle = (project: Project) => {
+    const mine = <T extends { projectId?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id);
+    const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
+    const snapshot: LifecycleSnapshot = { project, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"),
+      factoryCriteria: mine<FactoryCriteria>("factory-criteria"), factoryReviews: mine<FactoryReview>("factory-review"),
+      feedback: mine<Feedback>("feedback"), campaigns,
+      events: store.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
+      plans: mine<AssistantPlan>("assistant-plan"), proposals: mine<Proposal>("proposal") };
+    return computeLifecycle(snapshot);
+  };
+  app.get("/api/projects/:id/lifecycle", async request => lifecycle(workbench.project(paramId(request.params))));
   app.get("/api/state", async () => ({
+    lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"),
     factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
