@@ -17,7 +17,7 @@ import { reviewScene, type SceneReview } from "./scenes.js";
 import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
 import { LiveBus, type Stamped } from "./live.js";
 import { confirmPlan, createPlan, type AssistantPlan } from "./assistant.js";
-import { createAiPlan, reconcileAi } from "./ai.js";
+import { contextView, createAiPlan, createExternalPlan, reconcileAi, resolveHandle } from "./ai.js";
 import { controllerConfigured, PROFILES } from "./controller.js";
 import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
 import type { Campaign, Feedback, Project, Review } from "./contracts.js";
@@ -235,6 +235,18 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (!plan) throw new DomainError("NOT_FOUND", "Assistant plan not found", 404);
     return nativeResponse({ ...plan, state: plan.state ?? "done" }, reply, "assistant/plans");
   });
+  // Grounded planner context and external-agent proposals (used by the MCP server). Proposals carry no authority.
+  app.get("/api/assistant/context", async request => {
+    const q = z.object({ projectId: Id.optional() }).strict().parse(request.query);
+    const p = q.projectId ? workbench.project(q.projectId) : undefined;
+    return contextView(store, p, p ? lifecycle(p) : undefined);
+  });
+  app.get("/api/projects/:id/records/:handle", async request => {
+    const p = workbench.project(paramId(request.params));
+    const handle = z.string().regex(/^(project|[a-z]+-[0-9]{1,3})$/).parse((request.params as { handle?: string }).handle);
+    return resolveHandle(store, p, handle, lifecycle(p));
+  });
+  app.post("/api/assistant/external-plans", async request => createExternalPlan(store, request.body, lifecycle));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {

@@ -24,10 +24,12 @@
     "setup:cad": "python3 tools/setup_cadquery.py",
     "test:cad": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-e2e.ts",
     "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts",
-    "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts"
+    "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts",
+    "mcp": "node dist/src/mcp.js"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "aws-jwt-verify": "5.2.1",
     "fastify": "5.12.5",
     "proper-lockfile": "4.1.2",
@@ -50,5 +52,8 @@
   },
   "allowScripts": {
     "esbuild@0.28.2": true
+  },
+  "bin": {
+    "pai-mcp": "dist/src/mcp.js"
   }
 }

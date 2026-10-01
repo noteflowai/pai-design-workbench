@@ -393,3 +393,44 @@ test("AI engine: Kiro fallback receipt, cited answer, validated plan, reconcilia
   await noOverflow(page);
   expect(errors).toEqual([]);
 });
+
+test("MCP: an external agent reads the workspace and proposes; only the maintainer's confirmation runs native CAD", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+  const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+  await createProject(page);
+  const client = new Client({ name: "Kiro CLI", version: "2.24.0" });
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", "src/mcp.ts"],
+    env: { PATH: process.env.PATH ?? "", PAI_URL: new URL(baseURL!).origin }, stderr: "pipe" }));
+  const call = async (name: string, args: Record<string, unknown> = {}) => {
+    const r = await client.callTool({ name, arguments: args }) as { isError?: boolean; content: { text: string }[] };
+    expect(r.isError, r.content[0].text).toBeFalsy();
+    return JSON.parse(r.content[0].text);
+  };
+  try {
+    const projectId = (await call("pai_list_projects")).at(-1).id;
+    const ws = await call("pai_get_workspace", { projectId });
+    expect(Object.keys(ws.tools)).toContain("cad-review");
+    const proposed = await call("pai_propose_plan", { projectId, intent: "评估紧凑化支架是否满足壁厚 3 mm",
+      plans: [{ ref: "p1", tool: "cad-review", title: "紧凑化支架评审", payload: { variant: "compact" } }] });
+    expect(proposed.authority).toBe("none");
+    await page.reload();
+    const assistant = page.getByRole("complementary", { name: "AI 助手" });
+    await expect(assistant.getByText("外部 Agent · Kiro CLI")).toBeVisible();
+    const card = assistant.getByRole("article", { name: "计划 紧凑化支架评审" });
+    expect((await call("pai_get_plan", { planId: proposed.planId })).steps[0].confirmed).toBeNull();
+    await card.getByRole("button", { name: "确认执行" }).click();
+    await expect(card.getByText(/已执行 · 与计划一致/)).toBeVisible({ timeout: 180_000 });
+    const status = await call("pai_get_plan", { planId: proposed.planId });
+    expect(status.steps[0].confirmed).toMatchObject({ recordKind: "cad-review", match: "as-proposed" });
+    const record = await call("pai_get_record", { projectId, handle: "cad-1" });
+    expect(record.id).toBe(status.steps[0].confirmed.recordId);
+    expect(record.record.verdict).toBe("rejected");
+    expect((await call("pai_get_admission", { projectId, handle: "cad-1" })).admissible).toBe(false);
+  } finally { await client.close(); }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  expect(errors).toEqual([]);
+});

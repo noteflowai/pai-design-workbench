@@ -124,9 +124,11 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
 
 /** JSON with < and > escaped, so workspace or user text cannot close or open a prompt section. */
 const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+/** Tools a planner may propose for this context, with the JSON schema of the fields it may fill. */
+export const planTools = (context: AiContext) => Object.fromEntries(AI_TOOLS.filter(t => context.project ? t !== "create-project" : t === "create-project")
+  .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }) }]));
 export function buildPrompt(message: string, context: AiContext): string {
-  const tools = Object.fromEntries(AI_TOOLS.filter(t => context.project ? t !== "create-project" : t === "create-project")
-    .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }) }]));
+  const tools = planTools(context);
   return [
     "你是 PAI Design Workbench 的工程设计评审助手。只输出一个 JSON 对象，不要输出其他文字，不要调用任何工具，不要读写文件。",
     "你没有验收、批准、发布或推进反馈的权限。你给出的计划会由服务器按 schema 校验，并且必须由用户确认后才由原生工具执行。",
@@ -253,7 +255,9 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
 
 /** Turn model text into interpretation, validated plans and a cited answer. Invalid plans are dropped with a reason. */
 export function interpretOutput(text: string, context: AiContext): Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched"> {
-  const out = ModelOutput.parse(extractJson(text));
+  return interpretPlanned(ModelOutput.parse(extractJson(text)), context);
+}
+function interpretPlanned(out: z.infer<typeof ModelOutput>, context: AiContext): Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched"> {
   const interpretation = [...out.interpretation];
   const plans: ToolPlan[] = [], refs = new Map<string, ToolPlan>();
   const updating = out.plans.find(p => p.tool === "update-requirements");
@@ -363,4 +367,49 @@ export function reconcileAi(store: Store, id: string, input: unknown, actor: str
   const next: AssistantPlan = { ...plan, ai: { ...plan.ai!, reconciliation: { reason, at: new Date().toISOString(), actor } } };
   store.put("assistant-plan", next);
   return next;
+}
+
+/**
+ * Plans proposed by an external agent (for example over MCP). The agent ran its own model; PAI calls none.
+ * Proposals go through exactly the same contracts, relax diff and citation checks as the in-app engine,
+ * carry no authority and run only after a human confirms them in the workbench.
+ */
+export const ExternalPlanInput = z.object({
+  requestId: Id, projectId: Id.optional(),
+  agent: z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N} ._()/@:-]+$/u),
+  intent: z.string().trim().min(1).max(2000),
+  output: ModelOutput,
+}).strict();
+export function createExternalPlan(store: Store, input: unknown, lifecycleOf: (p: Project) => Lifecycle): AssistantPlan {
+  const request = ExternalPlanInput.parse(input);
+  const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
+  if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
+  const existing = store.requestRun(request.requestId);
+  if (existing) { const saved = store.get<AssistantPlan>("assistant-plan", existing); if (saved) return saved; }
+  const context = buildContext(store, project, project ? lifecycleOf(project) : undefined);
+  let result: ReturnType<typeof interpretPlanned>;
+  try { result = interpretPlanned(request.output, context); }
+  catch (error) { throw new DomainError("INVALID_CITATION", error instanceof Error ? error.message : "引用无效", 422); }
+  if (result.plans.length === 0) {
+    throw new DomainError("NO_VALID_PLAN", ["没有可用的计划。", ...result.interpretation.filter(x => x.startsWith("已拒绝"))].join(" "), 422);
+  }
+  const record: AssistantPlan = { ...result, id: randomUUID(), requestId: request.requestId, projectId: project?.id, projectRevision: project?.revision,
+    message: request.intent, createdAt: new Date().toISOString(), authority: "none", source: "external", state: "done",
+    external: { agent: request.agent, via: "mcp" },
+    model: { used: false, reason: `外部 Agent「${request.agent}」通过 MCP 提出；PAI 没有调用模型，计划按同一套契约校验` },
+    interpretation: result.interpretation.map(x => x.replace(/^已拒绝 AI 计划/, "已拒绝外部计划")), confirmations: [] };
+  const claimed = store.claim(request.requestId, sha256(canonical({ kind: "assistant-external", request })), record, "assistant-plan");
+  return claimed === record.id ? record : store.get<AssistantPlan>("assistant-plan", claimed)!;
+}
+
+/** The grounded, handle-addressed view a planner sees, plus the tools it may propose. */
+export function contextView(store: Store, project: Project | undefined, lifecycle?: Lifecycle) {
+  const context = buildContext(store, project, lifecycle);
+  return { workspace: context.workspace, handles: Object.fromEntries(context.handles), tools: planTools(context),
+    authority: "none", rules: ["计划只是提议；只有维护者在工作台确认后才调用原生工具。", "引用必须是 handles 中存在的句柄。", "放宽冻结约束时要写明 rationale。"] };
+}
+export function resolveHandle(store: Store, project: Project, handle: string, lifecycle?: Lifecycle) {
+  const h = buildContext(store, project, lifecycle).handles.get(handle);
+  if (!h) throw new DomainError("NOT_FOUND", `句柄 ${handle} 不存在`, 404);
+  return { handle, ...h, record: store.get<unknown>(h.kind, h.id) };
 }

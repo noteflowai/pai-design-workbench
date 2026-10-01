@@ -32,7 +32,8 @@ export interface AssistantPlan {
   interpretation: string[]; plans: ToolPlan[]; unmatched: boolean;
   authority: "none"; model: { used: boolean; reason: string };
   /** Model-sourced plans: executor outcome, engine receipts and any human reconciliation. */
-  source?: "rules" | "model";
+  source?: "rules" | "model" | "external";
+  external?: { agent: string; via: "mcp" };
   state?: "running" | "done" | "reconcile" | "deferred" | "blocked" | "invalid-output" | "interrupted";
   ai?: {
     action?: string; reason?: string; effects?: string; reportSha256?: string; error?: string;

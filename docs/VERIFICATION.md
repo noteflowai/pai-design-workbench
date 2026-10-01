@@ -2,6 +2,14 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## MCP 服务器（2026-10-01）
+
+| 检查 | 实际结果 |
+|---|---|
+| `npm run check` | 47 组通过。MCP 新增 3 组：工具清单恰好 7 个、不含任何确认/执行/发布/反馈/核对工具，读取类工具都标注为只读；提议按同一套契约校验（放宽 minWallMm 3 → 2.5 被标出，`approve-release` 与不符合 schema 的 payload 被拒绝，虚构的 `cad-7` 引用返回 `INVALID_CITATION`，没有有效计划返回 `NO_VALID_PLAN`），相同 `requestId` 不重复，提议本身不运行原生工具；只接受回环地址（拒绝 HTTPS、内网 IP、伪装域名、带用户信息或路径的 URL） |
+| `npm run test:browser` | 9 组通过。新增 MCP 流程：以 “Kiro CLI” 为客户端名的 stdio 客户端读取工作区并提议 compact 方案；界面显示“外部 Agent · Kiro CLI”；维护者确认后运行原生 CadQuery；Agent 读取到 as-proposed 确认、拒绝结论，准入检查为不可准入；390 px 无溢出 |
+| 构建产物 | `node dist/src/mcp.js` 完成握手，列出 7 个工具；`PAI_URL=https://pai.oneai.host` 以退出码 1 拒绝启动 |
+
 ## 0.4.0 单一镜像与托管 AI（2026-10-01）
 
 | 检查 | 实际结果 |

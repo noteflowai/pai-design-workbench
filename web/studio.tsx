@@ -101,6 +101,8 @@ function openCitation(c: ReturnType<typeof useApp>, x: { kind: string; id: strin
   else c.navigate(view as "overview");
 }
 function EngineMeta({ plan }: { plan: AssistantPlan }) {
+  if (plan.source === "external") return <div className="meta"><span className="chip info" title={plan.model.reason}>外部 Agent · {plan.external?.agent ?? "MCP"}</span>
+    <span className="chip muted">经 MCP · PAI 未调用模型</span><span className="chip muted">权限：无</span></div>;
   if (plan.source !== "model") return <div className="meta"><span className="chip muted">规则解析 · 无模型调用</span><span className="chip muted">权限：无</span></div>;
   const [label, tone] = STATE_CHIP[plan.state ?? "done"] ?? [plan.state ?? "", "muted"];
   const e = plan.ai?.engine;
