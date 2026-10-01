@@ -34,5 +34,29 @@
   },
   "foundAndFixed": "The first in-container call produced no report: the executor only runs when argv[1] equals its module path, and the image used a symlinked install path. PAI now resolves real paths and treats an empty report as needing reconciliation (unit-tested). The answered first run was reconciled without replay.",
   "attemptsUsed": 2,
-  "promptAndAnswerContentRecorded": false
+  "promptAndAnswerContentRecorded": false,
+  "blenderInContainer": {
+    "binary": "/opt/blender-5.2.2-linux-x64/blender",
+    "version": "5.2.2 LTS",
+    "renderer": "Cycles (CPU, headless)",
+    "occluded": {
+      "verdict": "rejected",
+      "failed": [
+        "camera-visibility"
+      ],
+      "seconds": 27
+    },
+    "clear": {
+      "verdict": "accepted-static-scene",
+      "failed": [],
+      "seconds": 22
+    },
+    "artifacts": [
+      "scene.blend",
+      "scene.glb",
+      "preview.png",
+      "checks.json"
+    ],
+    "credentialsMounted": false
+  }
 }

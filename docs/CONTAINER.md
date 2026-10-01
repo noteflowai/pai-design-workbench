@@ -37,7 +37,7 @@ docker run -d --name pai --network host \
 
 | 平台 | 状态 |
 |---|---|
-| linux/amd64 | 已构建并实测：容器内原生 CAD 检查得到预期失败，Kiro 主账号回答并附引用，计划通过 schema 校验 |
+| linux/amd64 | 已构建并实测：容器内 Blender 5.2.2 原生场景（带遮挡方案被 camera-visibility 拒绝，无遮挡方案通过，生成 .blend/GLB/PNG），CadQuery 原生检查得到预期的 min-wall 失败，Kiro 主账号回答并附引用，计划通过 schema 校验 |
 | linux/arm64 | Node、Kiro、CadQuery 都有对应版本；Blender 官方没有 linux-arm64 版本，镜像中会缺少 Blender 通道。未构建 |
 | macOS / Windows | 通过 Docker Desktop 运行 amd64 镜像；不打包原生桌面应用 |
 
