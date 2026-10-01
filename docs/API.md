@@ -28,6 +28,10 @@ AWS deployment uses the exact origin `https://pai.oneai.host` and requires signe
 | `GET /api/cad/:id` | Saved CAD checks for baseline and candidate, receipts, artifact digests |
 | `GET /api/cad/:id/files/:which/:file` | `part.step`, `part.stl`, `part.glb`, `assembly.glb`, `drawing.svg`, `checks.json`; digest checked; SVG served with `default-src 'none'` |
 | `GET /api/cad/:id/stages/:which/:index` | Staged GLB per modelling feature; presentation only |
+| `GET /api/projects/:id/versions` | Immutable snapshots of every frozen requirement version with digest |
+| `GET /api/projects/:id/admission?kind=&runId=` | Release admission checks for a completed run |
+| `POST /api/projects/:id/releases` | `{requestId,projectRevision,evidenceKind,runId,title,notes?}`; 422 unless every admission check passes; one candidate in review at a time |
+| `PATCH /api/projects/:id/releases/:releaseId` | `{expectedRevision,decision:"approve"|"reject",reason}`; approval re-checks admission; the actor is the verified ALB identity; an earlier release becomes superseded |
 | `GET /api/tools` | Professional tool survey; integrated/planned/survey-only states |
 | `GET /api/runs/:id` | Complete saved state and native receipts |
 | `GET /api/runs/:id/media/:candidate/:seed/:view` | Hash-checked original MP4, supports byte ranges |

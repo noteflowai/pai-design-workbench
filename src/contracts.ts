@@ -110,6 +110,10 @@ export interface Receipt {
   stdoutSha256: string;
   sourceDigests: Record<string, string>;
 }
+export interface ProjectVersion {
+  id: string; projectId: string; revision: number; title: string; intendedDecision: string;
+  requirements: Project["requirements"]; requirementDigest: string; frozenAt: string;
+}
 export interface Project extends z.infer<typeof CreateProject> {
   id: string; revision: number; createdAt: string;
 }

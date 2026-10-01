@@ -13,6 +13,7 @@ import { Evidence } from "./views/evidence";
 import { FeedbackView } from "./views/feedback";
 import { Deliver } from "./views/deliver";
 import { runScene } from "./actions";
+import { MATURITY } from "./context";
 import "./style.css";
 
 function parseRoute(): Route {
@@ -91,6 +92,8 @@ function App() {
     { id: "assistant", label: "打开 AI 助手", hint: "/", run: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); } },
     ...VIEWS.map(v => ({ id: `go-${v.id}`, label: `前往：${v.index ? `${v.index} ` : ""}${v.label}`, run: () => navigate(v.id) })),
     { id: "new", label: "新建评审任务", run: () => navigate("requirements", { new: "1" }) },
+    { id: "release", label: "发布：创建或审批发布候选", run: () => navigate("deliver") },
+    { id: "versions", label: "需求版本历史与比较", run: () => navigate("requirements") },
     { id: "scene", label: "生成并检查 Blender 场景（默认参数）", run: () => { if (ctx?.project && data?.capabilities.blender) void runScene(ctx, "occluded", { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true }); else navigate("design", { lane: "scene" }); } },
     { id: "cad", label: "CAD 零件：NEMA 17 电机支架", run: () => navigate("design", { lane: "cad" }) },
     { id: "factory", label: "工厂维护与能源评审", run: () => navigate("design", { lane: "factory" }) },
@@ -111,6 +114,9 @@ function App() {
           {ctx.data.projects.length > 0 && <select aria-label="选择已有任务" value={project?.id ?? ""} onChange={e => { selectProject(e.target.value); navigate("overview"); }}>
             {[...ctx.data.projects].reverse().map(p => <option key={p.id} value={p.id}>{p.title} · v{p.revision}</option>)}</select>}
           <button type="button" className="secondary compact" onClick={() => navigate("requirements", { new: "1" })}>新建</button>
+          {lifecycle && <button type="button" className={`maturity-chip m-${lifecycle.maturity.state}`} onClick={() => navigate("deliver")}
+            aria-label={`成熟度：${lifecycle.maturity.state === "released" ? `${lifecycle.maturity.number} 已发布` : lifecycle.maturity.state === "in-review" ? `${lifecycle.maturity.number} 待审批` : "设计中"}`}>
+            {lifecycle.maturity.state === "released" ? `${lifecycle.maturity.number} · ${MATURITY.released[0]}` : lifecycle.maturity.state === "in-review" ? `${lifecycle.maturity.number} · ${MATURITY["in-review"][0]}` : "设计中"}</button>}
         </div>
         <div className="top-actions">
           <button type="button" className="ghost command" onClick={() => dispatchEvent(new Event("pai-palette"))} aria-label="打开命令面板">命令 <kbd>Ctrl K</kbd></button>
@@ -129,6 +135,13 @@ function App() {
         <p className="rail-foot">反馈 → 复测 → 验证 形成闭环<br />记录仿真 · 合成场景 · 演示孪生<br />尚未现场验证</p>
       </nav>
       <main id="main" aria-busy={busy}>{busy && <div className="busy" role="progressbar" aria-label="正在执行并保存回执" />}{view}</main>
+      <footer className="statusbar" aria-label="状态栏">
+        <span className={`sb-item ${session?.running ? "live" : ""}`}>{session?.running ? <><span className="live-dot on" />{session.title} · {session.steps.filter(s => s.status === "done").length}/{Math.max(session.steps.length, 1)} 步</>
+          : <>原生任务空闲</>}</span>
+        {project && lifecycle && <span className="sb-item">需求 v{project.revision} · <code>{lifecycle.requirementDigest.slice(0, 10)}</code></span>}
+        {lifecycle && <span className="sb-item">{lifecycle.counts.runs} 次检查 · {lifecycle.failingCases.length} 个失败案例 · {lifecycle.counts.openFeedback} 条待处理反馈</span>}
+        <span className="sb-item sb-right">{ctx.data.capabilities.blender ? "Blender ✓" : "Blender —"} · {ctx.data.capabilities.cad ? "CadQuery ✓" : "CadQuery —"} · <kbd>Ctrl K</kbd> 命令</span>
+      </footer>
       {assistant && <button type="button" className="assistant-scrim" aria-label="关闭 AI 助手" onClick={() => setAssistant(false)} />}
       {assistant && <aside className="assistant" aria-label="AI 助手"><Assistant onClose={() => setAssistant(false)} /></aside>}
     </div>

@@ -5,6 +5,7 @@ import type { SceneReview } from "./scenes.js";
 import type { AssistantPlan } from "./assistant.js";
 import type { Proposal } from "./proposals.js";
 import type { CadReview } from "./cad.js";
+import type { Release } from "./release.js";
 
 /**
  * Lifecycle state derived only from durable records: requirement → design → native validation →
@@ -16,15 +17,16 @@ export type StageStatus = "pending" | "active" | "attention" | "done";
 export type EvidenceKind = "robot-review" | "blender-scene" | "factory-twin" | "cad-part";
 export interface StageState { id: StageId; index: number; label: string; status: StageStatus; metric: string; detail: string }
 export interface FailingCase { kind: EvidenceKind; runId: string; seed: number | null; checkId?: string; label: string; feedbackId?: string; feedbackStatus?: string }
-export interface Activity { at: string; stage: StageId; label: string; detail?: string; ref?: { kind: EvidenceKind | "feedback" | "campaign" | "plan"; id: string } }
+export interface Activity { at: string; stage: StageId; label: string; detail?: string; ref?: { kind: EvidenceKind | "feedback" | "campaign" | "plan" | "release"; id: string } }
 export interface NextStep { stage: StageId; label: string; detail: string; ref?: { kind: string; id: string } }
 export interface Lifecycle {
   projectId: string; revision: number; requirementDigest: string;
   stages: StageState[]; next: NextStep; failingCases: FailingCase[]; activity: Activity[];
+  maturity: { state: "none" | "in-review" | "released" | "superseded-only"; number?: string; releaseId?: string };
   counts: { runs: number; running: number; rejected: number; accepted: number; openFeedback: number; closedFeedback: number; drafts: number; observations: number };
 }
 export interface LifecycleSnapshot {
-  project: Project; reviews: Review[]; scenes: SceneReview[]; cads?: CadReview[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
+  project: Project; reviews: Review[]; scenes: SceneReview[]; cads?: CadReview[]; releases?: Release[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
   feedback: Feedback[]; campaigns: Campaign[]; events: { campaignId: string; kind: string; actorKind: string; at: string; participantId: string }[];
   plans: AssistantPlan[]; proposals: Proposal[];
 }
@@ -99,6 +101,9 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   const open = s.feedback.filter(f => f.status !== "closed"), closed = s.feedback.filter(f => f.status === "closed");
   const observations = s.events.length;
   const candidates = new Set(runs.map(r => r.key)).size;
+  const releases = s.releases ?? [];
+  const current = releases.find(r => r.maturity === "released"), pendingRelease = releases.find(r => r.maturity === "in-review");
+  const passing = completed.filter(r => r.verdict && ["accepted-in-recorded-panel", "accepted-static-scene", "accepted-cad-part", "accepted-illustrative"].includes(r.verdict));
   const stages: StageState[] = [
     { id: "requirements", index: 1, label: "需求冻结", status: "done", metric: `需求 v${project.revision}`,
       detail: `${s.factoryCriteria.length} 个工厂标准版本；后续检查绑定需求哈希` },
@@ -110,16 +115,21 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
       metric: `${cases.length} 个失败案例`, detail: uncovered.length ? `${uncovered.length} 个尚未记录反馈` : "失败案例均已绑定反馈" },
     { id: "feedback", index: 5, label: "反馈复测", status: open.length ? "attention" : closed.length ? "done" : "pending",
       metric: `${open.length} 待处理 · ${closed.length} 已关闭`, detail: "复现 → 分配 → 处理 → 新复测 → 关闭" },
-    { id: "deliver", index: 6, label: "交付试用", status: s.campaigns.length ? "done" : "pending",
-      metric: `${s.campaigns.length} 份草稿 · ${observations} 条观察`, detail: "证据包、案例草稿与实际试用记录；不自动发送" },
+    { id: "deliver", index: 6, label: "发布交付", status: current ? "done" : pendingRelease ? "attention" : s.campaigns.length ? "active-draft" as StageStatus : "pending",
+      metric: current ? `${current.number} 已发布` : pendingRelease ? `${pendingRelease.number} 待审批` : `${s.campaigns.length} 份草稿`,
+      detail: current ? `${current.title} · 绑定需求 v${current.projectRevision}` : "发布候选 → 准入检查 → 审批；证据包与案例草稿不自动发送" },
   ];
+  for (const st of stages) if ((st.status as string) === "active-draft") st.status = "pending";
   const oldestOpen = [...open].sort((a, b) => a.history[0].at.localeCompare(b.history[0].at))[0];
   const next: NextStep = running.length ? { stage: "validate", label: "查看运行中的原生任务", detail: "实时查看步骤与几何；完成后结论以保存的记录为准。", ref: { kind: running[0].kind, id: running[0].id } }
     : !completed.length ? { stage: "design", label: "提交第一个候选进行原生验证", detail: "选择机器人记录、Blender 场景、CAD 零件或工厂孪生候选，也可以在 AI 助手中描述意图。" }
     : oldestOpen ? { stage: "feedback", label: `推进反馈：${NEXT_FEEDBACK[oldestOpen.status]}`, detail: `当前状态“${STATUS[oldestOpen.status]}”；${oldestOpen.observed}`, ref: { kind: "feedback", id: oldestOpen.id } }
     : uncovered.length ? { stage: "evidence", label: "为失败案例记录反馈", detail: `${uncovered[0].label}。失败案例需要绑定反馈并复测。`, ref: { kind: uncovered[0].kind, id: uncovered[0].runId } }
-    : !s.campaigns.length ? { stage: "deliver", label: "生成可核验交付与案例草稿", detail: "证据包可在另一台机器重新核验；草稿保留失败与范围限制。" }
-    : { stage: "deliver", label: "记录实际试用观察", detail: "独立试用与维护者测试分开计量；没有曝光分母时不计算转化率。" };
+    : pendingRelease ? { stage: "deliver", label: `审批发布候选 ${pendingRelease.number}`, detail: `${pendingRelease.title}：准入检查已通过，等待维护者批准或驳回。`, ref: { kind: "release", id: pendingRelease.id } }
+    : !current && passing.length ? { stage: "deliver", label: "创建发布候选", detail: "已有通过的检查且失败案例均已处置；可以发起发布审批。" }
+    : !current ? { stage: "design", label: "提交新的候选，直到获得通过的检查", detail: "发布需要一次绑定当前需求、结论为通过的原生检查。" }
+    : !s.campaigns.length ? { stage: "deliver", label: "生成可核验交付与案例草稿", detail: `${current.number} 已发布；证据包可在另一台机器重新核验，草稿保留失败与范围限制。` }
+    : { stage: "deliver", label: "记录实际试用观察", detail: "试用中的问题回到反馈复测；独立试用与维护者测试分开计量。" };
 
   const activity: Activity[] = [{ at: project.createdAt, stage: "requirements", label: `创建任务并冻结需求`, detail: project.title }];
   for (const c of s.factoryCriteria) activity.push({ at: c.createdAt, stage: "requirements", label: "冻结工厂验收标准", detail: `摘要 ${c.digest.slice(0, 8)} · ${c.rationale}` });
@@ -130,12 +140,15 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   for (const r of s.factoryReviews) activity.push({ at: r.createdAt, stage: "validate", label: `工厂孪生评估${r.feedbackId ? "（反馈复测）" : ""}`, detail: `${VERDICT[r.verdict]} · 标准 ${r.criteriaDigest.slice(0, 8)}`, ref: { kind: "factory-twin", id: r.id } });
   for (const f of s.feedback) for (const h of f.history) activity.push({ at: h.at, stage: "feedback", label: `反馈${STATUS[h.status]}`, detail: h.reason, ref: { kind: "feedback", id: f.id } });
   for (const c of s.campaigns) activity.push({ at: c.createdAt, stage: "deliver", label: "生成案例草稿", detail: `${c.channel} · 未发送`, ref: { kind: "campaign", id: c.id } });
+  for (const r of releases) for (const h of r.history) activity.push({ at: h.at, stage: "deliver", label: `发布 ${r.number} · ${{ "in-review": "候选已创建", released: "已批准发布", rejected: "已驳回", superseded: "已废止" }[h.maturity]}`, detail: h.reason, ref: { kind: "release", id: r.id } });
   for (const e of s.events) activity.push({ at: e.at, stage: "deliver", label: `试用观察 · ${e.kind}`, detail: `${e.actorKind} · ${e.participantId}` });
   activity.sort((a, b) => b.at.localeCompare(a.at));
 
   return {
     projectId: project.id, revision: project.revision, requirementDigest: sha256(canonical(project.requirements)),
     stages, next, failingCases: cases, activity: activity.slice(0, 40),
+    maturity: current ? { state: "released", number: current.number, releaseId: current.id } : pendingRelease ? { state: "in-review", number: pendingRelease.number, releaseId: pendingRelease.id }
+      : releases.length ? { state: "superseded-only" } : { state: "none" },
     counts: { runs: runs.length, running: running.length, rejected, accepted: completed.length - rejected, openFeedback: open.length,
       closedFeedback: closed.length, drafts: s.campaigns.length, observations },
   };

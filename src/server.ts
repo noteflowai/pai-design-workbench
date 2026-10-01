@@ -23,6 +23,7 @@ import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
 import { CAD_FILES, DEFAULT_CAD_REQUIREMENTS, reviewCad, type CadReview } from "./cad.js";
+import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
 
@@ -102,7 +103,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const lifecycle = (project: Project) => {
     const mine = <T extends { projectId?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id);
     const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
-    const snapshot: LifecycleSnapshot = { project, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"),
+    const releases = mine<Release>("release");
+    const snapshot: LifecycleSnapshot = { project, releases, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"),
       factoryCriteria: mine<FactoryCriteria>("factory-criteria"), factoryReviews: mine<FactoryReview>("factory-review"),
       feedback: mine<Feedback>("feedback"), campaigns,
       events: store.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
@@ -110,7 +112,25 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return computeLifecycle(snapshot);
   };
   app.get("/api/projects/:id/lifecycle", async request => lifecycle(workbench.project(paramId(request.params))));
+  // The auth hook has already verified the ALB-signed token and that its subject equals this header.
+  const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
+    ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
+  app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));
+  app.get("/api/projects/:id/admission", async request => {
+    const q = z.object({ kind: z.enum(["robot-review", "blender-scene", "cad-part", "factory-twin"]), runId: Id }).strict().parse(request.query);
+    const p = workbench.project(paramId(request.params));
+    return admission(store, p, lifecycle(p), q.kind, q.runId);
+  });
+  app.post("/api/projects/:id/releases", async request => {
+    const p = workbench.project(paramId(request.params));
+    return createRelease(store, p, lifecycle(p), request.body, actor(request.headers));
+  });
+  app.patch("/api/projects/:id/releases/:releaseId", async request => {
+    const p = workbench.project(paramId(request.params));
+    return decideRelease(store, p, lifecycle(p), paramId(request.params, "releaseId"), request.body, actor(request.headers));
+  });
   app.get("/api/state", async () => ({
+    releases: store.list("release"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"),
@@ -131,7 +151,9 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.patch("/api/projects/:id", async request => {
     const input = CreateProject.extend({ expectedRevision: z.number().int().positive() }).strict().parse(request.body);
     const { expectedRevision, ...project } = input;
-    return workbench.updateProject(paramId(request.params), expectedRevision, project);
+    const updated = workbench.updateProject(paramId(request.params), expectedRevision, project);
+    supersedeForRevision(store, updated, actor(request.headers));
+    return updated;
   });
   app.post("/api/projects/:id/reviews", async (request, reply) =>
     executeNative(reply, request.body, "review", "runs", () => workbench.runReview(paramId(request.params), request.body)));

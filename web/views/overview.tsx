@@ -14,6 +14,7 @@ export function Overview() {
   const go = () => {
     const ref = l.next.ref;
     if (ref?.kind === "feedback") c.navigate("feedback", { id: ref.id });
+    else if (ref?.kind === "release") c.navigate("deliver");
     else if (ref && ["robot-review", "blender-scene", "factory-twin"].includes(ref.kind)) c.navigate(l.next.stage, { kind: ref.kind, id: ref.id });
     else c.navigate(l.next.stage);
   };
@@ -38,7 +39,7 @@ export function Overview() {
       <Card title="最近活动" aside={<small>{l.activity.length} 条</small>}>
         <ol className="activity">{l.activity.slice(0, 12).map((a, i) => <li key={i}>
           <time dateTime={a.at}>{time(a.at)}</time>
-          <div><button type="button" className="link" onClick={() => a.ref?.kind === "feedback" ? c.navigate("feedback", { id: a.ref.id })
+          <div><button type="button" className="link" onClick={() => a.ref?.kind === "feedback" ? c.navigate("feedback", { id: a.ref.id }) : a.ref?.kind === "release" ? c.navigate("deliver")
             : a.ref && ["robot-review", "blender-scene", "factory-twin"].includes(a.ref.kind) ? c.navigate("validate", { kind: a.ref.kind, id: a.ref.id }) : c.navigate(a.stage)}>{a.label}</button>
             {a.detail && <p>{a.detail}</p>}</div></li>)}</ol>
       </Card>
@@ -48,6 +49,7 @@ export function Overview() {
           <li><strong>Blender 场景</strong>合成静态几何的原生射线与投影检查；不代表关节可达性或动力学。</li>
           <li><strong>工厂孪生</strong>Robot Reel v0.18.0 演示仿真；参数未按真实工厂校准。</li>
           <li><strong>AI 助手</strong>只生成计划，没有验收或发布权；确认后才执行。</li>
+          <li><strong>发布</strong>维护者批准的发布候选只表示在上述证据范围内采用此设计决策，不代表物理验证或量产放行。</li>
         </ul>
         <p className="muted">尚未进行现场验证。独立试用者 {c.data.metrics.independentParticipants} 人（自报）；维护者与自动测试分开计量。</p>
       </Card>

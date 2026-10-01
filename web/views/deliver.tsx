@@ -3,6 +3,7 @@ import { api } from "../api";
 import { KIND_LABEL, useApp } from "../context";
 import { Card, Empty, ViewHeader, projectRuns, time, verdictOf } from "../ui";
 import type { Campaign } from "../../src/contracts";
+import { ReleasePanel } from "./release";
 
 const CHANNELS = [["direct-pilot", "直接试用"], ["github", "GitHub"], ["hugging-face", "Hugging Face"], ["website", "网站"], ["bilibili", "Bilibili"], ["youtube", "YouTube"]] as const;
 
@@ -21,13 +22,15 @@ export function Deliver() {
   const campaigns = c.data.campaigns.filter(x => x.projectId === project?.id);
   const [campaignId, setCampaignId] = useState("");
   const campaign = campaigns.find(x => x.id === campaignId) ?? campaigns.at(-1);
-  const header = <ViewHeader step="阶段 6 / 6 · 交付试用" title="可核验交付与试用" description="交付包可在另一台机器重新核验；案例草稿保留失败与范围限制；试用观察手动记录。工作台不发送、不发布。" />;
-  if (!project || runs.length === 0) return <>{header}<Empty title="还没有可交付的证据" action={<button type="button" onClick={() => c.navigate("design")}>提交候选</button>}>完成原生验证后生成交付包与案例草稿。</Empty></>;
+  const header = <ViewHeader step="阶段 6 / 6 · 发布交付" title="发布与交付" description="发布候选经准入检查与维护者批准后才算采用；交付包可在另一台机器重新核验；案例草稿保留失败与范围限制。工作台不对外发送或发布。" />;
+  if (!project) return <>{header}<Empty title="先冻结需求" action={<button type="button" onClick={() => c.navigate("requirements", { new: "1" })}>新建评审任务</button>} /></>;
+  if (runs.length === 0) return <>{header}<ReleasePanel /></>;
   const bundle = robots.find(r => r.id === bundleRun) ?? robots[0];
   const evidence = runs.find(r => r.id === evidenceRun) ?? runs[0];
   const m = c.data.metrics;
   return <>
     {header}
+    <ReleasePanel />
     <div className="split">
       <Card title="证据交付包" aside={<small>8 个文件 · 哈希与语义核验</small>}>
         {bundle ? <>

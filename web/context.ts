@@ -5,6 +5,8 @@ import type { SceneReview } from "../src/scenes";
 import type { FactoryCriteria, FactoryCriteriaValues, FactoryReview } from "../src/factory";
 import type { AssistantPlan } from "../src/assistant";
 import type { CadReview, CadRequirements } from "../src/cad";
+import type { Release } from "../src/release";
+import type { ProjectVersion } from "../src/contracts";
 import type { Lifecycle, StageId, EvidenceKind } from "../src/lifecycle";
 import type { LiveSession, LiveTrack } from "./studio";
 
@@ -13,6 +15,7 @@ export type ViewId = "overview" | StageId;
 export type State = {
   projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[];
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
+  releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
   capabilities: { modelProposal: boolean; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
@@ -23,7 +26,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; index?: number }
   { id: "validate", label: "原生验证", short: "验证", index: 3 },
   { id: "evidence", label: "失败回放", short: "证据", index: 4 },
   { id: "feedback", label: "反馈复测", short: "反馈", index: 5 },
-  { id: "deliver", label: "交付试用", short: "交付", index: 6 },
+  { id: "deliver", label: "发布交付", short: "发布", index: 6 },
 ];
 export interface Route { view: ViewId; params: URLSearchParams }
 export interface Ctx {
@@ -45,6 +48,13 @@ export const CAD_VARIANTS: Record<string, [string, string]> = {
 };
 export const CAD_CHECK_LABELS: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络" };
+export const MATURITY: Record<string, [string, "ok" | "warn" | "bad" | "muted" | "info"]> = {
+  "in-review": ["待审批", "warn"], released: ["已发布", "ok"], rejected: ["已驳回", "bad"], superseded: ["已废止", "muted"],
+};
+export const ADMISSION_LABELS: Record<string, string> = {
+  "evidence-completed": "检查已完成", "evidence-accepted": "检查结论为通过", "current-requirements": "绑定当前需求版本",
+  "failures-dispositioned": "失败案例均已处置", "no-open-feedback": "没有未关闭的反馈",
+};
 export const CANDIDATES = { reference: "基准设置", camera: "相机偏移", dim: "弱光设置" } as const;
 export const FEEDBACK_STATUS: Record<string, string> = {
   received: "已收到", "needs-context": "待补充", reproducible: "已复现", assigned: "已分配",

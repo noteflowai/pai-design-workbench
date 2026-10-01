@@ -15,6 +15,35 @@ function RequirementFields({ value, onChange }: { value: Req; onChange: (r: Req)
     <label className="inline"><input type="checkbox" checked={value.requireSignificantImprovement} onChange={e => onChange({ ...value, requireSignificantImprovement: e.target.checked })} />要求统计显著改善（Holm α=.05）</label>
   </div>;
 }
+const FIELD_LABEL: Record<string, string> = { minSuccessRate: "样本最低成功率", preserveBaselineSuccess: "保留基准成功案例",
+  requireSignificantImprovement: "统计显著改善", alpha: "显著性水平 α", title: "任务名称", intendedDecision: "准备作出的决策" };
+const show = (k: string, v: unknown) => typeof v === "boolean" ? (v ? "是" : "否") : k === "minSuccessRate" ? `${Number(v) * 100}%` : String(v);
+function Versions({ projectId }: { projectId: string }) {
+  const c = useApp();
+  const versions = (c.data.projectVersions ?? []).filter(v => v.projectId === projectId).sort((a, b) => b.revision - a.revision);
+  const [a, setA] = useState<number>(), [b, setB] = useState<number>();
+  if (versions.length === 0) return null;
+  const newer = versions.find(v => v.revision === (b ?? versions[0].revision)) ?? versions[0];
+  const older = versions.find(v => v.revision === (a ?? versions[1]?.revision));
+  const fields = older ? [...Object.keys(newer.requirements).map(k => [k, (older.requirements as Record<string, unknown>)[k], (newer.requirements as Record<string, unknown>)[k]] as const),
+    ["title", older.title, newer.title] as const, ["intendedDecision", older.intendedDecision, newer.intendedDecision] as const] : [];
+  const changed = fields.filter(([, x, y]) => JSON.stringify(x) !== JSON.stringify(y));
+  return <Card title="需求版本历史" aside={<small>{versions.length} 个冻结版本 · 只追加，不改写</small>} id="versions">
+    <ol className="versions">{versions.map((v, i) => <li key={v.id} className={v.revision === newer.revision ? "current" : ""}>
+      <span className="ver">v{v.revision}</span><div><strong>{i === 0 ? "当前版本" : "历史版本"}</strong><small>{time(v.frozenAt)} · SHA-256 {v.requirementDigest.slice(0, 10)}</small></div></li>)}</ol>
+    {versions.length > 1 && <>
+      <div className="toolbar compare-pick">
+        <label>比较<select aria-label="较早版本" value={older?.revision} onChange={e => setA(Number(e.target.value))}>{versions.slice(1).map(v => <option key={v.revision} value={v.revision}>v{v.revision}</option>)}</select></label>
+        <span aria-hidden="true">→</span>
+        <label>与<select aria-label="较新版本" value={newer.revision} onChange={e => setB(Number(e.target.value))}>{versions.map(v => <option key={v.revision} value={v.revision}>v{v.revision}</option>)}</select></label>
+      </div>
+      {older && older.revision !== newer.revision ? changed.length ? <div className="table-wrap"><table className="data-table diff"><caption className="visually-hidden">版本差异</caption>
+        <thead><tr><th scope="col">字段</th><th scope="col">v{older.revision}</th><th scope="col">v{newer.revision}</th></tr></thead>
+        <tbody>{changed.map(([k, x, y]) => <tr key={k}><td>{FIELD_LABEL[k] ?? k}</td><td className="del">{show(k, x)}</td><td className="add">{show(k, y)}</td></tr>)}</tbody></table></div>
+        : <p className="muted">两个版本内容相同。</p> : <p className="muted">选择两个不同的版本进行比较。</p>}
+    </>}
+  </Card>;
+}
 const DEFAULT_REQ: Req = { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 };
 
 export function Requirements() {
@@ -67,10 +96,11 @@ export function Requirements() {
       </dl>
       {revising ? <form className="stack revise" onSubmit={revise}>
         <RequirementFields value={draft} onChange={setDraft} />
-        <p className="warning">保存后生成 v{project.revision + 1}：已有检查仍绑定 v{project.revision}，需要重新执行检查；进行中的反馈可能因需求变化而无法关闭。</p>
+        <p className="warning">保存后生成 v{project.revision + 1}：已有检查仍绑定 v{project.revision}，需要重新执行检查；进行中的反馈可能因需求变化而无法关闭；已发布或待审批的发布将变为“已废止”。</p>
         <div className="button-row"><button type="button" className="secondary" onClick={() => setRevising(false)}>取消</button><button type="submit" disabled={c.busy}>保存为 v{project.revision + 1}</button></div>
       </form> : <div className="form-foot"><small>比较-交换更新：若他人已修改，会提示重新加载。</small><button type="button" className="secondary" onClick={() => setRevising(true)}>修订需求</button></div>}
     </Card>
+    <Versions projectId={project.id} />
     <Card title="工厂孪生验收标准" aside={<small>{criteria.length} 个版本</small>} id="factory-criteria">
       {criteria.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">冻结时间</th><th scope="col">需求</th><th scope="col">产出损失 ≤</th><th scope="col">EV ≥</th><th scope="col">车间 ≤</th><th scope="col">摘要</th></tr></thead>
         <tbody>{[...criteria].reverse().map(x => <tr key={x.id}><td>{time(x.createdAt)}</td><td>v{x.projectRevision}</td><td>{x.criteria.maxOutputLossPerSeed}</td>

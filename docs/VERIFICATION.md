@@ -30,6 +30,19 @@
 
 回执：[CAD 与反馈](evidence/deployment-cad-v021.json)、[逐记录持久化](evidence/deployment-persistence-v021.json)、[响应式布局与认证](evidence/deployment-ui-v021.json)、[共享基础设施](evidence/deployment-infra-v021.json)。截图：[线上桌面](evidence/cloud-v021-desktop.png)、[线上手机](evidence/cloud-v021-mobile.png)。
 
+## 0.3.0 版本、发布与成熟度（2026-10-01）
+
+对照 Onshape、Fusion、SOLIDWORKS/3DEXPERIENCE、NX/Teamcenter、CATIA、Creo、Blender 的官方界面资料（见[对比](UI_UX_BENCHMARK.md)），补齐四项专业工具共有、此前缺失的模式：需求版本快照与逐项比较、发布候选与成熟度关卡、同类候选并排检查矩阵、底部状态栏与成熟度标签。
+
+| 检查 | 实际结果 |
+|---|---|
+| `npm run check` | 40 组通过；新增发布关卡测试：拒绝的检查不可发布、失败案例未关闭时阻止、未关闭反馈时阻止、关闭后可创建、只允许一个待审批、比较-交换审批、第二次发布使第一次废止、需求修订使发布废止、版本快照与摘要、旧版本检查不可再发布、额外字段 400 |
+| `npm run test:browser` | 7 组通过；新增发布流程：真实 CAD 失败 → 反馈复测 → 准入显示 2 项未通过且按钮禁用 → 关闭反馈 → 5 项通过 → 创建 R1 → 批准 → 候选对比矩阵 → 修订需求 v2，差异显示 50% → 70%，R1 变为已废止；390px 无横向溢出 |
+| `test:native` / `test:blender` / `test:cad` / `test:suite` | 全部通过；14 个工业用例与预期一致 |
+| 界面复查 | 1440/1280/1024/768/390 px 逐页无溢出、裁切、遮挡或过小控件 |
+
+截图：[发布](evidence/release-desktop.png)、[候选对比](evidence/release-compare.png)、[手机](evidence/release-mobile.png)。
+
 ## 0.2.2 界面复查发布（2026-10-01）
 
 提交 `c1d790b`，[CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36810805958) 三个作业通过（LTS 作业含 CadQuery、14 个工业用例和 6 组浏览器流程），发布包 `27628f77…e3ed` 经 CDK（仅更新发布包读取授权）和 SSM 原子切换上线，上一发布目录保留。

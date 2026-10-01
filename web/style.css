@@ -475,3 +475,44 @@ main h1:focus, main h1:focus-visible { outline: none; }
 /* Viewport controls: ≥ 32 px touch targets (dense CAD toolbars, still usable on touch). */
 .top-right button, .outliner li button { min-height: 32px; }
 .brand { min-width: 40px; }
+
+/* Status bar (Blender/Fusion pattern): live native job, frozen requirement, counts, tool availability. */
+:root { --status: 28px; }
+.statusbar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--status); z-index: 25; display: flex; align-items: center; gap: 16px; padding: 0 14px;
+  background: #172d35; color: #cfe1dd; font-size: 11px; border-top: 1px solid #0d1a20; }
+.statusbar code { color: #9fe3cc; font-size: 11px; }
+.statusbar kbd { background: transparent; color: #cfe1dd; border-color: #4a6a6f; }
+.sb-item { display: inline-flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sb-item.live { color: #fff; font-weight: 600; }
+.sb-right { margin-left: auto; color: #9db4b1; }
+.rail, .assistant { height: calc(100vh - var(--top) - var(--status)); }
+main { padding-bottom: calc(48px + var(--status)); }
+.toasts { bottom: calc(16px + var(--status)); }
+.assistant-scrim { bottom: var(--status) !important; }
+@media (max-width: 1023px) { .assistant { bottom: var(--status); } }
+@media (max-width: 760px) { .statusbar { gap: 10px; } .statusbar .sb-item:nth-child(n+3) { display: none; } .rail, .assistant { height: auto; } .assistant { top: 0; bottom: var(--status); } }
+
+/* Maturity chip: like a PDM state badge next to the document name. */
+.maturity-chip { min-height: 34px; padding: 6px 10px; border-radius: 999px; font-size: 12px; background: var(--sunken); color: var(--ink-2); border-color: var(--line-2); }
+.maturity-chip:hover:not(:disabled) { background: var(--surface); border-color: var(--brand); }
+.maturity-chip.m-released { background: var(--ok-soft); color: var(--ok); border-color: #c7e5d6; }
+.maturity-chip.m-in-review { background: var(--warn-soft); color: var(--warn); border-color: #eedcaa; }
+.maturity-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* Release, versions, compare */
+.release-head { display: grid; gap: 2px; }
+.checks.flat { box-shadow: none; background: var(--sunken); }
+.admission { display: grid; gap: 8px; }
+.release-history { margin-top: 16px; }
+.data-table td small, .data-table th small { display: block; font-size: 11px; color: var(--ink-3); font-weight: 400; }
+.versions { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.versions li { display: flex; gap: 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.versions li.current { border-color: var(--brand); background: var(--brand-soft); }
+.versions li > div { display: grid; gap: 2px; }
+.versions .ver { font: 700 13px/1 ui-monospace, monospace; color: var(--brand-2); min-width: 32px; }
+.compare-pick { margin-bottom: 10px; align-items: center; } .compare-pick label { flex: 0 1 140px; }
+.diff td.del { background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.diff td.add { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.compare th, .compare td { text-align: center; } .compare th[scope="row"], .compare thead th:first-child { text-align: left; white-space: nowrap; }
+.compare td.fail { background: var(--bad-soft); color: var(--bad); font-weight: 700; }
+.compare .sel { box-shadow: inset 0 0 0 2px var(--brand); }

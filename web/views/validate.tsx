@@ -9,6 +9,7 @@ import type { Review } from "../../src/contracts";
 import type { SceneReview } from "../../src/scenes";
 import type { CadReview } from "../../src/cad";
 import { CAD_CHECK_LABELS, CAD_VARIANTS } from "../context";
+import { CompareCandidates } from "./compare";
 
 const Viewport = lazy(() => import("../viewport"));
 
@@ -145,6 +146,7 @@ export function Validate() {
         {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
         {selected && selected.state === "completed" && <>
           <CaseList runId={selected.id} />
+          <CompareCandidates kind={selected.kind} selected={selected.id} />
           <div className="button-row end"><button type="button" className="secondary" onClick={() => c.navigate("evidence", { kind: selected.kind, id: selected.id })}>查看证据与回放 →</button></div>
         </>}
       </div>

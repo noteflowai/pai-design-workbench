@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { z } from "zod";
-import { CreateProject, ReviewRequest, CreateFeedback, TransitionFeedback, CreateCampaign, TrackEvent,
+import { type ProjectVersion, CreateProject, ReviewRequest, CreateFeedback, TransitionFeedback, CreateCampaign, TrackEvent,
   type Campaign, type Feedback, type Project, type Review } from "./contracts.js";
 import { canonical, caseText, decide, DomainError, junit, outcomes, sha256, validatePanel, validateDiff } from "./domain.js";
 import { Store } from "./store.js";
@@ -23,13 +23,25 @@ export class Workbench {
   }
   createProject(input: unknown): Project {
     const project = { ...CreateProject.parse(input), id: randomUUID(), revision: 1, createdAt: new Date().toISOString() };
-    this.store.insert("project", project); return project;
+    this.store.insert("project", project); this.snapshot(project); return project;
   }
   updateProject(id: string, revision: number, input: unknown): Project {
     const old = this.project(id);
     if (old.revision !== revision) throw new DomainError("REVISION_CONFLICT", "Requirements have changed");
+    // Projects created before version snapshots existed get their prior revision captured once, from the record itself.
+    if (!this.store.get("project-version", `${id}@${old.revision}`)) this.snapshot(old, old.createdAt);
     const project = { ...old, ...CreateProject.parse(input), revision: old.revision + 1 };
-    this.store.put("project", project, revision); return project;
+    this.store.put("project", project, revision); this.snapshot(project); return project;
+  }
+  /** Immutable copy of each frozen requirement version, like a CAD version: never edited, only appended. */
+  private snapshot(p: Project, at = new Date().toISOString()) {
+    const version: ProjectVersion = { id: `${p.id}@${p.revision}`, projectId: p.id, revision: p.revision, title: p.title,
+      intendedDecision: p.intendedDecision, requirements: p.requirements, requirementDigest: sha256(canonical(p.requirements)), frozenAt: at };
+    this.store.insert("project-version", version);
+  }
+  versions(projectId: string) {
+    this.project(projectId);
+    return this.store.list<ProjectVersion>("project-version").filter(v => v.projectId === projectId).sort((a, b) => a.revision - b.revision);
   }
   review(id: string): Review {
     const review = this.store.get<Review>("review", id);
