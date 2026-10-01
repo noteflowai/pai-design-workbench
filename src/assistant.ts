@@ -19,7 +19,7 @@ import { CadRequest, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 export const AssistantInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
 }).strict();
-export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "robot-review" | "cad-review"
+export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "robot-review" | "cad-review" | "cad-code"
   | "factory-criteria" | "factory-review" | "model-proposal";
 export interface PlanChange { field: string; from: unknown; to: unknown; direction: "new" | "same" | "tightened" | "relaxed" | "changed" }
 export interface ToolPlan {
@@ -234,7 +234,7 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
     throw new DomainError("AI_RECONCILIATION_REQUIRED", "该 AI 运行的引擎影响尚未核对；先记录核对结果再执行其计划", 409);
   }
   const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
-    "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review" } as const)[step.tool];
+    "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);
   const record = store.get<Record<string, unknown>>(change.recordKind, change.recordId);
   if (!record) throw new DomainError("NOT_FOUND", "Executed record not found", 404);

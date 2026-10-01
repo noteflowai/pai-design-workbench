@@ -3,7 +3,7 @@ import { api, requestIdFor } from "../api";
 import { CANDIDATES, useApp } from "../context";
 import { Card, Chip, Empty, ViewHeader, time } from "../ui";
 import { runCad, runFactory, runReview, runScene } from "../actions";
-import { CAD_VARIANTS } from "../context";
+import { CAD_DRAFT_KEY, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import type { CandidateId } from "../../src/contracts";
 
 const LANES = [["robot", "机器人记录评审"], ["scene", "Blender 场景"], ["cad", "CAD 零件"], ["factory", "工厂孪生"]] as const;
@@ -107,19 +107,45 @@ function CadLane() {
   const [wall, setWall] = useState(Number(q.get("wall") ?? defaults.minWallMm));
   const [edge, setEdge] = useState(Number(q.get("edge") ?? defaults.edgeDistanceFactor));
   const [fit, setFit] = useState(defaults.requireNoInterference);
+  const sandbox = cap ? cap.generatedCode : undefined;
+  const [code, setCode] = useState(() => sessionStorage.getItem(CAD_DRAFT_KEY) ?? sandbox?.template ?? "");
+  const [codeCheck, setCodeCheck] = useState<{ ok: boolean; violations: string[] }>();
+  useEffect(() => { if (code) sessionStorage.setItem(CAD_DRAFT_KEY, code); setCodeCheck(undefined); }, [code]);
+  const feedback = q.get("feedback") ? c.data.feedback.find(f => f.id === q.get("feedback") && f.status === "fix-proposed") : undefined;
+  const generated = variant === "generated";
   if (!cap) return <Empty title="未配置 CadQuery">运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
   return <Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
-    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) =>
-      <label key={id} className={`option ${variant === id ? "selected" : ""}`}><input type="radio" name="cad-variant" value={id} checked={variant === id} onChange={() => setVariant(id)} />
-        <span className="option-tag">{id.toUpperCase()}</span><strong>{label}</strong><small>{note}</small></label>)}</div>
+    {feedback && <p className="notice" role="status">反馈复测：修改代码后提交，新回执将绑定到反馈「{feedback.observed.slice(0, 40)}」；零件要求保持不变。</p>}
+    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) => {
+      const off = id === "generated" && !sandbox?.available;
+      return <label key={id} className={`option ${variant === id ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? sandbox?.reason : undefined}>
+        <input type="radio" name="cad-variant" value={id} checked={variant === id} disabled={off} onChange={() => setVariant(id)} />
+        <span className="option-tag">{id === "generated" ? "CODE" : id.toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
+    })}</div>
+    {generated && sandbox?.available && <div className="code-editor">
+      <label htmlFor="cad-code">CadQuery 代码<small>只能 import cadquery as cq / math；给 result（一个实体）与 MOTOR_AXIS_Z 赋值。电机安装面 y=0，电机轴经过 x=0、z=MOTOR_AXIS_Z。</small></label>
+      <textarea id="cad-code" spellCheck={false} rows={18} value={code} onChange={e => setCode(e.target.value)} aria-describedby="cad-code-status" />
+      <div className="code-tools" id="cad-code-status" aria-live="polite">
+        <button type="button" className="secondary" disabled={c.busy || !code.trim()} onClick={() => void api<{ ok: boolean; violations: string[] }>("/cad/code-check", { code }).then(setCodeCheck)
+          .catch(e => c.toast(e instanceof Error ? e.message : String(e), "bad"))}>检查代码策略</button>
+        <button type="button" className="secondary" disabled={c.busy} onClick={() => setCode(sandbox.template)}>恢复模板</button>
+        {codeCheck && (codeCheck.ok ? <span className="chip ok">符合沙箱策略</span>
+          : <ul className="violations">{codeCheck.violations.map(v => <li key={v}>{v}</li>)}</ul>)}
+      </div>
+      <p className="muted">隔离：{sandbox.isolation.map(x => ISOLATION_LABEL[x] ?? x).join(" · ")}。代码只产生实体；结论来自与预设相同的原生 B-Rep 检查。</p>
+    </div>}
     <div className="field-grid" style={{ marginTop: 14 }}>
-      <label>质量上限<span className="unit-input"><input type="number" min={1} max={10000} step={1} value={mass} onChange={e => setMass(Number(e.target.value))} /><em>g</em></span></label>
-      <label>最小壁厚<span className="unit-input"><input type="number" min={0.5} max={50} step={0.1} value={wall} onChange={e => setWall(Number(e.target.value))} /><em>mm</em></span></label>
-      <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
-      <label className="inline"><input type="checkbox" checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>
+      <label>质量上限<span className="unit-input"><input type="number" min={1} max={10000} step={1} disabled={Boolean(feedback)} value={mass} onChange={e => setMass(Number(e.target.value))} /><em>g</em></span></label>
+      <label>最小壁厚<span className="unit-input"><input type="number" min={0.5} max={50} step={0.1} disabled={Boolean(feedback)} value={wall} onChange={e => setWall(Number(e.target.value))} /><em>mm</em></span></label>
+      <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} disabled={Boolean(feedback)} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
+      <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>
     </div>
     <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则，不含 FEA、公差叠加或实物测试。</p>
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
-      <button type="button" disabled={c.busy} onClick={() => void runCad(c, variant, { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm })}>生成并检查 CAD 零件</button></div>
+      <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {
+        const original = feedback ? (c.data.cads ?? []).find(x => x.id === feedback.runId) : undefined;
+        const requirements = original?.request.requirements ?? { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm };
+        void runCad(c, variant, requirements, generated ? code : undefined, feedback);
+      }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>;
 }

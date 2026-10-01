@@ -34,9 +34,14 @@ if ! python3 -c "import ensurepip" 2>/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3.12-venv >/dev/null
 fi
 runuser -u pai -- python3 tools/setup_cadquery.py
+# OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
+if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
+# Ubuntu 24.04 restricts unprivileged user namespaces; grant them to bwrap only (per-application AppArmor profile).
+if [ -d /sys/kernel/security/apparmor ] && [ -f "$RELEASE/infra/apparmor-bwrap" ]; then
+  install -m 0644 "$RELEASE/infra/apparmor-bwrap" /etc/apparmor.d/pai-bwrap && apparmor_parser -r /etc/apparmor.d/pai-bwrap
+fi
 # AI engine (pinned Kiro CLI + bounded executor); skipped only if the stack predates the AI resources.
 if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
-  if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
   bash "$RELEASE/infra/install_ai.sh"
 fi
 PREVIOUS=$(readlink -f /opt/pai/current)

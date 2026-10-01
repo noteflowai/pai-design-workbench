@@ -24,7 +24,8 @@ export function FeedbackView() {
   const shown = filter === "open" ? open : filter === "closed" ? closed : items;
   const selected = items.find(f => f.id === route.params.get("id")) ?? shown[0] ?? items[0];
   const [reason, setReason] = useState("");
-  useEffect(() => { if (selected) setReason(defaultReason(selected)); }, [selected?.id, selected?.status]);
+  const generated = Boolean(selected && selected.evidenceKind === "cad-part" && (c.data.cads ?? []).find(x => x.id === selected.runId)?.request.variant === "generated");
+  useEffect(() => { if (selected) setReason(defaultReason(selected, generated)); }, [selected?.id, selected?.status, generated]);
   const header = <ViewHeader step="阶段 5 / 6 · 反馈复测" title="反馈复测" description="反馈必须绑定原始失败案例：复现 → 分配 → 处理方案 → 新的原生复测 → 关闭。失败记录不会被改写成通过。" />;
   const uncovered = (c.lifecycle?.failingCases ?? []).filter(x => !x.feedbackId);
   const pending = uncovered.length > 0 && <Card title="待记录反馈的失败案例" aside={<small>{uncovered.length} 个 · 记录后自动绑定证据</small>}>
@@ -34,7 +35,7 @@ export function FeedbackView() {
   if (!project || items.length === 0) return <>{header}{pending || <Empty title="还没有反馈" action={<button type="button" onClick={() => c.navigate("design")}>提交候选</button>}>
     原生验证产生的失败案例会出现在这里，记录反馈后自动绑定证据与种子。</Empty>}</>;
   const run = selected && [...c.data.reviews, ...c.data.scenes, ...(c.data.cads ?? []), ...(c.data.factoryReviews ?? [])].find(r => r.id === selected.runId);
-  const action = selected ? feedbackAction(selected) : undefined;
+  const action = selected ? feedbackAction(selected, generated) : undefined;
   const stepIndex = selected ? Math.max(0, FLOW.indexOf(selected.status === "no-change-with-reason" ? "fix-proposed" : selected.status === "needs-context" ? "received" : selected.status)) : 0;
   return <>
     {header}

@@ -25,7 +25,8 @@
     "test:cad": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-e2e.ts",
     "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts",
     "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts",
-    "mcp": "node dist/src/mcp.js"
+    "mcp": "node dist/src/mcp.js",
+    "test:cad-code": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-code-e2e.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

@@ -8,7 +8,7 @@ import { FEEDBACK_STATUS } from "../context";
 import type { Review } from "../../src/contracts";
 import type { SceneReview } from "../../src/scenes";
 import type { CadReview } from "../../src/cad";
-import { CAD_CHECK_LABELS, CAD_VARIANTS } from "../context";
+import { CAD_CHECK_LABELS, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import { CompareCandidates } from "./compare";
 
 const Viewport = lazy(() => import("../viewport"));
@@ -92,6 +92,7 @@ function cadDetail(id: string, x: Record<string, unknown>): string {
   if (id === "envelope") return `包围盒 ${(x.observed as number[]).join(" × ")} mm；上限 ${(x.required as number[]).join(" × ")} mm`;
   return `单一闭合实体：${o}；OCCT BRepCheck`;
 }
+const SANDBOX_STATUS: Record<string, string> = { ok: "已生成实体", policy: "违反代码策略", error: "代码出错", limit: "超出资源上限" };
 function CadDetail({ cad }: { cad?: CadReview }) {
   const c = useApp();
   const [which, setWhich] = useState<"baseline" | "candidate">("candidate");
@@ -105,6 +106,12 @@ function CadDetail({ cad }: { cad?: CadReview }) {
     <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={model} /></Suspense>
     <div className="segmented" role="group" aria-label="零件">{(["baseline", "candidate"] as const).map(w =>
       <button key={w} type="button" aria-pressed={which === w} className={which === w ? "active" : ""} onClick={() => setWhich(w)}>{w === "baseline" ? "基准零件" : "候选零件"}</button>)}</div>
+    {cad?.sandbox && <details className="code-source" open={cad.state === "failed"}>
+      <summary>生成代码 · {cad.request.source!.code.split("\n").length} 行 · sha256 {cad.sandbox.codeSha256.slice(0, 12)} · 沙箱结果 {SANDBOX_STATUS[cad.sandbox.status] ?? cad.sandbox.status}</summary>
+      {cad.sandbox.error && <p className="warning">⚠ {cad.sandbox.error}</p>}
+      <p className="muted">隔离：{cad.sandbox.isolation.map(x => ISOLATION_LABEL[x] ?? x).join(" · ")}</p>
+      <pre className="code">{cad.request.source!.code}</pre>
+    </details>}
     {cad?.state === "completed" && shown && <>
       <ul className="checks">{shown.checks.map(x => <Check key={x.id} passed={x.passed} title={CAD_CHECK_LABELS[x.id]} detail={cadDetail(x.id, x)} />)}</ul>
       <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />

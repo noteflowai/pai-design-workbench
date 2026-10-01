@@ -1,0 +1,65 @@
+{
+  "schema": "pai-cad-code-e2e-1",
+  "checkedAt": "2026-10-01T10:49:42.389Z",
+  "result": "passed",
+  "bubblewrap": "bwrap",
+  "isolation": [
+    "no-network",
+    "read-only-root",
+    "hidden-home-state-credentials",
+    "pid-ipc-uts-user-namespaces",
+    "no-capabilities",
+    "clear-environment",
+    "writable-output-only",
+    "rlimit-cpu-memory-files",
+    "audit-hook",
+    "restricted-builtins"
+  ],
+  "layers": {
+    "os": {
+      "read-secret": "FileNotFoundError",
+      "write-outside": "OSError",
+      "write-output": "allowed",
+      "network": "OSError",
+      "subprocess": "allowed",
+      "os-system": "allowed",
+      "ctypes": "allowed",
+      "env": [],
+      "home-visible": false,
+      "run-entries": 0
+    },
+    "process": {
+      "read-secret": "FileNotFoundError",
+      "write-outside": "PermissionError",
+      "write-output": "allowed",
+      "network": "PermissionError",
+      "subprocess": "PermissionError",
+      "os-system": "PermissionError",
+      "ctypes": "PermissionError",
+      "env": [],
+      "home-visible": false,
+      "run-entries": 0
+    }
+  },
+  "templateEqualsPresetReference": true,
+  "templateSeconds": 30,
+  "thin": {
+    "failed": [
+      "min-wall"
+    ],
+    "observedMm": 2.5
+  },
+  "recheck": {
+    "feedback": "closed",
+    "verdict": "accepted-cad-part"
+  },
+  "neverEvidence": {
+    "policy": "422 CAD_CODE_POLICY (no record)",
+    "dunderEscape": "422",
+    "submodule": "error: CAD_CODE_ERROR",
+    "two-solids": "error: CAD_CODE_ERROR",
+    "memory": "limit: CAD_CODE_LIMIT",
+    "cpuLoop": "killed by RLIMIT_CPU (3 s budget in test, 60 s in service)"
+  },
+  "physicalValidation": false
+}

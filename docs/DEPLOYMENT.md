@@ -67,6 +67,10 @@ python3 tools/aws_operator.py login-file
 - **沙箱。** 服务单元使用 `ProtectSystem=strict`，Kiro 和 acpx 的状态目录 `~/.kiro`、`~/.acpx`、`~/.cache`、`~/.local` 单独设为可写，存放凭据的 `~/.config` 对服务保持只读。
 - **出错时。** 引擎回执显示 `work_started=false`、`effects=unknown` 时，界面要求人工核对，不会自动重放。
 
+## 生成代码沙箱
+
+发布脚本会安装 bubblewrap，并加载 `infra/apparmor-bwrap`。这是 Ubuntu 24.04 推荐的按应用授权配置：只给 `/usr/bin/bwrap` 开放非特权用户命名空间，系统级限制保持开启。沙箱内部仍然丢弃全部特权、不能联网。服务启动时会做一次探测，不通过就禁用该通道，见 [CAD_CODE.md](CAD_CODE.md)。
+
 ## 持久化与更新
 
 数据位于 `/var/lib/pai/data/state`，单进程 SQLite WAL 数据库及同一卷上的原生文件共同快照。删除栈保留数据卷、备份 vault、登录用户池和管理员 Secret。运行实例的 systemd 服务失败后重启，并保留任务身份；EC2 状态与 ALB 不健康目标有 CloudWatch 告警，未配置外发通知。

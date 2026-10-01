@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { CreateProject, Id, Requirements, ReviewRequest, Candidate, type Feedback, type Project, type Review } from "./contracts.js";
@@ -8,7 +9,8 @@ import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { compare, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { SceneRequest, SceneRequirements, type SceneReview } from "./scenes.js";
-import { CadRequest, CadRequirements, CAD_VARIANTS, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { sandboxStatus } from "./sandbox.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
@@ -27,7 +29,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "cad-review", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "cad-review", "cad-code", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -38,7 +40,8 @@ const ModelPayload = {
   "update-requirements": z.object({ requirements: Requirements.partial(), intendedDecision: z.string().trim().min(5).max(2000).optional() }).strict(),
   "robot-review": z.object({ candidate: Candidate }).strict(),
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
-  "cad-review": z.object({ variant: z.enum(CAD_VARIANTS), requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
   "factory-review": z.object({ criteria: z.string().min(1).max(40) }).strict(),
 } as const;
@@ -48,6 +51,9 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "robot-review": "Robot Reel 历史记录评审：candidate 为 reference/camera/dim",
   "scene-review": "Blender 工作单元：variant clear/occluded；requirements 可只写要改的字段",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
+  "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
+    + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 MOTOR_AXIS_Z（电机轴高度 mm）赋值。坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
+    + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
   "factory-criteria": "冻结工厂孪生验收标准（必须先于 factory-review）",
   "factory-review": "按冻结标准评估已复核的工厂孪生样本；criteria 填已有标准句柄（如 criteria-1）或同一回答中 factory-criteria 计划的 ref（如 p1）",
 };
@@ -62,11 +68,14 @@ const ModelOutput = z.object({
 }).passthrough();
 
 type Handle = { kind: string; id: string; label: string };
-export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: SceneReview; lastCad?: CadReview; lastCriteria?: FactoryCriteria }
+export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: SceneReview; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
+  /** Present only when the sandbox is available; the editable reference template offered to planners. */
+  cadCode?: { template: string } }
+export interface ContextOptions { cadCode?: { template: string } }
 
-export function buildContext(store: Store, project: Project | undefined, lifecycle?: Lifecycle): AiContext {
+export function buildContext(store: Store, project: Project | undefined, lifecycle?: Lifecycle, options: ContextOptions = {}): AiContext {
   const handles = new Map<string, Handle>();
-  if (!project) return { handles, workspace: { project: null, note: "没有任务；只能使用 create-project 或回答通用问题" } };
+  if (!project) return { handles, cadCode: options.cadCode, workspace: { project: null, note: "没有任务；只能使用 create-project 或回答通用问题" } };
   const mine = <T extends { projectId?: string; createdAt?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id).slice(-12);
   const add = (prefix: string, n: number, kind: string, id: string, label: string) => { const h = `${prefix}-${n}`; handles.set(h, { kind, id, label }); return h; };
   handles.set("project", { kind: "project", id: project.id, label: project.title });
@@ -116,7 +125,7 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     robotReviews: robots, blenderScenes: scenes, cadParts: cads, factoryCriteria: criteria, factoryReviews: factories, feedback, releases,
     scope: "记录仿真、合成静态几何、名义参数化几何与演示工厂仿真；没有物理验证、FEA 或现场测量",
   };
-  return { project, handles, workspace,
+  return { project, handles, workspace, cadCode: options.cadCode,
     lastScene: store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id).at(-1),
     lastCad: store.list<CadReview>("cad-review").filter(s => s.projectId === project.id).at(-1),
     lastCriteria: store.list<FactoryCriteria>("factory-criteria").filter(s => s.projectId === project.id).at(-1) };
@@ -125,8 +134,10 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
 /** JSON with < and > escaped, so workspace or user text cannot close or open a prompt section. */
 const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 /** Tools a planner may propose for this context, with the JSON schema of the fields it may fill. */
-export const planTools = (context: AiContext) => Object.fromEntries(AI_TOOLS.filter(t => context.project ? t !== "create-project" : t === "create-project")
-  .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }) }]));
+export const planTools = (context: AiContext) => Object.fromEntries(AI_TOOLS
+  .filter(t => (context.project ? t !== "create-project" : t === "create-project") && (t !== "cad-code" || context.cadCode))
+  .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }),
+    ...(t === "cad-code" ? { template: context.cadCode!.template } : {}) }]));
 export function buildPrompt(message: string, context: AiContext): string {
   const tools = planTools(context);
   return [
@@ -208,7 +219,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       warnings: [...relaxWarning(changes), ...note], evidence: "原生 .blend/GLB/PNG、射线与投影检查、EvalArc 对照；逐阶段实时几何" };
   }
   if (t === "cad-review") {
-    const p = parsed as { variant: typeof CAD_VARIANTS[number]; requirements: Partial<CadRequirements> };
+    const p = parsed as { variant: typeof CAD_PRESETS[number]; requirements: Partial<CadRequirements> };
     const prev = context.lastCad?.request.requirements;
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
     const payload = { projectRevision: opts.revision, variant: p.variant, requirements };
@@ -220,6 +231,23 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: p.variant, direction: context.lastCad ? (context.lastCad.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `CadQuery 参数化零件：NEMA 17 电机支架 · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };
+  }
+  if (t === "cad-code") {
+    if (!context.cadCode) throw new Error("生成代码通道不可用（沙箱未就绪）");
+    const p = parsed as { code: string; requirements: Partial<CadRequirements> };
+    const prev = context.lastCad?.request.requirements;
+    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
+    const payload = { projectRevision: opts.revision, variant: "generated", requirements, source: { language: "cadquery-2.8", code: p.code } };
+    CadRequest.parse({ ...payload, requestId: placeholder });
+    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"),
+      compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
+      compare("edgeDistanceFactor", prev?.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
+      compare("requireNoInterference", prev?.requireNoInterference, requirements.requireNoInterference, "true"),
+      { field: "variant", from: context.lastCad?.request.variant ?? null, to: "generated", direction: context.lastCad?.request.variant === "generated" ? "same" : context.lastCad ? "changed" : "new" },
+      { field: "code", from: null, to: `${p.code.split("\n").length} 行 · sha256 ${sha256(p.code).slice(0, 12)}`, direction: "new" }];
+    return { ...base, title: opts.title ?? "CadQuery 生成代码：NEMA 17 支架新候选", route: route("cad"), method: "POST", payload, changes,
+      warnings: [...relaxWarning(changes), "代码在隔离沙箱中运行（无网络、只读文件系统、资源上限）；只有原生 B-Rep 检查决定结论。", ...note],
+      evidence: "沙箱执行 → 精确 BREP 实体 → 与预设相同的 B-Rep 检查 → EvalArc 对照；可编辑 STEP" };
   }
   if (t === "factory-criteria") {
     const p = parsed as { criteria: Partial<FactoryCriteriaValues>; rationale: string };
@@ -287,6 +315,25 @@ function interpretPlanned(out: z.infer<typeof ModelOutput>, context: AiContext):
   return { interpretation, plans, answer, unmatched: plans.length === 0 && !answer };
 }
 
+/** The generated-code tool is offered only when the OS sandbox works on this host. */
+export async function contextOptions(config: Config): Promise<ContextOptions> {
+  if (!config.cadquery || !(await sandboxStatus(config)).available) return {};
+  return { cadCode: { template: await readFile(join(config.repository, CAD_TEMPLATE_FILE), "utf8") } };
+}
+/** Layer 1 of the sandbox, applied to proposals: code plans that violate the static policy are dropped with the reason. */
+async function screenCode(config: Config, result: Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched">, label: string) {
+  const dropped = new Set<string>();
+  for (const plan of result.plans) {
+    if (plan.tool !== "cad-code") continue;
+    const violations = await checkCadCode(config, String((plan.payload.source as { code: string }).code));
+    if (violations.length) { dropped.add(plan.id); result.interpretation.push(`已拒绝${label} ${plan.id}（cad-code）：代码不符合沙箱策略：${violations.slice(0, 3).join("；")}`); }
+  }
+  if (!dropped.size) return;
+  for (const plan of result.plans) if (plan.dependsOn && dropped.has(plan.dependsOn)) dropped.add(plan.id);
+  result.plans = result.plans.filter(p => !dropped.has(p.id));
+  result.unmatched = result.plans.length === 0 && !result.answer;
+}
+
 const STATE: Record<string, NonNullable<AssistantPlan["state"]>> = { done: "done", "deferred-budget": "deferred", "blocked-policy": "blocked", "blocked-engine": "blocked" };
 
 export async function createAiPlan(store: Store, config: Config, input: unknown, lifecycleOf: (p: Project) => Lifecycle, live?: LiveBus): Promise<AssistantPlan> {
@@ -318,7 +365,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
   live?.publish(request.requestId, { kind: "record", recordKind: "assistant-plan", recordId: record.id });
   try {
     step("context", "整理工作区记录与可用工具", "running");
-    const context = buildContext(store, project, project ? lifecycleOf(project) : undefined);
+    const context = buildContext(store, project, project ? lifecycleOf(project) : undefined, await contextOptions(config));
     const prompt = buildPrompt(request.message, context);
     step("context", "整理工作区记录与可用工具", "done", `${context.handles.size} 个可引用记录 · ${Math.round(Buffer.byteLength(prompt) / 1024)} KB`);
     step("engine", `调用 AI 引擎（${profiles.map(p => PROFILE_LABEL[p]).join(" → ")}）`, "running");
@@ -334,6 +381,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
       step("validate", "按 schema 校验计划与引用", "running");
       try {
         Object.assign(record, interpretOutput(r.answer, context));
+        await screenCode(config, record, " AI 计划");
         step("validate", "按 schema 校验计划与引用", "done", `${record.plans.length} 个计划${record.answer ? ` · ${record.answer.citations.length} 个引用` : ""}`);
       } catch (error) {
         if (record.state === "done") record.state = "invalid-output";
@@ -380,16 +428,17 @@ export const ExternalPlanInput = z.object({
   intent: z.string().trim().min(1).max(2000),
   output: ModelOutput,
 }).strict();
-export function createExternalPlan(store: Store, input: unknown, lifecycleOf: (p: Project) => Lifecycle): AssistantPlan {
+export async function createExternalPlan(store: Store, config: Config, input: unknown, lifecycleOf: (p: Project) => Lifecycle): Promise<AssistantPlan> {
   const request = ExternalPlanInput.parse(input);
   const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
   if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
   const existing = store.requestRun(request.requestId);
   if (existing) { const saved = store.get<AssistantPlan>("assistant-plan", existing); if (saved) return saved; }
-  const context = buildContext(store, project, project ? lifecycleOf(project) : undefined);
+  const context = buildContext(store, project, project ? lifecycleOf(project) : undefined, await contextOptions(config));
   let result: ReturnType<typeof interpretPlanned>;
   try { result = interpretPlanned(request.output, context); }
   catch (error) { throw new DomainError("INVALID_CITATION", error instanceof Error ? error.message : "引用无效", 422); }
+  await screenCode(config, result, "外部计划");
   if (result.plans.length === 0) {
     throw new DomainError("NO_VALID_PLAN", ["没有可用的计划。", ...result.interpretation.filter(x => x.startsWith("已拒绝"))].join(" "), 422);
   }
@@ -403,8 +452,8 @@ export function createExternalPlan(store: Store, input: unknown, lifecycleOf: (p
 }
 
 /** The grounded, handle-addressed view a planner sees, plus the tools it may propose. */
-export function contextView(store: Store, project: Project | undefined, lifecycle?: Lifecycle) {
-  const context = buildContext(store, project, lifecycle);
+export async function contextView(store: Store, config: Config, project: Project | undefined, lifecycle?: Lifecycle) {
+  const context = buildContext(store, project, lifecycle, await contextOptions(config));
   return { workspace: context.workspace, handles: Object.fromEntries(context.handles), tools: planTools(context),
     authority: "none", rules: ["计划只是提议；只有维护者在工作台确认后才调用原生工具。", "引用必须是 handles 中存在的句柄。", "放宽冻结约束时要写明 rationale。"] };
 }

@@ -58,9 +58,18 @@ jobs:
         with:
           python-version: "3.12"
           update-environment: false
+      - name: Bubblewrap OS sandbox for generated CAD code
+        if: matrix.node == '24.21.0'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; the sandbox needs them.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       - name: Hash-locked CadQuery 2.8 / OCCT 7.9 and native parametric CAD loop
         if: matrix.node == '24.21.0'
         run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py && npm run test:cad'
+      - name: Generated CadQuery code in the OS sandbox (layers, template equivalence, recheck, limits)
+        if: matrix.node == '24.21.0'
+        run: npm run test:cad-code
       - name: Representative industrial design test cases across all native lanes
         if: matrix.node == '24.21.0'
         run: npm run test:suite
@@ -77,6 +86,7 @@ jobs:
             .state/evidence/native-e2e.json
             .state/evidence/blender-e2e.json
             .state/evidence/cad-e2e.json
+            .state/evidence/cad-code-e2e.json
             .state/evidence/industrial-suite.json
             test-results/
           retention-days: 14

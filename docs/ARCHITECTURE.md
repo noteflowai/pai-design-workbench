@@ -86,6 +86,10 @@ One OCI image (see [CONTAINER.md](CONTAINER.md)) contains the workbench, the exe
 
 External agents use the same boundary through `pai-mcp` ([MCP.md](MCP.md)): read tools plus `pai_propose_plan`, which lands a typed, validated, authority-free plan in the assistant for human confirmation. There is no MCP tool to confirm, execute, reconcile, transition feedback or release.
 
+## Generated CAD code
+
+Text-to-CAD is useful only if generated geometry cannot decide its own verdict. Code runs in two sandboxed processes: one executes it and may write only an exact BREP solid; the other measures that solid with the same `cad_checks.py` used by the presets. Isolation is layered (AST policy → rlimits, audit hook and restricted builtins → bubblewrap without network, capabilities, environment or visible state) and fails closed when the OS layer is unavailable. Details: [CAD_CODE.md](CAD_CODE.md).
+
 ## Lifecycle-first workspace
 
 The UI is organised around the review lifecycle rather than one long page. `src/lifecycle.ts` derives, from durable records only, the status of each stage (requirements, design, validate, evidence, feedback, deliver), the retained failing cases with their bound feedback, the next step and an activity log. The rail shows each stage's status and metric; the overview shows the loop and the next step; every view is deep-linkable (`#/validate?kind=cad-part&id=…`). Validation and feedback use a master–detail layout; the docked assistant shares the same live session as the forms. Container queries follow the width of the work area, so docking the assistant never breaks the layout; at 390 px the rail becomes a horizontal stage bar and the assistant a full-screen sheet.

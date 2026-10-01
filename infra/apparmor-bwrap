@@ -1,0 +1,11 @@
+# Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor. The PAI generated-CAD sandbox
+# needs them for bubblewrap only; this grants `userns` to /usr/bin/bwrap and nothing else (Ubuntu's
+# documented per-application pattern). The sandbox inside still drops all capabilities.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile pai-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/pai-bwrap>
+}

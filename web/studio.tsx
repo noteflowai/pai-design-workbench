@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, openLive, requestIdFor, type LiveEvent } from "./api";
-import { useApp, type RunKind } from "./context";
+import { CAD_DRAFT_KEY, useApp, type RunKind } from "./context";
 import type { ViewportModel, Stage, Ray } from "./viewport";
 import type { AssistantPlan, ToolPlan } from "../src/assistant";
 import type { Project } from "../src/contracts";
@@ -76,11 +76,11 @@ export function LiveSteps({ session }: { session: LiveSession }) {
 }
 
 const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "robot-review": "Robot Reel",
-  "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型" };
+  "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型", "cad-code": "CadQuery 代码" };
 const directionLabel: Record<string, string> = { new: "新", same: "不变", tightened: "收紧", relaxed: "放宽", changed: "变更" };
 const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
-  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal" };
-const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin" };
+  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review" };
+const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part" };
 const SUGGESTIONS = [
   "生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m",
   "评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C",
@@ -216,7 +216,9 @@ export function Assistant({ onClose }: { onClose: () => void }) {
               {changed.length > 0 && <ul className="changes">{changed.map(x => <li key={x.field} className={x.direction}><span>{x.field}</span>
                 <code>{x.from === null ? "—" : String(x.from)} → {String(x.to)}</code><em>{directionLabel[x.direction]}</em></li>)}</ul>}
               {step.warnings.map(w => <p key={w} className="warning">⚠ {w}</p>)}
-              <details><summary>证据与参数</summary><p className="evidence">{step.evidence}</p><pre>{JSON.stringify({ route: `${step.method} /api${step.route}`, payload: step.payload }, null, 2)}</pre></details>
+              {step.tool === "cad-code" && <details className="code-source"><summary>查看生成的 CadQuery 代码</summary><pre className="code">{(step.payload.source as { code: string }).code}</pre></details>}
+              <details><summary>证据与参数</summary><p className="evidence">{step.evidence}</p><pre>{JSON.stringify({ route: `${step.method} /api${step.route}`,
+                payload: step.tool === "cad-code" ? { ...step.payload, source: { language: "cadquery-2.8", code: "（见上方代码）" } } : step.payload }, null, 2)}</pre></details>
               <div className="plan-actions">
                 {done ? <span className="confirmed">✓ 已执行 · {done.match === "as-proposed" ? "与计划一致" : "执行前经过修改"} · {done.recordId.slice(0, 8)}</span>
                   : <button type="button" disabled={c.busy || running !== undefined} onClick={() => void execute(plan, step)}>{running === key ? "执行中…" : "确认执行"}</button>}
@@ -228,6 +230,10 @@ export function Assistant({ onClose }: { onClose: () => void }) {
                   const r = step.payload.requirements as CadRequirementsLike;
                   c.navigate("design", { lane: "cad", variant: String(step.payload.variant), mass: String(r.maxMassG), wall: String(r.minWallMm), edge: String(r.edgeDistanceFactor) });
                 }}>在专业面板调整</button>}
+                {!done && step.tool === "cad-code" && <button type="button" className="secondary" onClick={() => {
+                  sessionStorage.setItem(CAD_DRAFT_KEY, (step.payload.source as { code: string }).code);
+                  c.navigate("design", { lane: "cad", variant: "generated" });
+                }}>在代码编辑器中修改</button>}
                 {!done && step.tool === "factory-criteria" && <button type="button" className="secondary" onClick={() =>
                   c.navigate("requirements", { criteria: JSON.stringify(step.payload.criteria) })}>在专业面板调整</button>}
               </div>

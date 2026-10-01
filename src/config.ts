@@ -5,6 +5,8 @@ export interface Config {
   workspace: string; state: string; web: string;
   robotRoot: string; stressSource: string; evalarcRoot: string; controlRoot: string; radarFile: string;
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
+  /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
+  bwrap?: string;
   /** Engines this deployment may use, in fallback order; a subset of the executor's reviewed profiles. */
   aiProfiles?: string[];
   listenHost?: string; publicOrigin?: string;
@@ -45,6 +47,7 @@ export function configuration(): Config {
     controllerDatabase: process.env.PAI_CONTROLLER_DATABASE,
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
+    bwrap: process.env.PAI_BWRAP,
     aiProfiles: aiProfiles(process.env.PAI_AI_PROFILES),
     listenHost, publicOrigin, albAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,

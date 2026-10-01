@@ -9,3 +9,4 @@ test-results/
 *.log
 infra/cdk.out/
 infra/cdk.context.json
+__pycache__/

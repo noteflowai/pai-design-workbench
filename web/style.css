@@ -534,3 +534,18 @@ main { padding-bottom: calc(48px + var(--status)); }
 .rejected-line { color: var(--bad) !important; font-size: 12px !important; }
 .reconcile { display: grid; gap: 6px; margin-top: 8px; }
 .reconciled { display: block; margin-top: 6px; color: var(--ok); }
+
+/* Generated CadQuery code: editor, policy result and source view */
+.option.disabled { opacity: .55; cursor: not-allowed; }
+.code-editor { display: grid; gap: 8px; margin-top: 14px; }
+.code-editor label { display: grid; gap: 2px; font-weight: 600; }
+.code-editor label small { font-weight: 400; color: var(--ink-3); }
+.code-editor textarea, pre.code { font: 12px/1.55 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; tab-size: 4; }
+.code-editor textarea { width: 100%; min-height: 280px; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; padding: 10px 12px;
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--sunken); color: var(--ink); }
+.code-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.violations { margin: 0; padding-left: 18px; color: var(--bad); font-size: 12px; }
+pre.code { white-space: pre; overflow-wrap: normal; overflow-x: auto; max-height: 360px; color: var(--ink); }
+.code-source { margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--surface); }
+.code-source summary { cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.notice { padding: 8px 12px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--brand-2); font-size: 13px; margin: 0 0 12px; }

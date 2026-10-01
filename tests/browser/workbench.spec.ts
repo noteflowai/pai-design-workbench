@@ -434,3 +434,60 @@ test("MCP: an external agent reads the workspace and proposes; only the maintain
   await noOverflow(page);
   expect(errors).toEqual([]);
 });
+
+test("generated CadQuery code: policy check, sandboxed build, native failure, recheck with revised code; AI code plan", async ({ page }, testInfo) => {
+  test.setTimeout(420_000);
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.cad?.generatedCode?.available) throw new Error(`Sandbox required: ${state.capabilities.cad?.generatedCode?.reason}`);
+  const template: string = state.capabilities.cad.generatedCode.template;
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  // The intended policy rejection surfaces as a toast; Chrome also logs it as a resource error.
+  page.on("console", m => { if (m.type() === "error" && !/status of 422/.test(m.text())) errors.push(m.text()); });
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("radio", { name: /生成代码/ }).check();
+  const editor = page.getByRole("textbox", { name: /CadQuery 代码/ });
+  await expect(editor).toHaveValue(template);
+  await editor.fill(template.replace("import cadquery as cq", "import cadquery as cq\nimport os"));
+  await page.getByRole("button", { name: "检查代码策略" }).click();
+  await expect(page.locator(".violations")).toContainText("发现 os");
+  await editor.fill(template.replace("T = 4.0 ", "T = 2.5 "));
+  await page.getByRole("button", { name: "检查代码策略" }).click();
+  await expect(page.getByText("符合沙箱策略")).toBeVisible();
+  await page.getByRole("button", { name: "在沙箱中运行并检查" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 240_000 });
+  await expect(page.locator(".check-item.fail")).toHaveCount(1);
+  await expect(page.locator(".check-item.fail")).toContainText("最小壁厚");
+  await expect(page.locator(".code-source summary")).toContainText("沙箱结果 已生成实体");
+  await page.getByRole("button", { name: "查看证据与回放 →" }).click();
+  await page.getByRole("button", { name: /记录反馈：CAD 最小壁厚/ }).click();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案"]);
+  await page.getByRole("button", { name: "修订代码并复测", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "反馈复测" })).toBeVisible();
+  await expect(editor).toHaveValue(template.replace("T = 4.0 ", "T = 2.5 "));
+  await editor.fill(template.replace("T = 4.0 ", "T = 3.5 "));
+  await page.getByRole("button", { name: "提交修订代码并复测" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 240_000 });
+  await expect.poll(async () => (await (await page.request.get("/api/state")).json()).feedback.at(-1).status, { timeout: 30_000 }).toBe("rechecked");
+
+  // An AI-written code plan: shown as code, refused parts listed, executed only on confirmation.
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(".state/browser/fake-executor.json", JSON.stringify({ attempts: [{ profile: "kiro-primary", status: "succeeded", answer: "```json\n" + JSON.stringify({ kind: "plan", plans: [
+    { ref: "p1", tool: "cad-code", title: "AI 生成：加宽底板", payload: { code: template.replace("W = 60.0 ", "W = 64.0 ") } },
+    { ref: "p2", tool: "cad-code", title: "越权", payload: { code: template + "\nx = open('/etc/passwd')\n" } }] }) + "\n```" }] }));
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await assistant.getByRole("button", { name: "AI 引擎", exact: true }).click();
+  await assistant.locator("#studio-input").fill("写一个加宽底板的支架代码");
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  await expect(assistant.getByText(/已拒绝 AI 计划 p2（cad-code）：代码不符合沙箱策略/)).toBeVisible({ timeout: 60_000 });
+  const card = assistant.getByRole("article", { name: "计划 AI 生成：加宽底板" });
+  await card.getByText("查看生成的 CadQuery 代码").click();
+  await expect(card.locator("pre.code")).toContainText("W = 64.0");
+  await card.getByRole("button", { name: "确认执行" }).click();
+  await expect(card.getByText(/已执行 · 与计划一致/)).toBeVisible({ timeout: 240_000 });
+  await page.screenshot({ path: testInfo.outputPath("cad-code-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  expect(errors).toEqual([]);
+});

@@ -24,7 +24,8 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
-import { CAD_FILES, DEFAULT_CAD_REQUIREMENTS, reviewCad, type CadReview } from "./cad.js";
+import { CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
+import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
@@ -64,6 +65,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (status >= 400 && status < 500) return reply.code(status).send({ error: "REQUEST_REJECTED" });
     return reply.code(500).send({ error: "LOCAL_TOOL_UNAVAILABLE", message: "Check local configuration and retained receipts" });
   });
+  const sandbox = config.cadquery ? await sandboxStatus(config) : { available: false, reason: "CadQuery 未配置" };
+  const cadTemplate = await readFile(join(config.repository, CAD_TEMPLATE_FILE), "utf8");
   const paramId = (p: unknown, field = "id") => Id.parse((p as Record<string, unknown>)[field]);
   const nativeResponse = <T extends { id: string; state: string }>(record: T, reply: FastifyReply, route: string) => {
     if (record.state === "running" && config.publicOrigin) reply.code(202).header("Location", `/api/${route}/${record.id}`).header("Retry-After", "2");
@@ -142,7 +145,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
-      cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS } : false,
+      cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
+        generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? config.aiProfiles ?? PROFILES : [] },
       liveStream: "server-sent events; presentation only",
@@ -171,8 +175,17 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (sha256(content) !== stage.sha256) throw new DomainError("SCENE_FILE_CHANGED", "Stage geometry differs from its recorded digest", 422);
     return reply.type("model/gltf-binary").header("X-PAI-Evidence", "presentation-stage").send(content);
   });
-  app.post("/api/projects/:id/cad", async (request, reply) =>
-    executeNative(reply, request.body, "cad-review", "cad", () => reviewCad(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.post("/api/projects/:id/cad", async (request, reply) => {
+    await precheckCad(store, config, request.body);
+    return executeNative(reply, request.body, "cad-review", "cad", () => reviewCad(store, config, workbench.project(paramId(request.params)), request.body, live));
+  });
+  // Static policy check for the code editor; parses only, never executes.
+  app.post("/api/cad/code-check", async request => {
+    const { code } = z.object({ code: z.string().min(1).max(20_000) }).strict().parse(request.body);
+    if (!config.cadquery) throw new DomainError("CAD_NOT_CONFIGURED", "CadQuery 未配置", 503);
+    const violations = await checkCadCode(config, code);
+    return { ok: violations.length === 0, violations };
+  });
   app.get("/api/cad/:id", async (request, reply) => {
     const cad = store.get<CadReview>("cad-review", paramId(request.params));
     if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
@@ -239,14 +252,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.get("/api/assistant/context", async request => {
     const q = z.object({ projectId: Id.optional() }).strict().parse(request.query);
     const p = q.projectId ? workbench.project(q.projectId) : undefined;
-    return contextView(store, p, p ? lifecycle(p) : undefined);
+    return contextView(store, config, p, p ? lifecycle(p) : undefined);
   });
   app.get("/api/projects/:id/records/:handle", async request => {
     const p = workbench.project(paramId(request.params));
     const handle = z.string().regex(/^(project|[a-z]+-[0-9]{1,3})$/).parse((request.params as { handle?: string }).handle);
     return resolveHandle(store, p, handle, lifecycle(p));
   });
-  app.post("/api/assistant/external-plans", async request => createExternalPlan(store, request.body, lifecycle));
+  app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {

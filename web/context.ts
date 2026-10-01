@@ -17,7 +17,8 @@ export type State = {
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
+  capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
+    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string } }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
 export const VIEWS: { id: ViewId; label: string; short: string; index?: number }[] = [
   { id: "overview", label: "项目总览", short: "总览" },
@@ -45,7 +46,13 @@ export function useApp(): Ctx {
 export const CAD_VARIANTS: Record<string, [string, string]> = {
   reference: ["基准设计", "4 mm 板厚 · Ø22.5 止口 · 完整安装板"], lightweight: ["轻量化", "板厚降至 2.5 mm 以减重"],
   "undersize-bore": ["止口孔偏小", "止口孔 Ø21.5 mm（电机止口 Ø22）"], compact: ["紧凑化", "降低安装板高度与宽度"],
+  generated: ["生成代码", "CadQuery 代码在隔离沙箱中建模"],
 };
+/** Code handed from the assistant or a recheck to the CAD editor; session-scoped, never sent anywhere else. */
+export const CAD_DRAFT_KEY = "pai-cad-code-draft";
+export const ISOLATION_LABEL: Record<string, string> = { "no-network": "无网络", "read-only-root": "只读文件系统", "hidden-home-state-credentials": "隐藏主目录/状态/凭据",
+  "pid-ipc-uts-user-namespaces": "独立命名空间", "no-capabilities": "无特权", "clear-environment": "清空环境变量", "writable-output-only": "仅输出目录可写",
+  "rlimit-cpu-memory-files": "CPU 60 s / 内存 3 GiB 上限", "audit-hook": "审计钩子拦截进程/网络/写文件", "restricted-builtins": "受限内置函数" };
 export const CAD_CHECK_LABELS: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络" };
 export const MATURITY: Record<string, [string, "ok" | "warn" | "bad" | "muted" | "info"]> = {

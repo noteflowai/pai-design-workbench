@@ -5,18 +5,20 @@ import type { SceneReview } from "../src/scenes";
 import type { FactoryReview } from "../src/factory";
 import type { FailingCase } from "../src/lifecycle";
 import type { CadReview, CadRequirements } from "../src/cad";
-import { CAD_VARIANTS } from "./context";
+import { CAD_DRAFT_KEY, CAD_VARIANTS } from "./context";
 
-export function runCad(c: Ctx, variant: string, requirements: CadRequirements) {
+export function runCad(c: Ctx, variant: string, requirements: CadRequirements, code?: string, feedback?: Feedback) {
   const p = c.project!;
-  const requestId = requestIdFor(`pai-cad-${p.id}-${p.revision}-${variant}-${JSON.stringify(requirements)}`);
+  const source = variant === "generated" && code ? { language: "cadquery-2.8", code } : undefined;
+  const requestId = requestIdFor(`pai-cad-${p.id}-${p.revision}-${variant}-${JSON.stringify(requirements)}-${code ?? ""}-${feedback ? `${feedback.id}-${feedback.revision}` : ""}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
     const r = await c.track(requestId, `CadQuery 参数化零件 · ${CAD_VARIANTS[variant][0]}`, "cad-part",
-      () => api<CadReview>(`/projects/${p.id}/cad`, { requestId, projectRevision: p.revision, variant, requirements }));
+      () => api<CadReview>(`/projects/${p.id}/cad`, { requestId, projectRevision: p.revision, variant, requirements, ...(source ? { source } : {}), ...(feedback ? { feedbackId: feedback.id } : {}) }));
     c.navigate("validate", { kind: "cad-part", id: r.id });
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
-  }, "原生 CAD 零件与独立检查已生成。");
+    if (feedback) await api(`/feedback/${feedback.id}`, { expectedRevision: feedback.revision, status: "rechecked", reason: "按修订后的生成代码重新执行沙箱建模与原生检查，绑定新回执。", recheckRunId: r.id }, "PATCH");
+  }, feedback ? "已用修订代码复测，并绑定到反馈。" : "原生 CAD 零件与独立检查已生成。");
 }
 
 /** Every native action: navigate to validation first so live progress is visible, then run with a durable identity. */
@@ -83,14 +85,15 @@ export function recordCaseFeedback(c: Ctx, fc: FailingCase) {
 
 export const nextStatus = (f: Feedback) => ({ received: "reproducible", "needs-context": "reproducible", reproducible: "assigned",
   assigned: f.evidenceKind === "factory-twin" ? "no-change-with-reason" : "fix-proposed", rechecked: "closed" } as Record<string, string>)[f.status];
-export const feedbackAction = (f: Feedback) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
+export const feedbackAction = (f: Feedback, generated = false) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
   assigned: f.evidenceKind === "factory-twin" ? "记录保留原因" : "提出回退方案",
-  "fix-proposed": f.evidenceKind === "blender-scene" ? "移除遮挡并复测" : f.evidenceKind === "cad-part" ? "恢复基准参数并复测" : "回退基准并复测", "no-change-with-reason": "复测保留方案",
+  "fix-proposed": f.evidenceKind === "blender-scene" ? "移除遮挡并复测" : f.evidenceKind === "cad-part" ? (generated ? "修订代码并复测" : "恢复基准参数并复测") : "回退基准并复测", "no-change-with-reason": "复测保留方案",
   rechecked: "关闭已复测反馈" } as Record<string, string>)[f.status];
-export const defaultReason = (f: Feedback) => ({
+export const defaultReason = (f: Feedback, generated = false) => ({
   received: "已按原始证据复现该失败案例。", "needs-context": "补充上下文后已复现。", reproducible: "分配给维护者处理。",
   assigned: f.evidenceKind === "factory-twin" ? "上游数据未变化：保留失败并记录为已知限制，等待上游以新参数重跑。"
     : f.evidenceKind === "blender-scene" ? "保持原几何约束，移除遮挡物并重新生成场景。"
+    : f.evidenceKind === "cad-part" && generated ? "修订生成代码以满足约束，零件要求不变，在沙箱中重新建模并检查。"
     : f.evidenceKind === "cad-part" ? "恢复满足约束的基准参数（4 mm 板厚、Ø22.5 止口、完整安装板），零件要求不变，重新生成并检查。" : "回退到基准设置并重新执行原生检查。",
   "fix-proposed": "按记录的处理方案重新执行原生检查，并绑定新回执。", "no-change-with-reason": "按保留说明在原标准下重新评估，并绑定新回执。",
   rechecked: "新复测回执已核对；关闭反馈，原失败记录保留。" } as Record<string, string>)[f.status] ?? "";
@@ -98,6 +101,13 @@ export const defaultReason = (f: Feedback) => ({
 export function advanceFeedback(c: Ctx, f: Feedback, reason: string) {
   const next = nextStatus(f), p = c.project!;
   if (next) return c.perform(() => api(`/feedback/${f.id}`, { expectedRevision: f.revision, status: next, reason }, "PATCH"), "反馈状态已保存。");
+  const generated = f.evidenceKind === "cad-part" && f.status === "fix-proposed" ? (c.data.cads ?? []).find(x => x.id === f.runId && x.request.variant === "generated") : undefined;
+  if (generated) {
+    // A generated part is fixed by revising its code: open the original code in the editor, bound to this feedback.
+    sessionStorage.setItem(CAD_DRAFT_KEY, generated.request.source!.code);
+    c.navigate("design", { lane: "cad", variant: "generated", feedback: f.id });
+    return Promise.resolve();
+  }
   return c.perform(async () => {
     const requestId = requestIdFor(`pai-recheck-${f.id}-${p.revision}-${f.revision}-${f.status}`);
     const keep = f.status === "no-change-with-reason";

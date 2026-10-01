@@ -21,11 +21,11 @@ const checks = (failing: string[]) => ({ schema: "pai-cad-checks-1", variant: "l
 const out = (o: unknown) => "```json\n" + JSON.stringify(o) + "\n```";
 const quota = (profile: string) => ({ profile, status: "failed", errorKind: "quota" });
 
-async function setup() {
+async function setup(overrides: Partial<ReturnType<typeof configuration>> = {}) {
   const dir = await mkdtemp(join(tmpdir(), "pai-ai-"));
   const ledger = join(dir, "ledger.sqlite3"); await writeFile(ledger, "");
   // Self-contained: the fake executor's directory is its control root, independent of the host's checkouts.
-  const config = { ...configuration(), state: dir, controllerEntrypoint: fake, controllerDatabase: ledger, controlRoot: dirname(fake) };
+  const config = { ...configuration(), state: dir, controllerEntrypoint: fake, controllerDatabase: ledger, controlRoot: dirname(fake), cadquery: undefined, ...overrides };
   const { app, store, workbench } = await createApp(config, {} as Adapters);
   const p = workbench.createProject(task);
   const cad = { id: randomUUID(), projectId: p.id, projectRevision: 1, request: { requestId: randomUUID(), projectRevision: 1, variant: "lightweight", requirements: DEFAULT_CAD_REQUIREMENTS },
@@ -151,5 +151,41 @@ test("AI is disabled without the reviewed executor and ledger; workspace text st
     const workspace = /\n<workspace>(\{.*\})<\/workspace>\n<user>/s.exec(call.prompt)![1];
     assert.equal(JSON.parse(workspace).feedback[0].observed, f.observed, "injected markup is JSON-escaped data inside the workspace block");
     assert.equal((call.prompt.match(/<user>/g) ?? []).length, 1);
+  } finally { await s.cleanup(); }
+});
+
+test("cad-code plans: offered only with a working sandbox; same contracts plus the static code policy; never executed by planning", async () => {
+  const template = await readFile(new URL("../native/cad_template.py", import.meta.url), "utf8");
+  const plans = [
+    { ref: "p1", tool: "cad-code", title: "3.5 mm 板厚生成代码", payload: { code: template.replace("T = 4.0 ", "T = 3.5 ") } },
+    { ref: "p2", tool: "cad-code", title: "越权代码", payload: { code: template.replace("import cadquery as cq", "import cadquery as cq\nimport os") } },
+  ];
+  // Without CadQuery/bubblewrap the tool is not offered and a proposal for it is refused with a reason.
+  let s = await setup();
+  try {
+    const r = await s.ask("写一个板厚 3.5 mm 的支架", { attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "plan", plans }) }] });
+    const plan = r.body as AssistantPlan;
+    assert.equal(plan.plans.length, 0);
+    assert.ok(plan.interpretation.some(x => /p1（cad-code）：生成代码通道不可用/.test(x)), plan.interpretation.join(" | "));
+  } finally { await s.cleanup(); }
+
+  const python = join(process.cwd(), ".state/tools/cadquery-2.8.0/bin/python");
+  const available = await readFile(python).then(() => true, () => false);
+  if (!available) return;
+  s = await setup({ cadquery: python });
+  try {
+    const before = s.store.list("cad-review").length;
+    const r = await s.ask("写一个板厚 3.5 mm 的支架", { log: s.log, attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "plan", plans }) }] });
+    const plan = r.body as AssistantPlan;
+    const prompt = JSON.parse((await readFile(s.log, "utf8")).trim().split("\n").at(-1)!).prompt as string;
+    assert.match(prompt, /"cad-code"/); assert.ok(prompt.includes("MOTOR_AXIS_Z = T + 24.0"), "template offered to the planner");
+    assert.deepEqual(plan.plans.map(p => [p.id, p.tool]), [["p1", "cad-code"]]);
+    const step = plan.plans[0];
+    assert.equal(step.route, `/projects/${s.project.id}/cad`);
+    assert.deepEqual([step.payload.variant, (step.payload.source as { language: string }).language], ["generated", "cadquery-2.8"]);
+    assert.ok(step.changes.some(c => c.field === "code" && c.direction === "new"));
+    assert.ok(step.warnings.some(w => w.includes("沙箱")));
+    assert.ok(plan.interpretation.some(x => /已拒绝 AI 计划 p2（cad-code）：代码不符合沙箱策略：.*发现 os/.test(x)), plan.interpretation.join(" | "));
+    assert.equal(s.store.list("cad-review").length, before, "planning never runs code");
   } finally { await s.cleanup(); }
 });
