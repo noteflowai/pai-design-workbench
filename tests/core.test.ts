@@ -239,3 +239,13 @@ test("unknown proposal effects cannot be bypassed with a fresh identity or provi
     await assert.rejects(propose(s.store, configuration(), s.project, { ...request, requestId: randomUUID(), profiles: ["codex"] }), /cannot bypass/);
   } finally { await s.cleanup(); }
 });
+
+test("every hosted 202 status route the server emits is followed by the browser client", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const server = await readFile(new URL("../src/server.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../web/api.ts", import.meta.url), "utf8");
+  const routes = [...server.matchAll(/executeNative\(reply, request\.body, "[^"]+", "([^"]+)"/g)].map(m => m[1]);
+  assert.ok(routes.length >= 5, routes.join(","));
+  const pattern = new RegExp(/new RegExp|(\/\^\\\/api\\\/\(.*?\)\\\/\[a-f0-9-\]\+\$\/)/.exec(client)![1].slice(1, -1));
+  for (const route of new Set(routes)) assert.ok(pattern.test(`/api/${route}/0a1b2c3d-0000-4000-8000-000000000000`), `client must poll /api/${route}/:id`);
+});
