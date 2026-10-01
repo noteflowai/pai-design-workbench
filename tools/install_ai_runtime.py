@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import subprocess
 import tarfile
 import urllib.request
@@ -70,8 +71,9 @@ if not marker.exists():
     tmp.mkdir(mode=0o755)
     with tarfile.open(args.executor_tar) as t:
         t.extractall(tmp, filter="data")
-    subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=tmp, check=True)
-    subprocess.run(["npm", "run", "build"], cwd=tmp, check=True)
+    # Tool output goes to stderr so stdout stays a single JSON summary for callers.
+    subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=tmp, check=True, stdout=sys.stderr)
+    subprocess.run(["npm", "run", "build"], cwd=tmp, check=True, stdout=sys.stderr)
     for name, key in (("acpx", "acpx"), ("@agentclientprotocol/codex-acp", "codexAcp"), ("@agentclientprotocol/claude-agent-acp", "claudeAgentAcp")):
         installed = json.loads((tmp / "node_modules" / name / "package.json").read_text())["version"]
         if installed != ex[key]:

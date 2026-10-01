@@ -13,7 +13,7 @@ python3 -c "import boto3,os,sys; boto3.client('s3').download_file(os.environ['PA
 chown pai:pai "$TAR"
 OUT=$(runuser -u pai -- env PATH="$NODE_BIN:$PATH" HOME=/var/lib/pai python3 "$PAI_RELEASE/tools/install_ai_runtime.py" --prefix "$AI" --executor-tar "$TAR" --link-dir "$AI/bin")
 rm -f "$TAR"
-ROOT=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['executorRoot'])" "$OUT")
+ROOT=$(python3 -c "import json,sys; print(json.loads(sys.argv[1].strip().splitlines()[-1])['executorRoot'])" "$OUT")
 # Kiro keys, in the exact files the executor reads (owner-only); values never reach logs.
 runuser -u pai -- install -d -m 0700 /var/lib/pai/.config /var/lib/pai/.config/agent-cli /var/lib/pai/.config/kiro-failover
 python3 - <<'PY'
