@@ -241,7 +241,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       <label className="visually-hidden" htmlFor="studio-input">设计意图</label>
       <textarea id="studio-input" ref={input} rows={3} maxLength={2000} value={message} placeholder="描述意图，例如：生成带遮挡的工作单元，占地 ≤ 12 m²"
         onChange={e => setMessage(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(); }} />
-      <div className="composer-foot"><small>{useAi ? "AI 引擎：Kiro 主→备→二备→Codex→Claude" : aiAvailable ? "规则解析 · 不调用模型" : "未配置 AI 引擎 · 规则解析"} · Ctrl/⌘+Enter</small>
+      <div className="composer-foot"><small>{useAi ? `AI 引擎：${(c.data.capabilities.assistant?.engines ?? []).map(e => PROFILE_NAME[e] ?? e).join(" → ")}` : aiAvailable ? "规则解析 · 不调用模型" : "未配置 AI 引擎 · 规则解析"} · Ctrl/⌘+Enter</small>
         <button type="submit" disabled={thinking || !message.trim()}>生成计划 ↵</button></div>
     </form>
   </div>;

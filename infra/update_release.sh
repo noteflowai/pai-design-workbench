@@ -34,6 +34,11 @@ if ! python3 -c "import ensurepip" 2>/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3.12-venv >/dev/null
 fi
 runuser -u pai -- python3 tools/setup_cadquery.py
+# AI engine (pinned Kiro CLI + bounded executor); skipped only if the stack predates the AI resources.
+if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
+  if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
+  bash "$RELEASE/infra/install_ai.sh"
+fi
 PREVIOUS=$(readlink -f /opt/pai/current)
 systemctl stop pai-workbench.service
 ln -sfn "$RELEASE" /opt/pai/current.next

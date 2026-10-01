@@ -88,6 +88,17 @@ export class WorkbenchStack extends cdk.Stack {
     // Avoid replacing/stopping the instance merely because a frontend asset changed.
     asset.bucket.grantRead(role, context("bootstrapAssetKey"));
     asset.bucket.grantRead(role, asset.s3ObjectKey);
+    // AI runtime: the pinned NoteFlow executor archive (private source, never in Git) and Kiro API keys.
+    const executorPath = resolve("../.state/deploy/executor-ec007f070db8.tar");
+    const executor = new assets.Asset(this, "Executor", {
+      path: executorPath, assetHash: createHash("sha256").update(readFileSync(executorPath)).digest("hex"), assetHashType: cdk.AssetHashType.CUSTOM,
+    });
+    executor.bucket.grantRead(role, executor.s3ObjectKey);
+    const aiKeys = new secrets.Secret(this, "AiKeys", {
+      secretName: "pai-workbench/kiro-keys",
+      description: "Kiro headless API keys for the PAI bounded executor (primary, backup, backup2); written by the operator, read by the instance",
+    });
+    aiKeys.grantRead(role);
     const data = new ec2.Volume(this, "Data", {
       availabilityZone: zone, size: cdk.Size.gibibytes(40), volumeType: ec2.EbsDeviceVolumeType.GP3,
       encrypted: true, removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -162,6 +173,7 @@ export class WorkbenchStack extends cdk.Stack {
       description: "PAI deployment verification and private admin credential retrieval",
     });
     secret.grantRead(operator);
+    operator.addToPolicy(new iam.PolicyStatement({ actions: ["secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"], resources: [aiKeys.secretArn] }));
     operator.addToPolicy(new iam.PolicyStatement({
       actions: ["ssm:SendCommand"], resources: [
         `arn:aws:ec2:${this.region}:${this.account}:instance/${instance.instanceId}`,
@@ -181,5 +193,7 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ReleaseHash", { value: createHash("sha256").update(readFileSync(releasePath)).digest("hex") });
     new cdk.CfnOutput(this, "ReleaseBucket", { value: asset.s3BucketName });
     new cdk.CfnOutput(this, "ReleaseKey", { value: asset.s3ObjectKey });
+    new cdk.CfnOutput(this, "ExecutorKey", { value: executor.s3ObjectKey });
+    new cdk.CfnOutput(this, "AiKeysArn", { value: aiKeys.secretArn });
   }
 }

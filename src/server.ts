@@ -144,7 +144,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       blender: Boolean(config.blender),
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
-      assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? PROFILES : [] },
+      assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? config.aiProfiles ?? PROFILES : [] },
       liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));

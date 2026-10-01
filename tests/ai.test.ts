@@ -123,6 +123,10 @@ test("unverified engine effects block plans and new runs until a human reconcili
     assert.equal(c.status, 200);
     r = await s.ask("再问一次", { attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "clarify", interpretation: ["需要哪个零件？"] }) }] });
     assert.equal(r.body.state, "done", JSON.stringify(r.body.ai));
+    r = await s.ask("静默退出", { silent: true });
+    assert.equal(r.body.state, "reconcile", "an empty report with exit 0 is never an answer");
+    assert.match(r.body.interpretation[0], /CONTROLLER_NO_REPORT/);
+    await s.call("POST", `/api/assistant/plans/${r.body.id}/reconciliation`, { reason: "执行器没有运行，无引擎调用" });
     r = await s.ask("崩溃", { flowStatus: "failed", action: "done", attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "clarify" }) }] });
     assert.equal(r.body.state, "reconcile", "a done report without a completed flow is not trusted");
     const g = await s.call("GET", `/api/assistant/plans/${r.body.id}`);

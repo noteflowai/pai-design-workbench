@@ -1,0 +1,38 @@
+{
+  "schema": "pai-container-verification-1",
+  "checkedAt": "2026-10-01T07:51:42.454085+00:00",
+  "image": "pai-workbench:0.4.0",
+  "platform": "linux/amd64",
+  "contents": {
+    "node": "24.21.0",
+    "kiro": "2.24.0",
+    "blender": "5.2.2 LTS",
+    "cadquery": "2.8.0",
+    "executorCommit": "ec007f070db8",
+    "acpx": "0.19.3"
+  },
+  "credentialsInImage": false,
+  "secretsFoundInHistory": 0,
+  "nativeCadInContainer": {
+    "verdict": "rejected",
+    "failed": [
+      "min-wall"
+    ]
+  },
+  "aiInContainer": {
+    "engine": "kiro-primary",
+    "model": "claude-opus-5.5",
+    "state": "done",
+    "citations": [
+      "cad-1",
+      "project"
+    ],
+    "plans": [
+      "cad-review reference minWallMm 3",
+      "cad-review compact minWallMm 3"
+    ]
+  },
+  "foundAndFixed": "The first in-container call produced no report: the executor only runs when argv[1] equals its module path, and the image used a symlinked install path. PAI now resolves real paths and treats an empty report as needing reconciliation (unit-tested). The answered first run was reconciled without replay.",
+  "attemptsUsed": 2,
+  "promptAndAnswerContentRecorded": false
+}

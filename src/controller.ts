@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { command, writePrivate } from "./adapters.js";
@@ -90,10 +90,15 @@ export async function runController(config: Config, directory: string, runId: st
   }).catch(() => undefined), 1_000);
   let r: Awaited<ReturnType<typeof command>>;
   try {
-    r = await command("node", [config.controllerEntrypoint!, "--state", state, "--database", config.controllerDatabase!,
-      "--request", join(directory, "request.json")], config.controlRoot, undefined, 470_000);
+    // The executor only runs when argv[1] equals its own module path, so symlinked install paths must be resolved.
+    const [entry, root] = await Promise.all([realpath(config.controllerEntrypoint!), realpath(config.controlRoot)]);
+    r = await command("node", [entry, "--state", state, "--database", config.controllerDatabase!,
+      "--request", join(directory, "request.json")], root, undefined, 470_000);
+    // An empty report with exit 0 means the flow never ran; never treat that as an answer.
+    if (r.exitCode === 0 && !r.stdout.trim()) throw new DomainError("CONTROLLER_NO_REPORT", "Executor produced no report", 502);
   } finally { clearInterval(poll); }
   await writePrivate(join(directory, "stdout.json"), r.stdout);
+  await writePrivate(join(directory, "stderr.log"), r.stderr.slice(0, 20_000));
   const attempts = await readAttempts(state, runId);
   for (const a of attempts) { const key = `${a.profile}:${a.status}`; if (!seen.has(key)) options.onAttempt?.(a); }
   let parsed: z.infer<typeof Report>;

@@ -19,7 +19,7 @@ def session(role):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("action", choices=["status", "login-file", "send", "apply-release", "result"])
+parser.add_argument("action", choices=["status", "login-file", "send", "apply-release", "result", "put-ai-keys"])
 parser.add_argument("--script", type=Path)
 parser.add_argument("--command-id")
 args = parser.parse_args()
@@ -47,7 +47,8 @@ elif args.action in ("send", "apply-release"):
     if args.action == "apply-release":
         source = Path(__file__).resolve().parents[1] / "infra/update_release.sh"
         variables = {"PAI_RELEASE_HASH": outputs["ReleaseHash"], "PAI_ASSET_BUCKET": outputs["ReleaseBucket"],
-                     "PAI_ASSET_KEY": outputs["ReleaseKey"]}
+                     "PAI_ASSET_KEY": outputs["ReleaseKey"], "PAI_EXECUTOR_KEY": outputs.get("ExecutorKey", ""),
+                     "PAI_AI_KEYS_ARN": outputs.get("AiKeysArn", "")}
         script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
         script = args.script.read_text()
@@ -57,6 +58,20 @@ elif args.action in ("send", "apply-release"):
         Comment="PAI workbench authorized deployment verification",
     )
     print(response["Command"]["CommandId"])
+elif args.action == "put-ai-keys":
+    # Reads the local Kiro key files exactly as the executor does and stores them; values are never printed.
+    import re
+    home = Path.home()
+    primary = re.findall(r"^(?:export\s+)?KIRO_API_KEY\s*=\s*(.+)$", (home / ".config/agent-cli/env").read_text(), re.M)
+    if len(primary) != 1:
+        raise SystemExit("expected exactly one primary KIRO_API_KEY")
+    keys = {"primary": shlex.split(primary[0], comments=True)[0],
+            "backup": (home / ".config/kiro-failover/backup.key").read_text().strip(),
+            "backup2": (home / ".config/kiro-failover/backup2.key").read_text().strip()}
+    if not all(re.fullmatch(r"ksk_[A-Za-z0-9_-]{20,}", v) for v in keys.values()) or len(set(keys.values())) != 3:
+        raise SystemExit("unexpected key format or duplicate keys")
+    operator.client("secretsmanager").put_secret_value(SecretId=outputs["AiKeysArn"], SecretString=json.dumps(keys))
+    print(json.dumps({"stored": sorted(keys), "secret": outputs["AiKeysArn"].split(":")[-1]}))
 elif args.action == "result":
     if not args.command_id:
         parser.error("--command-id is required")

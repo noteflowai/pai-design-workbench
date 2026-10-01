@@ -15,6 +15,7 @@ if (!(request.timeout_seconds >= 1 && request.timeout_seconds <= 60) || request.
 const prompt = readFileSync(request.prompt_file, "utf8");
 const spec = JSON.parse(process.env.FAKE_EXECUTOR ?? (process.env.FAKE_EXECUTOR_FILE ? readFileSync(process.env.FAKE_EXECUTOR_FILE, "utf8") : "{}"));
 if (spec.log) appendFileSync(spec.log, JSON.stringify({ run_id: request.run_id, profiles: request.profiles, promptBytes: Buffer.byteLength(prompt), prompt }) + "\n");
+if (spec.silent) process.exit(0);
 const dir = join(values.state, "runs", request.run_id);
 mkdirSync(dir, { recursive: true });
 let final;

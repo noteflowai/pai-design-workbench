@@ -1,0 +1,4 @@
+{"schema_version":1,"timezone":"Asia/Singapore","run_attempt_limit":5,"daily_attempt_limit":20,
+ "providers":{"kiro":{"daily_attempt_limit":12},"codex":{"daily_attempt_limit":4},"claude":{"daily_attempt_limit":4}},
+ "profiles":{"kiro-primary":"kiro","kiro-backup":"kiro","kiro-backup2":"kiro","codex":"codex","claude":"claude"},
+ "money_limits":null}

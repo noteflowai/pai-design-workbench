@@ -1,0 +1,13 @@
+.state
+node_modules
+dist
+web-dist
+test-results
+playwright-report
+infra/node_modules
+infra/cdk.out
+.git
+**/__pycache__
+*.sqlite*
+*.log
+.env

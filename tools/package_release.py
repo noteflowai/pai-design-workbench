@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parents[1]
 output = root / ".state/deploy/release.tgz"
 output.parent.mkdir(parents=True, exist_ok=True)
 directories = ["dist/src", "web-dist", "src", "scripts", "native", "tools", "data"]
-files = ["package.json", "package-lock.json", "LICENSE", "THIRD_PARTY_NOTICE.md"]
+files = ["package.json", "package-lock.json", "LICENSE", "THIRD_PARTY_NOTICE.md", "infra/install_ai.sh"]
 paths = [root / p for p in files]
 for directory in directories:
     paths.extend(p for p in (root / directory).rglob("*") if p.is_file() and "__pycache__" not in p.parts)

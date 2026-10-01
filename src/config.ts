@@ -5,9 +5,19 @@ export interface Config {
   workspace: string; state: string; web: string;
   robotRoot: string; stressSource: string; evalarcRoot: string; controlRoot: string; radarFile: string;
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
+  /** Engines this deployment may use, in fallback order; a subset of the executor's reviewed profiles. */
+  aiProfiles?: string[];
   listenHost?: string; publicOrigin?: string;
   albAuth?: { albArn: string; issuer: string; clientId: string };
   authLogoutUrl?: string;
+}
+const ALL_PROFILES = ["kiro-primary", "kiro-backup", "kiro-backup2", "codex", "claude"];
+function aiProfiles(value?: string): string[] | undefined {
+  if (!value) return undefined;
+  const list = value.split(",").map(x => x.trim()).filter(Boolean);
+  if (!list.length || list.some(x => !ALL_PROFILES.includes(x)) || new Set(list).size !== list.length) throw new Error("PAI_AI_PROFILES must list distinct executor profiles");
+  // Keep the executor's reviewed order (Kiro primary → backup → backup2 → Codex → Claude).
+  return ALL_PROFILES.filter(x => list.includes(x));
 }
 export function configuration(): Config {
   const moduleRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
@@ -35,6 +45,7 @@ export function configuration(): Config {
     controllerDatabase: process.env.PAI_CONTROLLER_DATABASE,
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
+    aiProfiles: aiProfiles(process.env.PAI_AI_PROFILES),
     listenHost, publicOrigin, albAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,
   };

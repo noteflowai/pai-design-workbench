@@ -17,7 +17,7 @@ export type State = {
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { modelProposal: boolean; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
+  capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
 export const VIEWS: { id: ViewId; label: string; short: string; index?: number }[] = [
   { id: "overview", label: "项目总览", short: "总览" },
