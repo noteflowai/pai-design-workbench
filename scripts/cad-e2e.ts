@@ -77,10 +77,19 @@ try {
   assert.equal(roundtrip.valid, true); assert.equal(roundtrip.solids, 1);
   assert.ok(Math.abs(roundtrip.volume - fixed.candidate!.volume) < 0.01 * fixed.candidate!.volume, "STEP re-import preserves volume within 1%");
   assert.deepEqual(roundtrip.holeDiameters, [3.4, 5.5, 22.5]);
+  assert.deepEqual(fixed.candidate!.boundingBox, [60, 30, 50], "staged GLB meshing must not inflate nominal CAD bounds");
+  assert.deepEqual(roundtrip.boundingBox, fixed.candidate!.boundingBox, "STEP geometry retains the measured envelope");
+  const boundary = await request<CadReview>("POST", `/api/projects/${project.id}/cad`, {
+    requestId: randomUUID(), projectRevision: 1, variant: "reference",
+    requirements: { ...requirements, maxEnvelopeMm: [60, 30, 50] },
+  });
+  assert.equal(boundary.verdict, "accepted-cad-part", "nominal envelope at the exact requirement boundary must pass after staged exports");
+  assert.ok(boundary.candidate!.checks.every(c => c.passed));
   const report = { schema: "pai-cad-e2e-1", checkedAt: new Date().toISOString(), result: "passed",
     cadquery: fixed.candidate!.cadquery, ocp: fixed.candidate!.ocp, part: "NEMA 17 motor-mount bracket (6061 aluminium, nominal)",
     candidates: { lightweight: ["min-wall"], ...others }, referenceMassG: fixed.candidate!.mass, lightweightMassG: light.candidate!.mass,
     feedbackStatus: f.status, preventedUnfixedClosure: true, rejectedChangedRequirementsRecheck: true, stageEvents: 12, stepReimport: roundtrip,
+    nominalEnvelopeBoundaryAccepted: true,
     nativeArtifactKinds: ["step", "stl", "glb", "assembly-glb", "svg-drawing", "native-checks-json"],
     physicalValidation: false, feaPerformed: false, toleranceStackUp: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });
