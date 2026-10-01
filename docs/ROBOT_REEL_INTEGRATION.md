@@ -1,5 +1,13 @@
 # Robot Reel 最新进展与 PAI 接入
 
+## 2026-10-01 更新：0.18.3 公开原生交付已补齐
+
+[v0.18.3](https://github.com/noteflowai/robot-reel/releases/tag/v0.18.3) 已发布，主分支 `4a158e8`。本轮匿名下载 `factory-twin-blender.zip`、实验记录包和 SHA256SUMS，逐一核对 GitHub 附件摘要及公开校验表。14 文件的 Blender 原生包为 3,388,112 字节，SHA-256 `e205a6e633784898e7db7b27ede00b572056c116f4a5cd62153a8ac869788baf`，与上轮独立 Blender 重开和 USD 回读的整个归档逐字节一致。因此下文 9 月 30 日记录的公开下载缺口已经解决；本轮没有重复建模、渲染或原生重开。见[下载复核](evidence/robot-reel-native-delivery-v0183.json)。
+
+0.18.3 增加实验正文数字、首页/Hugging Face 数字和中文版来源表的一致性检查；这些是上游发布说明。本轮未将其视为新的模型或工厂实验。工作台已验证的生产工具仍固定在原提交，Factory Twin 导入仍使用原冻结数据；升级工具另需原有闭环回归，不能将新发布日期赋给旧记录。Kiro 的课程制作与原工作树均未改写。
+
+## 2026-09-30 原始复核
+
 2026-09-30 复核远程主分支与本地提交，均为 `b3ee5c7d2c5588ddc7e067869c049aad7e6951ce`，PR [#90](https://github.com/noteflowai/robot-reel/pull/90) 新增 Factory Twin Lab。[v0.18.0 已发布](https://github.com/noteflowai/robot-reel/releases/tag/v0.18.0)，上游 Check/Release 均成功；[公开演示页](https://noteflowai.github.io/robot-reel/factory-twin/)返回 200，内容与复验副本一致。本轮检查保留原工作区未提交的推广笔记和封面，没有重置、合并或覆盖 Kiro 的工作。检验使用该提交的独立归档副本。
 
 新增能力包括六工位产线、三台 AMR、园区温控与能源仿真；带噪声、丢包、延迟的遥测；主轴磨损 EKF；14 种维护候选预测；需量控制和延迟执行；同扰动的 closed/shadow 配对；Blender 程序化园区、记录驱动动画、OpenUSD 导出与回读。参见[原始方法与限制](https://github.com/noteflowai/robot-reel/blob/b3ee5c7d2c5588ddc7e067869c049aad7e6951ce/examples/factory-twin/METHODS.md)。

@@ -1,0 +1,34 @@
+{
+  "schema": "pai-upstream-native-delivery-readback-1",
+  "checkedAt": "2026-10-01T03:14:51.906217+00:00",
+  "result": "passed",
+  "release": "v0.18.3",
+  "releaseUrl": "https://github.com/noteflowai/robot-reel/releases/tag/v0.18.3",
+  "anonymousDownloads": [
+    {
+      "name": "factory-twin-blender.zip",
+      "bytes": 3388112,
+      "sha256": "e205a6e633784898e7db7b27ede00b572056c116f4a5cd62153a8ac869788baf",
+      "anonymousDownload": true
+    },
+    {
+      "name": "robot-reel-factory-twin-experiment.zip",
+      "bytes": 3245768,
+      "sha256": "1c37913ba91aaaf2aa7ad7992deba3870b9efbdc7a09d16a985c3f7f7562bd5d",
+      "anonymousDownload": true
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 1700,
+      "sha256": "cb9add655542db4076e26b26d08d2ecf383eeeab26fd96c677c8e609a5046d53",
+      "anonymousDownload": true
+    }
+  ],
+  "nativeArchiveMatchesPreviouslyReopenedBytes": true,
+  "nativeArchiveFileCount": 14,
+  "publicNativeDeliveryGapResolved": true,
+  "priorNativeReview": "docs/evidence/robot-reel-factory-review.json",
+  "nativeReopenRepeatedThisCheck": false,
+  "productionToolUpgraded": false,
+  "physicalValidation": false
+}
