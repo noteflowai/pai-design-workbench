@@ -1,7 +1,9 @@
 {
   "schema": "pai-aws-ai-verification-1",
   "site": "https://pai.oneai.host",
-  "checkedAt": "2026-10-01T08:33:38.788Z",
+  "release": "00c12c039d4f6c706a64c406524295c0603b09de5606c1a26b35487ed2a201dc",
+  "sourceCommit": "e9f6c7d",
+  "checkedAt": "2026-10-01T08:59:47.980Z",
   "capabilities": {
     "mode": "typed plans; confirmation required",
     "modelInvocation": true,
@@ -11,9 +13,6 @@
       "kiro-backup2"
     ]
   },
-  "reconciled": [
-    "4c8ba9f9-eefb-47e7-913e-d23835e51490"
-  ],
   "ai": {
     "state": "done",
     "engine": "kiro-primary",
@@ -39,9 +38,10 @@
       }
     ],
     "rejectedPlans": 0,
-    "seconds": 30,
+    "seconds": 27,
     "authority": "none"
   },
+  "timelineOverlap": false,
   "confirmed": {
     "match": "as-proposed",
     "verdict": "rejected",

@@ -10,7 +10,7 @@
 | `npm run test:browser` | 8 组通过。AI 组使用假执行器，不消耗真实尝试，覆盖回退链、引用跳转、计划确认、核对门槛，并断言时间线滚动后气泡、引用和计划卡互不重叠 |
 | 本地真实引擎 | Kiro 主账号 2 次完成（答案带引用，计划有效）；Claude 结果需核对，已人工核对；Codex 被执行器在开始前拒绝（模型广播冲突，属执行器侧问题，未修改） |
 | 容器 `pai-workbench:0.4.0` | 7.0 GB，仅 amd64。容器内原生 CAD 得到 min-wall 失败；Kiro 主账号回答，引用 `cad-1`，给出两个壁厚 3 mm 的复测计划。镜像历史中没有密钥。见[回执](evidence/container.json) |
-| pai.oneai.host | 通过 Cognito 登录后：能力清单只列出 Kiro 三个账号；真实 Kiro 主账号用时 30 s 完成，引用 3 条已存记录，两个计划均通过校验；确认执行 compact 方案，原生检查得出的拒绝结论保留；跨源和匿名 AI 请求被拒绝；390 px 无溢出，控制台无错误。见[回执](evidence/deployment-ai.json) |
+| pai.oneai.host | 通过 Cognito 登录后：能力清单只列出 Kiro 三个账号；真实 Kiro 主账号用时 30 s 完成，引用 3 条已存记录，两个计划均通过校验；确认执行 compact 方案，原生检查得出的拒绝结论保留；跨源和匿名 AI 请求被拒绝；390 px 无溢出，控制台无错误。见[回执](evidence/deployment-ai.json)、[基础设施](evidence/deployment-infra-v040.json)、[截图](evidence/cloud-ai.png) |
 
 托管上线过程中发现并修复了三个问题：安装脚本的 stdout 混入了构建输出；主机上的 boto3 没有默认区域；systemd 的 `ProtectSystem=strict` 让 HOME 只读，Kiro 在握手前就退出。前两个问题导致发布中止，但旧版本一直在服务。第三个问题让首次托管调用以 `transport`（开始前失败）结束，没有回退，已人工核对，没有重放；之后用不发送提示的协议探针确认修复有效。截图还发现一个 CSS 选择器冲突：回答气泡继承了侧栏的 sticky 样式，导致内容重叠。已修复，并加入浏览器回归测试，确认该测试在旧样式下会失败。
 
