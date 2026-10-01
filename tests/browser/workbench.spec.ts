@@ -228,7 +228,13 @@ test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and 
   await createProject(page);
   await rail(page, /候选设计/).click();
   await page.getByRole("tab", { name: "CAD 零件" }).click();
+  // Choose a non-default option first so a dead hit target cannot pass silently.
+  await page.getByRole("radio", { name: /紧凑化/ }).check();
+  await expect(page.getByRole("radio", { name: /紧凑化/ })).toBeChecked();
+  await page.locator(".option", { hasText: "止口孔偏小" }).click();
+  await expect(page.getByRole("radio", { name: /止口孔偏小/ })).toBeChecked();
   await page.getByRole("radio", { name: /轻量化/ }).check();
+  await expect(page.getByRole("radio", { name: /轻量化/ })).toBeChecked();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   const viewport = page.locator(".viewport");
   await expect.poll(async () => (await viewport.getAttribute("data-objects")) !== "0" && await page.locator(".viewport .live-dot.on").count() === 1,
