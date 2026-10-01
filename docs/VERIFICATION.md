@@ -30,6 +30,18 @@
 
 回执：[CAD 与反馈](evidence/deployment-cad-v021.json)、[逐记录持久化](evidence/deployment-persistence-v021.json)、[响应式布局与认证](evidence/deployment-ui-v021.json)、[共享基础设施](evidence/deployment-infra-v021.json)。截图：[线上桌面](evidence/cloud-v021-desktop.png)、[线上手机](evidence/cloud-v021-mobile.png)。
 
+## 0.2.2 界面复查发布（2026-10-01）
+
+提交 `c1d790b`，[CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36810805958) 三个作业通过（LTS 作业含 CadQuery、14 个工业用例和 6 组浏览器流程），发布包 `27628f77…e3ed` 经 CDK（仅更新发布包读取授权）和 SSM 原子切换上线，上一发布目录保留。
+
+线上实际执行（Cognito 登录后）：
+- 在 CAD 设计通道选择“紧凑化”并提交，原生 B-Rep 几何在 3.2 s 出现在实时视口，18 s 完成；结论为拒绝，只有孔边距失败；STEP 下载摘要与记录一致。
+- 助手停靠时在 1024 / 1280 / 1440 px 下，工作区宽 616 / 712 / 812 px，均位于助手左侧，无遮挡、无横向溢出。390 px 下助手默认关闭，作为全屏弹出层打开和关闭；反馈页直接列出尚未记录反馈的孔边距失败案例。
+- 跨源写入 403；未登录下载 STEP 重定向到登录；已有反馈状态与 CAD 文件摘要不变；退出登录返回登录页；控制台无错误。
+- 基础设施：WordPress 路由 100/110/default 不变，WordPress 公网 200，目标健康。
+
+回执：[线上功能与布局](evidence/deployment-result-v022.json)、[基础设施](evidence/deployment-infra-v022.json)；截图：[CAD 1280 px](evidence/cloud-v022-cad.png)、[手机](evidence/cloud-v022-mobile.png)。本轮新增 2 个维护者验收任务和 2 次 CAD 检查（首次验收脚本在关闭手机弹出层的步骤出错后重跑）；独立参与人数仍为 0。
+
 ## 0.2.0 发布与云端复核（2026-10-01）
 
 [发布 v0.2.0](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.0)，提交 `5d37dab`，发布包 `a217550d…b1daf`。[最终发布 PR CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36806224444) 的 LTS、Current 与基础设施三个作业全部通过；隔离副本也用 Node 24.21.0 完成 39 组检查、真实 Blender/CAD、14 个工业用例和六条浏览器流程。

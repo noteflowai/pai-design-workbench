@@ -1,0 +1,66 @@
+{
+  "schema": "pai-aws-deployment-verification-3",
+  "site": "https://pai.oneai.host",
+  "checkedAt": "2026-10-01T03:41:14.674Z",
+  "version": "0.2.2",
+  "before": {
+    "projects": 12,
+    "cads": 4,
+    "feedback": 5
+  },
+  "cad": {
+    "cadId": "c4adb8fe-f34c-41b0-a886-dfd8c7f61e36",
+    "variant": "compact",
+    "failed": [
+      "hole-edge-distance"
+    ],
+    "firstLiveGeometryMs": 3204,
+    "totalMs": 18057,
+    "stepDigestVerified": true
+  },
+  "layout": {
+    "docked": [
+      {
+        "width": 1024,
+        "mainWidth": 616,
+        "assistantLeft": 684
+      },
+      {
+        "width": 1280,
+        "mainWidth": 712,
+        "assistantLeft": 924
+      },
+      {
+        "width": 1440,
+        "mainWidth": 812,
+        "assistantLeft": 1048
+      }
+    ],
+    "phone": {
+      "width": 390,
+      "assistantStartsClosed": true,
+      "sheetOpensAndCloses": true,
+      "noHorizontalOverflow": true,
+      "uncoveredCaseListed": true
+    }
+  },
+  "guards": {
+    "crossOriginWriteRejected": true,
+    "anonymousStepDownload": 302,
+    "wordpressStatus": {
+      "withoutRedirect": 301,
+      "afterRedirect": 200,
+      "source": "deployment-infra-v022.json"
+    },
+    "existingRecordsUnchanged": true
+  },
+  "result": "passed",
+  "consoleErrors": 0,
+  "logoutReturnedToLogin": true,
+  "independentParticipants": 0,
+  "physicalValidated": false,
+  "modelProposalExecuted": false,
+  "testedCodeCommit": "c1d790b00e16eb03a5b0fd8513e72ffacca36530",
+  "releaseSha256": "27628f77951ff01ab6a65dcbb97f1f0887a875a8cdbd2b160d5fd8594f25e3ed",
+  "ciRun": "https://github.com/noteflowai/pai-design-workbench/actions/runs/36810805958"
+}
