@@ -20,7 +20,10 @@
     "setup:demo": "tsx scripts/setup-demo.ts",
     "setup:native": "python3 tools/setup_native_tools.py",
     "test:blender": "node --env-file-if-exists=.state/demo.env --import tsx scripts/blender-e2e.ts",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "setup:cad": "python3 tools/setup_cadquery.py",
+    "test:cad": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-e2e.ts",
+    "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

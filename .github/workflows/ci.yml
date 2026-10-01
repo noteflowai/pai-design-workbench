@@ -28,7 +28,7 @@ jobs:
       - run: bash -n infra/bootstrap.sh infra/update_release.sh
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     strategy:
       matrix:
         node: ["24.21.0", "26.10.0"]
@@ -52,6 +52,18 @@ jobs:
       - name: Current native Blender and generated editable geometry
         if: matrix.node == '24.21.0'
         run: npm run setup:native && npm run test:blender
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        id: py312
+        if: matrix.node == '24.21.0'
+        with:
+          python-version: "3.12"
+          update-environment: false
+      - name: Hash-locked CadQuery 2.8 / OCCT 7.9 and native parametric CAD loop
+        if: matrix.node == '24.21.0'
+        run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py && npm run test:cad'
+      - name: Representative industrial design test cases across all native lanes
+        if: matrix.node == '24.21.0'
+        run: npm run test:suite
       - run: npx playwright install --with-deps chromium
         if: matrix.node == '24.21.0'
       - name: Desktop, mobile and real video decoding
@@ -64,5 +76,7 @@ jobs:
           path: |
             .state/evidence/native-e2e.json
             .state/evidence/blender-e2e.json
+            .state/evidence/cad-e2e.json
+            .state/evidence/industrial-suite.json
             test-results/
           retention-days: 14

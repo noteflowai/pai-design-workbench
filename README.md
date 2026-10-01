@@ -6,7 +6,15 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
-已实现**历史记录评审**、**Blender 原生静态场景设计**与**工厂孪生维护/能源方案评审**三个闭环，以及 **AI 工作室**：对话生成类型化工具计划（显示约束收紧或放宽，无验收权），确认后调用原生工具；Blender 每完成一个构建阶段即通过 SSE 推送原生几何、射线与 Cycles 采样进度，在 three.js 专业视口（轨道、视图预设、大纲、检查器、线框/X 光、阶段时间轴、Ctrl+K 命令面板）实时呈现。提供响应式 Web/PWA。首版不执行新的策略推理，不包含参数化机械 CAD、现场安全认证或自动发布。受控模型提案接口已实现，但实际模型调用需要现有控制器入口与经过审查的预算账本；未配置时明确禁用。
+![交互演示：AI 计划驱动 CadQuery 实时建模、Blender 视线检查、工厂孪生评审与反馈复测闭环](docs/media/demo.gif)
+
+完整演示视频：[docs/media/demo.mp4](docs/media/demo.mp4)（约 2 分钟）。原生计算在录制时全程真实执行；成片只把画面静止的等待片段按 6 倍速播放，没有剪切或调换顺序。
+
+实现了四条原生证据通道：**机器人历史记录评审**、**Blender 工作单元布局**、**CadQuery/OCCT 参数化 CAD 零件**、**工厂孪生维护与能源评审**。它们共用同一条生命周期闭环：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 交付试用。左侧栏显示每个阶段的状态，总览页给出“下一步”，二者都由已保存的记录推导。
+
+**AI 助手**停靠在右侧，把对话解析成类型化的工具计划，并标出每项约束是收紧还是放宽。计划没有验收权，只有你确认后才调用原生工具。Blender 和 CadQuery 每完成一个构建阶段，几何就通过 SSE 推送到 three.js 专业视口；视口支持轨道操作、视图预设、大纲、检查器、线框/X 光和阶段时间轴，另有 Ctrl+K 命令面板。界面为响应式 Web/PWA。[14 个典型工业设计测试用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
+
+不执行新的策略推理，不做 FEA、公差叠加、现场安全认证或自动发布。受控模型提案接口已实现，但实际模型调用需要现有控制器入口与经过审查的预算账本；未配置时明确禁用。
 
 ## 快速启动
 
@@ -16,9 +24,12 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 npm ci
 npm run setup:demo    # 下载固定版本的公开工具及原始仿真记录，约45MB记录
 npm run setup:native  # Linux x86_64：最新 Blender 5.2.2 LTS，官方校验和验证
+npm run setup:cad     # Python 3.12：哈希锁定的 CadQuery 2.8.0 / OCCT 7.9
 npm run check
 npm run test:native
 npm run test:blender
+npm run test:cad
+npm run test:suite   # 14 个典型工业设计用例
 npm run start        # http://127.0.0.1:4317
 ```
 
@@ -63,6 +74,7 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 | 原生验收 | Robot Reel 核验记录与配对统计；生成稳定种子 ID 的 JUnit，交由 EvalArc 对照 |
 | AI 工作室 | 确定性意图解析为 Zod 校验的计划；确认后走同一 API；受控模型仅作为显式计划步骤 |
 | 工厂孪生 | Robot Reel v0.18.0 逐字节 seeds/manifest；预冻结标准、摘要重算、逐种子保留；不执行上游工具 |
+| 参数化 CAD | CadQuery 2.8 / OCCT 7.9 受控配方；STEP/STL/GLB/SVG；B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；STEP 重导入核对 |
 | 回放与交付 | 与已核验 manifest 匹配的原始视频；8 文件证据包、哈希与语义核验 |
 | 推广反馈 | 案例草稿、匿名事件、反馈状态及新复测回执；不自动发送或发布 |
 
@@ -92,6 +104,7 @@ npm run test:browser
 
 TypeScript 7.0.2 与当前稳定依赖锁定在 `package-lock.json`。Node 24.21 LTS 与 26.10 Current 在 CI 检查；Blender 5.2.2 使用官方校验和验证。原生依赖固定在安装脚本中，升级需要重新通过原生和浏览器检查。
 
+- [工业设计典型测试用例](docs/INDUSTRIAL_TEST_CASES.md)
 - [系统设计与取舍](docs/ARCHITECTURE.md)
 - [API 与闭环操作](docs/API.md)
 - [后续领域接入和试用计划](docs/NEXT.md)

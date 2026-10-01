@@ -208,3 +208,43 @@ test("factory criteria are frozen first; real Factory Twin seeds stay failed thr
   await page.screenshot({ path: testInfo.outputPath("factory-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
+
+test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and restored-parameter recheck", async ({ page }, testInfo) => {
+  test.setTimeout(360_000);
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.cad) throw new Error("Native CadQuery is required for this integration check");
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("radio", { name: /轻量化/ }).check();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  const viewport = page.locator(".viewport");
+  await expect.poll(async () => (await viewport.getAttribute("data-objects")) !== "0" && await page.locator(".viewport .live-dot.on").count() === 1,
+    { timeout: 120_000 }).toBe(true);
+  await expect(page.getByText("LIVE · CadQuery 原生构建中")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
+  await expect(viewport).toHaveAttribute("data-objects", "2");
+  await expect(page.locator(".outliner").getByText("NEMA 17 motor")).toBeVisible();
+  await expect(page.locator(".check-item.fail")).toHaveCount(1);
+  await expect(page.locator(".check-item.fail")).toContainText("最小壁厚");
+  await expect.poll(() => page.locator(".drawings img").evaluateAll(images => images.length === 2 && images.every(i => (i as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  await page.getByRole("button", { name: "查看证据与回放 →" }).click();
+  const step = await page.request.get(await page.getByRole("link", { name: "下载可编辑 STEP" }).getAttribute("href") as string);
+  expect(step.status()).toBe(200); expect((await step.text()).startsWith("ISO-10303-21")).toBe(true);
+  await page.getByRole("button", { name: /记录反馈：CAD 最小壁厚/ }).click();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "恢复基准参数并复测", "关闭已复测反馈"], 180_000);
+  const latest = await (await page.request.get("/api/state")).json();
+  const mine = latest.cads.filter((c: { projectId: string }) => c.projectId === latest.projects.at(-1).id);
+  expect(mine.map((c: { verdict: string }) => c.verdict).sort()).toEqual(["accepted-cad-part", "rejected"]);
+  expect(latest.feedback.at(-1).status).toBe("closed");
+  await rail(page, /原生验证/).click();
+  await page.getByRole("button", { name: /CAD 零件 NEMA 17 支架 · 轻量化 零件检查拒绝/ }).click();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("cad-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("cad-mobile.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});

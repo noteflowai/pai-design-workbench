@@ -10,6 +10,9 @@ import type { Adapters } from "./adapters.js";
 import { sceneCaseText, type SceneReview } from "./scenes.js";
 import { factoryCaseText, FACTORY_CHECKS, type FactoryReview, type FactoryCheckId } from "./factory.js";
 import type { LiveBus } from "./live.js";
+import { CAD_CHECKS, cadCaseText, type CadReview } from "./cad.js";
+
+const SCENE_CHECKS = ["footprint-area", "declared-target-envelope", "camera-visibility"];
 
 export class Workbench {
   constructor(public store: Store, public adapters: Adapters, public stateDirectory: string, public live?: LiveBus) {}
@@ -121,8 +124,8 @@ export class Workbench {
           throw new DomainError("NOT_A_FACTORY_FAILURE", "Factory feedback must bind a seed that fails the named frozen check", 422);
         }
       }
-    } else if (parsed.checkId && (FACTORY_CHECKS as readonly string[]).includes(parsed.checkId)) {
-      throw new DomainError("CHECK_KIND_MISMATCH", "Factory check IDs require Factory Twin evidence", 422);
+    } else if (parsed.checkId && !(parsed.evidenceKind === "blender-scene" ? SCENE_CHECKS : parsed.evidenceKind === "cad-part" ? CAD_CHECKS as readonly string[] : []).includes(parsed.checkId)) {
+      throw new DomainError("CHECK_KIND_MISMATCH", "Check ID does not belong to this evidence kind", 422);
     }
     if (parsed.kind === "regression" && parsed.seed === null) throw new DomainError("MISSING_CASE", "A regression needs a paired seed");
     if (parsed.kind === "regression" && (!("stress" in run) || !run.stress
@@ -130,9 +133,10 @@ export class Workbench {
         || outcomes(run.stress, run.candidate).get(parsed.seed!) !== false)) {
       throw new DomainError("NOT_A_RECORDED_REGRESSION", "The reported seed must lose a recorded baseline success");
     }
-    if (parsed.kind === "design-check" && parsed.evidenceKind !== "factory-twin" && (!parsed.checkId || parsed.evidenceKind !== "blender-scene"
-        || !("baseline" in run) || !run.baseline?.checks.find(c => c.id === parsed.checkId)?.passed
-        || typeof run.candidate === "string" || run.candidate?.checks.find(c => c.id === parsed.checkId)?.passed !== false)) {
+    const native = run as SceneReview | CadReview;
+    if (parsed.kind === "design-check" && parsed.evidenceKind !== "factory-twin" && (!parsed.checkId || !["blender-scene", "cad-part"].includes(parsed.evidenceKind)
+        || !native.baseline?.checks.find(c => c.id === parsed.checkId)?.passed
+        || native.candidate?.checks.find(c => c.id === parsed.checkId)?.passed !== false)) {
       throw new DomainError("NOT_A_NATIVE_DESIGN_FAILURE", "Design feedback must bind a native check losing its baseline pass");
     }
     const feedback: Feedback = {
@@ -171,8 +175,8 @@ export class Workbench {
             || outcomes(run.stress, run.candidate).get(old.seed) !== true)) {
         throw new DomainError("ISSUE_NOT_FIXED", "The reported seed still fails; retain the unresolved feedback");
       }
-      if (old.kind === "design-check" && old.evidenceKind === "blender-scene" && old.status === "fix-proposed"
-          && (!("baseline" in run) || typeof run.candidate === "string" || run.candidate?.checks.find(c => c.id === old.checkId)?.passed !== true)) {
+      if (old.kind === "design-check" && ["blender-scene", "cad-part"].includes(old.evidenceKind) && old.status === "fix-proposed"
+          && (run as SceneReview | CadReview).candidate?.checks.find(c => c.id === old.checkId)?.passed !== true) {
         throw new DomainError("ISSUE_NOT_FIXED", "The native design check still fails; retain the unresolved feedback");
       }
       if (old.evidenceKind === "factory-twin") {
@@ -188,8 +192,13 @@ export class Workbench {
       history: [...old.history, { status: change.status, reason: change.reason, at: new Date().toISOString(), recheckRunId: change.recheckRunId }] };
     this.store.put("feedback", next, change.expectedRevision); return next;
   }
-  evidence(id: string, kind: Feedback["evidenceKind"]): Review | SceneReview | FactoryReview {
+  evidence(id: string, kind: Feedback["evidenceKind"]): Review | SceneReview | FactoryReview | CadReview {
     if (kind === "robot-review") return this.review(id);
+    if (kind === "cad-part") {
+      const cad = this.store.get<CadReview>("cad-review", id);
+      if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
+      return cad;
+    }
     if (kind === "factory-twin") {
       const factory = this.store.get<FactoryReview>("factory-review", id);
       if (!factory) throw new DomainError("NOT_FOUND", "Factory Twin review not found", 404);
@@ -206,6 +215,7 @@ export class Workbench {
       createdAt: new Date().toISOString(),
       text: (parsed.evidenceKind === "blender-scene" ? sceneCaseText(run as SceneReview)
         : parsed.evidenceKind === "factory-twin" ? factoryCaseText(run as FactoryReview)
+        : parsed.evidenceKind === "cad-part" ? cadCaseText(run as CadReview)
         : this.caseText(run as Review))
         + "\nInvitation: Try permitted evidence of your own. Report setup failures, unclear evidence or an existing workflow that works better.\nNot sent or published by this workbench.\n" };
     this.store.insert("campaign", campaign); return campaign;

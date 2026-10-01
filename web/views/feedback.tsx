@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FEEDBACK_STATUS, useApp } from "../context";
+import { CAD_CHECK_LABELS, FEEDBACK_STATUS, useApp } from "../context";
 import { Card, Chip, Empty, ViewHeader, time, type Tone } from "../ui";
 import { advanceFeedback, defaultReason, feedbackAction } from "../actions";
 import { CHECK_LABELS } from "../factory";
@@ -7,7 +7,7 @@ import type { Feedback } from "../../src/contracts";
 
 const FLOW = ["received", "reproducible", "assigned", "fix-proposed", "rechecked", "closed"];
 const tone = (s: string): Tone => s === "closed" ? "ok" : s === "rechecked" ? "info" : "warn";
-const source = (f: Feedback) => f.evidenceKind === "blender-scene" ? `Blender · ${f.checkId}` : f.evidenceKind === "factory-twin"
+const source = (f: Feedback) => f.evidenceKind === "blender-scene" ? `Blender · ${f.checkId}` : f.evidenceKind === "cad-part" ? `CAD · ${CAD_CHECK_LABELS[f.checkId ?? ""] ?? f.checkId}` : f.evidenceKind === "factory-twin"
   ? `工厂 · seed ${f.seed} · ${CHECK_LABELS[f.checkId ?? ""] ?? f.checkId}` : `机器人记录 · seed ${f.seed}`;
 const HINT: Record<string, string> = {
   "fix-proposed": "将按处理方案重新执行原生检查，并把新回执绑定到此反馈；未修复时不能进入复测。",
@@ -28,7 +28,7 @@ export function FeedbackView() {
   const header = <ViewHeader step="阶段 5 / 6 · 反馈复测" title="反馈复测" description="反馈必须绑定原始失败案例：复现 → 分配 → 处理方案 → 新的原生复测 → 关闭。失败记录不会被改写成通过。" />;
   if (!project || items.length === 0) return <>{header}<Empty title="还没有反馈" action={<button type="button" onClick={() => c.navigate("evidence")}>查看失败案例</button>}>
     从验证结果或失败回放中的失败案例记录反馈，反馈会自动绑定证据与种子。</Empty></>;
-  const run = selected && [...c.data.reviews, ...c.data.scenes, ...(c.data.factoryReviews ?? [])].find(r => r.id === selected.runId);
+  const run = selected && [...c.data.reviews, ...c.data.scenes, ...(c.data.cads ?? []), ...(c.data.factoryReviews ?? [])].find(r => r.id === selected.runId);
   const action = selected ? feedbackAction(selected) : undefined;
   const stepIndex = selected ? Math.max(0, FLOW.indexOf(selected.status === "no-change-with-reason" ? "fix-proposed" : selected.status === "needs-context" ? "received" : selected.status)) : 0;
   return <>

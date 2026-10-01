@@ -2,6 +2,20 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 生命周期界面、参数化 CAD 与典型用例（2026-10-01）
+
+本地 Node 22.23.3，CI 另用 24.21 LTS / 26.10 Current；Blender 5.2.2 LTS；CadQuery 2.8.0 / OCCT 7.9.3（哈希锁定）；Chromium 使用 SwiftShader WebGL。
+
+| 检查 | 实际结果 |
+|---|---|
+| `npm run check` | 类型检查、39 组单元/接口测试、生产构建通过。新增：生命周期推导 3 组（阶段、下一步、失败案例去重、运行优先）、CAD 3 组（意图计划与放宽方向、反馈只能绑定丢失基准通过的检查、未配置时 503、拒绝未知文件和额外字段） |
+| `npm run test:cad` | 轻量化候选只有 min-wall 失败；止口孔候选失败 interface 与 interference；紧凑候选失败 hole-edge-distance；未修复不能复测关闭；改变需求的复测被拒绝；恢复基准后关闭；STEP 重导入体积一致、孔径 3.4/5.5/22.5。见[回执](evidence/cad-e2e.json) |
+| `npm run test:suite` | [14 个典型工业设计用例](INDUSTRIAL_TEST_CASES.md)全部与预期一致。见[回执](evidence/industrial-suite.json) |
+| `npm run test:native`、`npm run test:blender` | 通过，结果不变 |
+| `npm run test:browser` | 6 组通过：登录态 390px 布局；完整生命周期（需求 → 验证 → 回放 → 反馈复测 → 交付 → 需求修订 v2，六个阶段全部完成）；Blender 表单闭环；AI 计划驱动的实时 Blender 视口；工厂孪生；CAD 实时 B-Rep 构建、测量失败、工程视图、STEP 下载与恢复参数复测。全部 390px 无横向溢出、无控制台错误 |
+
+截图：[总览](evidence/overview-desktop.png)、[CAD](evidence/cad-desktop.png)、[CAD 手机](evidence/cad-mobile.png)。演示视频由 `scripts/record-demo.mjs` 在本地实际录制，原生计算全程真实执行；`tools/render_demo.py` 用 ffmpeg freezedetect 找出画面静止的等待片段并按 6 倍速播放，不剪切、不调换顺序。
+
 ## AI 工作室、实时视口与工厂孪生（2026-09-30 第二轮）
 
 本地 Node 22.23.3（CI 另用 24.21 LTS 与 26.10 Current）、Blender 5.2.2 LTS、Chromium（SwiftShader WebGL）实际运行：

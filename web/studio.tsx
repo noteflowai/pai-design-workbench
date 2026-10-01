@@ -5,8 +5,10 @@ import type { ViewportModel, Stage, Ray } from "./viewport";
 import type { AssistantPlan, ToolPlan } from "../src/assistant";
 import type { Project } from "../src/contracts";
 import type { SceneReview } from "../src/scenes";
+import type { CadReview } from "../src/cad";
 
 type Which = "baseline" | "candidate";
+type CadRequirementsLike = { maxMassG: number; minWallMm: number; edgeDistanceFactor: number };
 export interface LiveSession {
   requestId: string; title: string; kind: RunKind; running: boolean; recordId?: string; verdict?: string; state?: string;
   steps: { id: string; label: string; status: string; detail?: string }[];
@@ -47,18 +49,22 @@ export function useLiveSession() {
   return { session, track };
 }
 
-export function viewportModel(session: LiveSession | undefined, scene: SceneReview | undefined, which: Which): ViewportModel | undefined {
-  const live = session?.kind === "blender-scene" && (session.running || session.recordId === scene?.id || !scene) ? session : undefined;
+export function viewportModel(session: LiveSession | undefined, scene: SceneReview | CadReview | undefined, which: Which,
+  kind: "blender-scene" | "cad-part" = "blender-scene"): ViewportModel | undefined {
+  const base = kind === "cad-part" ? "/api/cad" : "/api/scenes", finalFile = kind === "cad-part" ? "assembly.glb" : "scene.glb", units = kind === "cad-part" ? "mm" as const : "m" as const;
+  const rays = (r?: SceneReview | CadReview) => (r as SceneReview | undefined)?.rays;
+  const live = session?.kind === kind && (session.running || session.recordId === scene?.id || !scene) ? session : undefined;
   if (live && (live.stages.baseline.length || live.stages.candidate.length || live.running)) {
     const w = live.running ? live.current ?? "baseline" : which;
     const finalScene = !live.running && scene?.id === live.recordId && scene?.state === "completed" ? scene : undefined;
-    return { key: live.requestId, which: w, stages: live.stages[w], ray: live.rays[w] ?? finalScene?.rays?.[w], render: live.render[w],
-      running: live.running, title: live.title, finalUrl: finalScene ? `/api/scenes/${finalScene.id}/files/${w}/scene.glb` : undefined };
+    return { key: live.requestId, which: w, stages: live.stages[w], ray: live.rays[w] ?? rays(finalScene)?.[w], render: live.render[w], units,
+      running: live.running, title: live.title, finalUrl: finalScene ? `${base}/${finalScene.id}/files/${w}/${finalFile}` : undefined };
   }
   if (!scene) return undefined;
-  const stages = (scene.stages?.[which] ?? []).map(s => ({ index: s.index, label: s.label, objects: s.objects, url: `/api/scenes/${scene.id}/stages/${which}/${s.index}` }));
-  return { key: scene.id, which, stages, ray: scene.rays?.[which], running: scene.state === "running", title: `场景 ${scene.id.slice(0, 8)}`,
-    finalUrl: scene.state === "completed" ? `/api/scenes/${scene.id}/files/${which}/scene.glb` : undefined };
+  const stages = (scene.stages?.[which] ?? []).map(s => ({ index: s.index, label: s.label, objects: s.objects, url: `${base}/${scene.id}/stages/${which}/${s.index}` }));
+  return { key: scene.id, which, stages, ray: rays(scene)?.[which], running: scene.state === "running", units,
+    title: `${kind === "cad-part" ? "零件" : "场景"} ${scene.id.slice(0, 8)}`,
+    finalUrl: scene.state === "completed" ? `${base}/${scene.id}/files/${which}/${finalFile}` : undefined };
 }
 
 export function LiveSteps({ session }: { session: LiveSession }) {
@@ -69,15 +75,16 @@ export function LiveSteps({ session }: { session: LiveSession }) {
   </div>;
 }
 
-const toolLabel: Record<string, string> = { "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "robot-review": "Robot Reel",
+const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "robot-review": "Robot Reel",
   "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型" };
 const directionLabel: Record<string, string> = { new: "新", same: "不变", tightened: "收紧", relaxed: "放宽", changed: "变更" };
-const recordKind: Record<string, string> = { "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
+const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
   "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal" };
-const nativeKind: Record<string, RunKind> = { "scene-review": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin" };
+const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin" };
 const SUGGESTIONS = [
   "生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m",
   "评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C",
+  "评估 NEMA 17 电机支架轻量化方案：壁厚不低于 3 mm，质量不超过 80 g",
   "验证相机偏移的 SmolVLA 记录评审",
 ];
 
@@ -166,6 +173,10 @@ export function Assistant({ onClose }: { onClose: () => void }) {
                   const r = step.payload.requirements as { maxFootprintArea: number; targetEnvelopeRadius: number; requireTargetVisible: boolean };
                   c.navigate("design", { lane: "scene", variant: String(step.payload.variant), area: String(r.maxFootprintArea), radius: String(r.targetEnvelopeRadius), visible: String(r.requireTargetVisible) });
                 }}>在专业面板调整</button>}
+                {!done && step.tool === "cad-review" && <button type="button" className="secondary" onClick={() => {
+                  const r = step.payload.requirements as CadRequirementsLike;
+                  c.navigate("design", { lane: "cad", variant: String(step.payload.variant), mass: String(r.maxMassG), wall: String(r.minWallMm), edge: String(r.edgeDistanceFactor) });
+                }}>在专业面板调整</button>}
                 {!done && step.tool === "factory-criteria" && <button type="button" className="secondary" onClick={() =>
                   c.navigate("requirements", { criteria: JSON.stringify(step.payload.criteria) })}>在专业面板调整</button>}
               </div>
@@ -174,7 +185,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
         </div>
       </div>)}
       {session && (session.running || session.steps.length > 0) && <div className="bubble tool"><LiveSteps session={session} />
-        {session.kind === "blender-scene" && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: "blender-scene", ...(session.recordId ? { id: session.recordId } : {}) })}>在三维视口查看 →</button>}</div>}
+        {(session.kind === "blender-scene" || session.kind === "cad-part") && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: session.kind, ...(session.recordId ? { id: session.recordId } : {}) })}>在三维视口查看 →</button>}</div>}
       {thinking && <div className="bubble assistant typing" aria-label="解析中"><i /><i /><i /></div>}
     </div>
     <form className="composer" onSubmit={e => void send(e)}>

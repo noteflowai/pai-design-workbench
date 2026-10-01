@@ -1,0 +1,55 @@
+{
+  "schema": "pai-cad-e2e-1",
+  "checkedAt": "2026-10-01T01:03:41.545Z",
+  "result": "passed",
+  "cadquery": "2.8.0",
+  "ocp": "7.9.3.1.1",
+  "part": "NEMA 17 motor-mount bracket (6061 aluminium, nominal)",
+  "candidates": {
+    "lightweight": [
+      "min-wall"
+    ],
+    "undersize-bore": [
+      "nema17-interface",
+      "motor-interference"
+    ],
+    "compact": [
+      "hole-edge-distance"
+    ]
+  },
+  "referenceMassG": 48.368,
+  "lightweightMassG": 31.85,
+  "feedbackStatus": "closed",
+  "preventedUnfixedClosure": true,
+  "rejectedChangedRequirementsRecheck": true,
+  "stageEvents": 12,
+  "stepReimport": {
+    "schema": "pai-cad-reopen-1",
+    "cadquery": "2.8.0",
+    "valid": true,
+    "solids": 1,
+    "volume": 17914.235,
+    "boundingBox": [
+      60,
+      30,
+      50
+    ],
+    "cylindricalFaces": 7,
+    "holeDiameters": [
+      3.4,
+      5.5,
+      22.5
+    ]
+  },
+  "nativeArtifactKinds": [
+    "step",
+    "stl",
+    "glb",
+    "assembly-glb",
+    "svg-drawing",
+    "native-checks-json"
+  ],
+  "physicalValidation": false,
+  "feaPerformed": false,
+  "toleranceStackUp": false
+}

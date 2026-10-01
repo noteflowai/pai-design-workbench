@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { api, requestIdFor } from "../api";
 import { CANDIDATES, useApp } from "../context";
 import { Card, Chip, Empty, ViewHeader, time } from "../ui";
-import { runFactory, runReview, runScene } from "../actions";
+import { runCad, runFactory, runReview, runScene } from "../actions";
+import { CAD_VARIANTS } from "../context";
 import type { CandidateId } from "../../src/contracts";
 
-const LANES = [["robot", "机器人记录评审"], ["scene", "Blender 场景"], ["factory", "工厂孪生"]] as const;
+const LANES = [["robot", "机器人记录评审"], ["scene", "Blender 场景"], ["cad", "CAD 零件"], ["factory", "工厂孪生"]] as const;
 type Lane = typeof LANES[number][0];
 const CANDIDATE_NOTES: Record<CandidateId, string> = { reference: "固定原始视角与光照", camera: "相机平移 +0.12 m", dim: "光照降为基准的 25%" };
 
@@ -22,7 +23,7 @@ export function Design() {
       <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={lane === id} aria-controls={`lane-${id}`} className={lane === id ? "active" : ""}
         onClick={() => c.navigate("design", { lane: id })}>{label}</button>)}</div>
     <div role="tabpanel" id={`lane-${lane}`} aria-labelledby={`tab-${lane}`}>
-      {lane === "robot" ? <RobotLane /> : lane === "scene" ? <SceneLane /> : <FactoryLane />}
+      {lane === "robot" ? <RobotLane /> : lane === "scene" ? <SceneLane /> : lane === "cad" ? <CadLane /> : <FactoryLane />}
     </div>
   </>;
 }
@@ -93,5 +94,32 @@ function FactoryLane() {
       <div className="form-foot"><small>摘要与大小校验 → 影子模式只观察 → 重算上游摘要 → 逐种子评估</small>
         <button type="button" disabled={c.busy || !selected} onClick={() => void runFactory(c, selected!.id)}>导入已复核样本并评估</button></div>
     </>}
+  </Card>;
+}
+
+function CadLane() {
+  const c = useApp();
+  const q = c.route.params;
+  const cap = c.data.capabilities.cad;
+  const defaults = cap ? cap.defaultRequirements : { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] as [number, number, number] };
+  const [variant, setVariant] = useState(q.get("variant") ?? "lightweight");
+  const [mass, setMass] = useState(Number(q.get("mass") ?? defaults.maxMassG));
+  const [wall, setWall] = useState(Number(q.get("wall") ?? defaults.minWallMm));
+  const [edge, setEdge] = useState(Number(q.get("edge") ?? defaults.edgeDistanceFactor));
+  const [fit, setFit] = useState(defaults.requireNoInterference);
+  if (!cap) return <Empty title="未配置 CadQuery">运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
+  return <Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
+    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) =>
+      <label key={id} className={`option ${variant === id ? "selected" : ""}`}><input type="radio" name="cad-variant" value={id} checked={variant === id} onChange={() => setVariant(id)} />
+        <span className="option-tag">{id.toUpperCase()}</span><strong>{label}</strong><small>{note}</small></label>)}</div>
+    <div className="field-grid" style={{ marginTop: 14 }}>
+      <label>质量上限<span className="unit-input"><input type="number" min={1} max={10000} step={1} value={mass} onChange={e => setMass(Number(e.target.value))} /><em>g</em></span></label>
+      <label>最小壁厚<span className="unit-input"><input type="number" min={0.5} max={50} step={0.1} value={wall} onChange={e => setWall(Number(e.target.value))} /><em>mm</em></span></label>
+      <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
+      <label className="inline"><input type="checkbox" checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>
+    </div>
+    <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则，不含 FEA、公差叠加或实物测试。</p>
+    <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
+      <button type="button" disabled={c.busy} onClick={() => void runCad(c, variant, { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm })}>生成并检查 CAD 零件</button></div>
   </Card>;
 }

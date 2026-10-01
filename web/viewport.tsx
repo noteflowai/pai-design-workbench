@@ -8,6 +8,8 @@ export type Stage = { index: number; label: string; url: string; objects: string
 export interface ViewportModel {
   key: string; which: "baseline" | "candidate"; stages: Stage[]; finalUrl?: string; ray?: Ray;
   render?: { sample: number; samples: number }; running: boolean; title: string;
+  /** Blender scenes are authored in metres; CAD parts in millimetres (shown at 1:20 in the viewport). */
+  units?: "m" | "mm";
 }
 type View = "persp" | "top" | "front" | "right" | "camera";
 const VIEWS: { id: View; label: string; key: string }[] = [
@@ -104,6 +106,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
   const url = activeIndex !== undefined ? stages[activeIndex].url : model?.finalUrl ?? stages.at(-1)?.url;
   useEffect(() => { setScrub(undefined); runtime.current?.known.clear(); }, [model?.key, model?.which]);
 
+  const scale = model?.units === "mm" ? 0.05 : 1, unit = model?.units ?? "m";
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
@@ -112,14 +115,20 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     r.loader.load(url, gltf => {
       if (cancelled) return;
       r.root.clear();
+      gltf.scene.scale.setScalar(scale);
+      gltf.scene.updateMatrixWorld(true);
       const meshes: THREE.Mesh[] = [];
       gltf.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) { const m = o as THREE.Mesh; m.castShadow = true; m.receiveShadow = true; meshes.push(m); } });
       r.root.add(gltf.scene);
       const now = performance.now();
-      const list = meshes.map(m => {
+      // A native object may be exported as several meshes (OCCT writes one per B-Rep face): group by name.
+      const fresh = new Set(meshes.map(nativeName).filter(n => !r.known.has(n)));
+      const boxes = new Map<string, THREE.Box3>();
+      meshes.forEach(m => {
         const name = nativeName(m);
-        const size = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
-        if (!r.known.has(name)) {
+        const box = new THREE.Box3().setFromObject(m);
+        boxes.set(name, boxes.has(name) ? boxes.get(name)!.union(box) : box);
+        if (fresh.has(name)) {
           // Newly produced native geometry grows in with a short glow: the "live build" effect.
           const material = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial;
           const scale = m.scale.clone(), glow = material.emissive?.clone();
@@ -129,14 +138,15 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
             m.scale.set(scale.x * e, scale.y * e, scale.z * e);
             if (material.emissive && glow) material.emissive.setRGB(glow.r + (1 - t) * 0.25, glow.g + (1 - t) * 0.55, glow.b + (1 - t) * 0.45);
           } });
-          r.known.add(name);
         }
-        return { name, visible: true, size: [size.x, size.y, size.z] as [number, number, number] };
       });
+      fresh.forEach(n => r.known.add(n));
+      const list = [...boxes].map(([name, box]) => { const size = box.getSize(new THREE.Vector3()).divideScalar(scale);
+        return { name, visible: true, size: [size.x, size.y, size.z] as [number, number, number] }; });
       r.dirty = true; setObjects(list); setLoaded(url);
     }, undefined, () => { if (!cancelled) setLoaded(`error:${url}`); });
     return () => { cancelled = true; };
-  }, [url]);
+  }, [url, scale]);
 
   useEffect(() => {
     const r = runtime.current;
@@ -226,10 +236,10 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     data-stage={activeIndex !== undefined ? stages[activeIndex].index : stages.length} data-ray={ray ? (ray.visible ? "target" : "blocked") : "none"}>
     <div className="viewport-canvas" ref={host}>
       {webgl === "unavailable" && <div className="viewport-fallback">此浏览器未启用 WebGL；原生渲染图与下载文件不受影响。</div>}
-      {webgl === "ok" && !url && <div className="viewport-empty"><strong>实时原生视口</strong><span>在左侧对话或确认计划后，Blender 每完成一个构建阶段，这里即时出现对应的原生几何。</span></div>}
+      {webgl === "ok" && !url && <div className="viewport-empty"><strong>实时原生视口</strong><span>提交候选或在 AI 助手中确认计划后，原生工具每完成一个构建阶段，这里即时出现对应的几何。</span></div>}
       <div className="viewport-hud top-left">
-        <span className={`live-dot ${model?.running ? "on" : ""}`} />{model?.running ? "LIVE · Blender 原生构建中" : model ? model.title : "等待原生任务"}
-        {model && <small>{model.which === "baseline" ? "基准布局" : "候选布局"} · {activeIndex !== undefined ? `阶段 ${stages[activeIndex].index}/${stages.length}` : model.finalUrl ? "最终 GLB（摘要已核验）" : `阶段 ${stages.length}`}</small>}
+        <span className={`live-dot ${model?.running ? "on" : ""}`} />{model?.running ? `LIVE · ${model.units === "mm" ? "CadQuery" : "Blender"} 原生构建中` : model ? model.title : "等待原生任务"}
+        {model && <small>{model.which === "baseline" ? (model.units === "mm" ? "基准零件" : "基准布局") : (model.units === "mm" ? "候选零件" : "候选布局")} · {activeIndex !== undefined ? `阶段 ${stages[activeIndex].index}/${stages.length}` : model.finalUrl ? "最终 GLB（摘要已核验）" : `阶段 ${stages.length}`}</small>}
       </div>
       <div className="viewport-hud top-right" role="toolbar" aria-label="视图预设">
         {VIEWS.map(v => <button key={v.id} type="button" className={view === v.id ? "active" : ""} aria-pressed={view === v.id} title={`快捷键 ${v.key}`} onClick={() => setView(v.id)}>{v.label}</button>)}
@@ -245,7 +255,8 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
           <button type="button" onClick={() => setSelected(s => s === o.name ? undefined : o.name)}>{o.name}</button></li>)}</ul>}
       </div>
       <div className="inspector"><strong>检查器</strong>
-        {inspected ? <p>{inspected.name}<br />{inspected.size.map(n => n.toFixed(2)).join(" × ")} m（包围盒）</p>
+        {inspected ? <p>{inspected.name}<br />{inspected.size.map(n => n.toFixed(unit === "mm" ? 1 : 2)).join(" × ")} {unit}（包围盒）</p>
+          : unit === "mm" && objects[0] ? <p>{objects[0].name}<br />{objects[0].size.map(n => n.toFixed(1)).join(" × ")} mm（包围盒）</p>
           : footprint ? <p>占地包围盒 {footprint.size[0].toFixed(2)} × {footprint.size[2].toFixed(2)} m</p> : <p>选择对象查看尺寸</p>}
         <div className="toggles">
           <label className="check"><input type="checkbox" checked={wire} onChange={e => setWire(e.target.checked)} />线框 (Z)</label>

@@ -1,0 +1,239 @@
+{
+  "schema": "pai-industrial-suite-1",
+  "checkedAt": "2026-10-01T01:07:00.966Z",
+  "result": "passed",
+  "environment": {
+    "node": "v22.23.3",
+    "blender": "5.2.2 LTS",
+    "cadquery": "2.8.0",
+    "ocp": "7.9.3.1.1",
+    "robotReel": "6124cee3cba5",
+    "factoryTwin": "b3ee5c7d2c55"
+  },
+  "cases": [
+    {
+      "id": "R1",
+      "domain": "机器人感知设计",
+      "title": "检查相机外参偏移 +0.12 m",
+      "tool": "Robot Reel + EvalArc",
+      "rationale": "感知布局改动常提高平均成功率却丢失原本成功的工况；需按配对种子保留回归。",
+      "expected": "rejected；丢失 seed 9；Holm p 不支持显著改善",
+      "actual": "rejected；camera 7/10 vs 基准 5/10；丢失 seed 9；Holm p=1",
+      "passed": true,
+      "durationMs": 2487,
+      "evidence": {
+        "reviewId": "a1ec8a73-38af-4885-8b66-aa1889fe2ed1",
+        "blockingChanges": 1,
+        "holmP": 1
+      }
+    },
+    {
+      "id": "R2",
+      "domain": "机器人感知设计",
+      "title": "照明降至基准 25%",
+      "tool": "Robot Reel + EvalArc",
+      "rationale": "低照度是常见现场条件；同一模型在记录样本上的成功率下限与回归同时检查。",
+      "expected": "rejected；成功率低于 50% 且丢失基准成功",
+      "actual": "rejected；dim 4/10；丢失 seed 9",
+      "passed": true,
+      "durationMs": 1650,
+      "evidence": {
+        "reviewId": "f5dac922-8fd1-4a7a-a6aa-fa862d7e1be4"
+      }
+    },
+    {
+      "id": "B1",
+      "domain": "工作单元布局（Blender）",
+      "title": "检查相机视线被遮挡",
+      "tool": "Blender 5.2 + EvalArc",
+      "rationale": "工作单元布局中安全围栏/设备遮挡相机是典型视觉检测失效；用原生射线与投影检查，而非渲染外观判断。",
+      "expected": "rejected；候选射线首先命中遮挡物；EvalArc 1 项回归",
+      "actual": "rejected；候选首个命中 Visibility obstruction；blocking 1",
+      "passed": true,
+      "durationMs": 29726,
+      "evidence": {
+        "sceneId": "472f1e1c-94b5-4427-a76f-1e6cb79c44a7",
+        "stages": 4
+      }
+    },
+    {
+      "id": "B2",
+      "domain": "工作单元布局（Blender）",
+      "title": "无遮挡基准布局",
+      "tool": "Blender 5.2 + EvalArc",
+      "rationale": "正向对照：同一配方在无遮挡时三项静态检查全部通过。",
+      "expected": "accepted-static-scene；射线首先命中目标",
+      "actual": "accepted-static-scene；首个命中 Target",
+      "passed": true,
+      "durationMs": 24785,
+      "evidence": {
+        "sceneId": "0c3f826f-1f5f-4ea2-81f9-2c7629ee798a"
+      }
+    },
+    {
+      "id": "B3",
+      "domain": "工作单元布局（Blender）",
+      "title": "车间面积预算收紧到 10 m²",
+      "tool": "Blender 5.2 + EvalArc",
+      "rationale": "需求收紧后基准与候选都超限：应拒绝，但这不是候选引入的回归（EvalArc 0 项）。",
+      "expected": "rejected；footprint-area 失败；blocking 0",
+      "actual": "rejected；失败 footprint-area；blocking 0",
+      "passed": true,
+      "durationMs": 22698,
+      "evidence": {
+        "sceneId": "596bb299-c121-4b01-a434-bd0457f65341"
+      }
+    },
+    {
+      "id": "C1",
+      "domain": "机械零件（CAD）",
+      "title": "NEMA 17 电机支架基准设计",
+      "tool": "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+      "rationale": "步进电机安装支架是自动化设备最常见的定制机加工件；接口、壁厚、孔边距、质量与装配干涉都在 B-Rep 上实测。",
+      "expected": "accepted-cad-part；STEP 重新导入体积一致",
+      "actual": "accepted-cad-part；48.368 g；STEP 重导入体积 17914.235 mm³（原 17914.235）",
+      "passed": true,
+      "durationMs": 27637,
+      "evidence": {
+        "cadId": "3a0304e8-16f2-4f7b-a980-49b50585a760",
+        "stepSha256": "198362d9bbd7990e2b9e49d95dbb4497b6618bd9cad0eea6f994d955982343a7",
+        "reopen": {
+          "schema": "pai-cad-reopen-1",
+          "cadquery": "2.8.0",
+          "valid": true,
+          "solids": 1,
+          "volume": 17914.235,
+          "boundingBox": [
+            60,
+            30,
+            50
+          ],
+          "cylindricalFaces": 7,
+          "holeDiameters": [
+            3.4,
+            5.5,
+            22.5
+          ]
+        }
+      }
+    },
+    {
+      "id": "C2",
+      "domain": "机械零件（CAD）",
+      "title": "轻量化：板厚 4 → 2.5 mm",
+      "tool": "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+      "rationale": "减重是最常见的设计迭代；质量变好时仍需守住最小壁厚（刚度/加工）约束。",
+      "expected": "rejected；仅 min-wall 失败；质量下降",
+      "actual": "rejected；失败 min-wall；48.368 → 31.85 g",
+      "passed": true,
+      "durationMs": 21624,
+      "evidence": {
+        "cadId": "9ba32c2d-81b7-4816-9195-0b074d27157d"
+      }
+    },
+    {
+      "id": "C3",
+      "domain": "机械零件（CAD）",
+      "title": "止口孔 Ø22.5 → Ø21.5",
+      "tool": "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+      "rationale": "标准件接口尺寸错误是装配返工的主要来源；用 NEMA 17 止口 Ø22 做布尔干涉检查。",
+      "expected": "rejected；nema17-interface 与 motor-interference 失败",
+      "actual": "rejected；失败 nema17-interface,motor-interference；干涉体积 34.165 mm³",
+      "passed": true,
+      "durationMs": 26221,
+      "evidence": {
+        "cadId": "893789c4-d2cd-48b1-a8cb-a5780ebe0c90"
+      }
+    },
+    {
+      "id": "C4",
+      "domain": "机械零件（CAD）",
+      "title": "紧凑化：降低安装板高度与宽度",
+      "tool": "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+      "rationale": "压缩外形会让紧固孔靠近边缘；1.5×d 边距是常用 DFM 经验规则。",
+      "expected": "rejected；仅 hole-edge-distance 失败",
+      "actual": "rejected；最不利孔边距 5 mm < 8.25 mm",
+      "passed": true,
+      "durationMs": 20816,
+      "evidence": {
+        "cadId": "52816652-58b7-4339-b15b-0633c124e25d"
+      }
+    },
+    {
+      "id": "C5",
+      "domain": "机械零件（CAD）",
+      "title": "质量预算收紧到 40 g",
+      "tool": "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+      "rationale": "需求变化使基准也不满足：结论拒绝，但 EvalArc 不把它误报为候选回归。",
+      "expected": "rejected；mass 失败；blocking 0",
+      "actual": "rejected；48.368 g > 40 g；blocking 0",
+      "passed": true,
+      "durationMs": 19629,
+      "evidence": {
+        "cadId": "3c849cad-c498-4954-8e46-b6ea2f3c47bf"
+      }
+    },
+    {
+      "id": "F1",
+      "domain": "工厂维护与能源",
+      "title": "预测性维护 + 需量控制方案（默认标准）",
+      "tool": "Robot Reel Factory Twin v0.18.0",
+      "rationale": "净产出 +133 的方案仍有退化种子与 EV 服务不足；逐种子保留，能耗不抵消。",
+      "expected": "rejected；seed 3、11 产出下降；seed 10 EV 74%",
+      "actual": "rejected；产出 3,11；EV 10；净 +133",
+      "passed": true,
+      "durationMs": 43,
+      "evidence": {
+        "reviewId": "c2c25281-8fd5-4251-a629-63a6377a7a9a"
+      }
+    },
+    {
+      "id": "F2",
+      "domain": "工厂维护与能源",
+      "title": "显式放宽标准（损失 ≤ 3 件、EV ≥ 70%）",
+      "tool": "Robot Reel Factory Twin v0.18.0",
+      "rationale": "放宽必须是新冻结版本；旧结论保持拒绝。",
+      "expected": "accepted-illustrative；新标准摘要不同",
+      "actual": "accepted-illustrative；标准 5d993ba1",
+      "passed": true,
+      "durationMs": 15,
+      "evidence": {
+        "reviewId": "f2463141-5636-4bc4-aefa-97743192439e"
+      }
+    },
+    {
+      "id": "F3",
+      "domain": "数据完整性",
+      "title": "篡改上游摘要（seeds.json 与 manifest 一并伪造）",
+      "tool": "Factory Twin 一致性校验",
+      "rationale": "上游自报结论不能被直接采信；摘要必须能由逐种子结果重算。",
+      "expected": "422 FACTORY_SUMMARY_INCONSISTENT",
+      "actual": "422 FACTORY_SUMMARY_INCONSISTENT",
+      "passed": true,
+      "durationMs": 14,
+      "evidence": {}
+    },
+    {
+      "id": "A1",
+      "domain": "AI 助手",
+      "title": "对话放宽壁厚约束",
+      "tool": "确定性意图解析 → 类型化计划",
+      "rationale": "AI 计划必须标出放宽并保持无验收权，不自动执行。",
+      "expected": "cad-review 计划；minWallMm 标记为放宽；authority none；未执行",
+      "actual": "cad-review；minWallMm relaxed；authority none；确认 0",
+      "passed": true,
+      "durationMs": 12,
+      "evidence": {
+        "planId": "259966dc-98e4-40ce-9d10-d394ae4d5060",
+        "warnings": [
+          "放宽了已冻结的约束：只会生成新的冻结版本，既有结论和失败案例保持不变。"
+        ]
+      }
+    }
+  ],
+  "totals": {
+    "cases": 14,
+    "passed": 14
+  },
+  "scope": "Recorded simulation, synthetic static geometry, nominal parametric CAD and illustrative factory simulation. No physical validation, FEA, tolerance stack-up or site measurement."
+}

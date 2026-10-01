@@ -23,6 +23,11 @@ AWS deployment uses the exact origin `https://pai.oneai.host` and requires signe
 | `POST /api/projects/:id/factory-criteria` | `{requestId,projectRevision,criteria,rationale}`; freezes Factory Twin acceptance criteria before evidence |
 | `POST /api/projects/:id/factory-reviews` | `{requestId,projectRevision,criteriaId,source,feedbackId?}`; `source` is the bundled reviewed sample or an upload of byte-exact `seeds.json` + `manifest.json` |
 | `GET /api/factory-reviews/:id` | Saved per-seed results, consistency checks, criteria digest and source digests |
+| `GET /api/projects/:id/lifecycle` | Stage status, failing cases, next step and activity derived from durable records (also in `/api/state` as `lifecycles`) |
+| `POST /api/projects/:id/cad` | `{requestId,projectRevision,variant,requirements,feedbackId?}`; variants `reference/lightweight/undersize-bore/compact`; native CadQuery; may return 202 + `Location: /api/cad/:id` |
+| `GET /api/cad/:id` | Saved CAD checks for baseline and candidate, receipts, artifact digests |
+| `GET /api/cad/:id/files/:which/:file` | `part.step`, `part.stl`, `part.glb`, `assembly.glb`, `drawing.svg`, `checks.json`; digest checked; SVG served with `default-src 'none'` |
+| `GET /api/cad/:id/stages/:which/:index` | Staged GLB per modelling feature; presentation only |
 | `GET /api/tools` | Professional tool survey; integrated/planned/survey-only states |
 | `GET /api/runs/:id` | Complete saved state and native receipts |
 | `GET /api/runs/:id/media/:candidate/:seed/:view` | Hash-checked original MP4, supports byte ranges |
@@ -44,6 +49,10 @@ The UI's quick recheck follows rollback-to-reference for recorded robotics and r
 The assistant parses a message into plans whose payloads validate against the same Zod contracts as the forms. It never executes; the client runs a plan only after the user confirms it, through the normal route with a new request identity, then posts a confirmation. Dependent steps (`{p1}` placeholders) require their predecessor to be executed first. Any relaxed constraint is labelled and warned; it only creates a new frozen version. Model calls occur only as an explicit `model-proposal` plan when the controller and reviewed ledger are configured; otherwise parsing is deterministic and `model.used` is false.
 
 Open `GET /api/live/:requestId` before posting the native request with that identity. Events describe work as it happens; the stored record, receipts and digests remain authoritative. Staged GLBs are presentation snapshots of the same native scene, not additional evidence.
+
+## Parametric CAD review
+
+`requirements`: `maxMassG`, `minWallMm`, `edgeDistanceFactor`, `requireNoInterference`, `maxEnvelopeMm` (3 values). The baseline always uses the reference parameters. Checks: `solid-valid`, `nema17-interface`, `motor-interference`, `min-wall`, `hole-edge-distance`, `mass`, `envelope`. Feedback is `design-check` with the `checkId` that lost its baseline pass. A recheck must keep the same requirements; `fix-proposed` closes only if that check then passes. No user geometry or code is accepted.
 
 ## Factory Twin review
 

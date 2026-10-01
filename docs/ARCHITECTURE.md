@@ -78,6 +78,14 @@ flowchart LR
 
 **Factory Twin.** Evidence is byte-identical upstream `seeds.json` + `manifest.json` (bundled from Robot Reel `b3ee5c7`, Apache-2.0, extracted from git objects). Criteria are a separate frozen record that must exist before import. Consistency is checked by recomputing the upstream summary; acceptance is computed per seed from frozen criteria only. With default criteria the real panel is rejected: seeds 3 and 11 lose output, seed 10 delivers 74% EV service. No upstream tool is executed and the hosted Robot Reel verifier stays at `6124cee3cba5`.
 
+## Lifecycle-first workspace
+
+The UI is organised around the review lifecycle rather than one long page. `src/lifecycle.ts` derives, from durable records only, the status of each stage (requirements, design, validate, evidence, feedback, deliver), the retained failing cases with their bound feedback, the next step and an activity log. The rail shows each stage's status and metric; the overview shows the loop and the next step; every view is deep-linkable (`#/validate?kind=cad-part&id=…`). Validation and feedback use a master–detail layout; the docked assistant shares the same live session as the forms. Container queries follow the width of the work area, so docking the assistant never breaks the layout; at 390 px the rail becomes a horizontal stage bar and the assistant a full-screen sheet.
+
+## Parametric CAD lane
+
+`native/cad_bracket.py` builds a NEMA 17 motor-mount bracket in CadQuery 2.8 / OCCT 7.9 from a closed variant set. It exports a staged GLB after each modelling feature, then measures the B-Rep: solid validity, pilot bore / M3 pattern / 31 mm pitch from cylindrical faces, a boolean common with the motor envelope, minimum wall from opposite planar faces and hole ligaments with material between them, edge distance from hole centres to the face outer wire, mass and envelope. The same JUnit → EvalArc comparison as the Blender lane decides regressions. CadQuery is installed into `.state/tools` from a hash-locked requirement file (`native/cadquery-requirements.txt`). Nominal geometry only.
+
 ## Why this scope first
 
 A verifiable robotics review is feasible with existing real recordings and native checks. Mechanical CAD, DFM and industrial deployment need different native artifacts, evaluators and measurements. The contracts can support them, but labeling a generic text proposal as an industrial design solution would hide missing capabilities.

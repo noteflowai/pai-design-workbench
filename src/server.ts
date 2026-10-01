@@ -22,6 +22,7 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
+import { CAD_FILES, DEFAULT_CAD_REQUIREMENTS, reviewCad, type CadReview } from "./cad.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
 
@@ -101,7 +102,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const lifecycle = (project: Project) => {
     const mine = <T extends { projectId?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id);
     const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
-    const snapshot: LifecycleSnapshot = { project, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"),
+    const snapshot: LifecycleSnapshot = { project, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"),
       factoryCriteria: mine<FactoryCriteria>("factory-criteria"), factoryReviews: mine<FactoryReview>("factory-review"),
       feedback: mine<Feedback>("feedback"), campaigns,
       events: store.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
@@ -112,13 +113,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.get("/api/state", async () => ({
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
-    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"),
+    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"),
     factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
     assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
+      cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "deterministic intent to typed plans; confirmation required", modelInvocation: Boolean(config.controllerEntrypoint && config.controllerDatabase) },
       liveStream: "server-sent events; presentation only",
@@ -143,6 +145,35 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (!scene || !stage || !/^stages\/\d{2}-[a-z-]{1,24}\.glb$/.test(stage.file)) throw new DomainError("NOT_FOUND", "Stage not recorded", 404);
     const content = await readFile(join(config.state, "scenes", p.id, p.which, stage.file));
     if (sha256(content) !== stage.sha256) throw new DomainError("SCENE_FILE_CHANGED", "Stage geometry differs from its recorded digest", 422);
+    return reply.type("model/gltf-binary").header("X-PAI-Evidence", "presentation-stage").send(content);
+  });
+  app.post("/api/projects/:id/cad", async (request, reply) =>
+    executeNative(reply, request.body, "cad-review", "cad", () => reviewCad(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.get("/api/cad/:id", async (request, reply) => {
+    const cad = store.get<CadReview>("cad-review", paramId(request.params));
+    if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
+    return nativeResponse(cad, reply, "cad");
+  });
+  app.get("/api/cad/:id/files/:which/:file", async (request, reply) => {
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(CAD_FILES) }).parse(request.params);
+    const cad = store.get<CadReview>("cad-review", p.id);
+    if (!cad || cad.state !== "completed") throw new DomainError("NOT_FOUND", "Completed CAD evidence required", 404);
+    const content = await readFile(join(config.state, "cad", p.id, p.which, p.file));
+    if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
+    const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
+      "drawing.svg": "image/svg+xml", "checks.json": "application/json" };
+    // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
+    if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+    else if (!p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
+    return reply.type(types[p.file]).send(content);
+  });
+  app.get("/api/cad/:id/stages/:which/:index", async (request, reply) => {
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), index: z.coerce.number().int().min(1).max(16) }).parse(request.params);
+    const cad = store.get<CadReview>("cad-review", p.id);
+    const stage = cad?.stages?.[p.which]?.find(s => s.index === p.index);
+    if (!cad || !stage || !/^stages\/\d{2}-[a-z-]{1,24}\.glb$/.test(stage.file)) throw new DomainError("NOT_FOUND", "Stage not recorded", 404);
+    const content = await readFile(join(config.state, "cad", p.id, p.which, stage.file));
+    if (sha256(content) !== stage.sha256) throw new DomainError("CAD_FILE_CHANGED", "Stage geometry differs from its recorded digest", 422);
     return reply.type("model/gltf-binary").header("X-PAI-Evidence", "presentation-stage").send(content);
   });
   app.get("/api/live/:requestId", async (request, reply) => {

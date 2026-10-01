@@ -4,6 +4,7 @@ import type { FactoryCriteria, FactoryReview } from "./factory.js";
 import type { SceneReview } from "./scenes.js";
 import type { AssistantPlan } from "./assistant.js";
 import type { Proposal } from "./proposals.js";
+import type { CadReview } from "./cad.js";
 
 /**
  * Lifecycle state derived only from durable records: requirement → design → native validation →
@@ -12,7 +13,7 @@ import type { Proposal } from "./proposals.js";
  */
 export type StageId = "requirements" | "design" | "validate" | "evidence" | "feedback" | "deliver";
 export type StageStatus = "pending" | "active" | "attention" | "done";
-export type EvidenceKind = "robot-review" | "blender-scene" | "factory-twin";
+export type EvidenceKind = "robot-review" | "blender-scene" | "factory-twin" | "cad-part";
 export interface StageState { id: StageId; index: number; label: string; status: StageStatus; metric: string; detail: string }
 export interface FailingCase { kind: EvidenceKind; runId: string; seed: number | null; checkId?: string; label: string; feedbackId?: string; feedbackStatus?: string }
 export interface Activity { at: string; stage: StageId; label: string; detail?: string; ref?: { kind: EvidenceKind | "feedback" | "campaign" | "plan"; id: string } }
@@ -23,7 +24,7 @@ export interface Lifecycle {
   counts: { runs: number; running: number; rejected: number; accepted: number; openFeedback: number; closedFeedback: number; drafts: number; observations: number };
 }
 export interface LifecycleSnapshot {
-  project: Project; reviews: Review[]; scenes: SceneReview[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
+  project: Project; reviews: Review[]; scenes: SceneReview[]; cads?: CadReview[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
   feedback: Feedback[]; campaigns: Campaign[]; events: { campaignId: string; kind: string; actorKind: string; at: string; participantId: string }[];
   plans: AssistantPlan[]; proposals: Proposal[];
 }
@@ -33,10 +34,13 @@ const STATUS: Record<string, string> = { received: "已收到", "needs-context":
 const NEXT_FEEDBACK: Record<string, string> = { received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
   assigned: "提出处理方案", "fix-proposed": "按方案复测", "no-change-with-reason": "按保留说明复测", rechecked: "关闭已复测反馈" };
 const VERDICT: Record<string, string> = { "accepted-in-recorded-panel": "记录样本内通过", rejected: "拒绝", "needs-more-evidence": "需要更多证据",
-  "accepted-static-scene": "静态场景通过", "accepted-illustrative": "演示范围内通过" };
+  "accepted-static-scene": "静态场景通过", "accepted-illustrative": "演示范围内通过", "accepted-cad-part": "零件检查通过" };
 const FACTORY_CHECK: Record<string, string> = { "output-per-seed": "单种子产出", "demand-intervals": "需量超限", "hall-comfort": "车间舒适度",
   "ev-service": "EV 充电服务", "closed-failures": "闭环故障" };
 const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性" };
+const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
+  "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络" };
+export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板" };
 const CANDIDATE: Record<string, string> = { reference: "基准设置", camera: "相机偏移", dim: "弱光设置" };
 
 function latestBy<T extends { createdAt: string }>(items: T[], key: (item: T) => string): T[] {
@@ -65,6 +69,13 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
       }
     }
   }
+  for (const cad of latestBy((s.cads ?? []).filter(x => x.state === "completed" && !x.feedbackId), x => canonical(x.request.requirements) + x.request.variant)) {
+    for (const check of cad.baseline?.checks ?? []) {
+      if (check.passed && cad.candidate?.checks.find(c => c.id === check.id)?.passed === false) {
+        cases.push(bind({ kind: "cad-part", runId: cad.id, seed: null, checkId: check.id, label: `CAD ${CAD_CHECK[check.id] ?? check.id}：基准通过，${CAD_VARIANT[cad.request.variant]}失败` }));
+      }
+    }
+  }
   for (const f of latestBy(s.factoryReviews.filter(x => !x.feedbackId), x => x.criteriaId)) {
     for (const [checkId, seeds] of Object.entries(f.aggregate.failingSeeds)) for (const seed of seeds) {
       cases.push(bind({ kind: "factory-twin", runId: f.id, seed, checkId, label: `工厂 seed ${seed}：${FACTORY_CHECK[checkId] ?? checkId}未满足冻结标准` }));
@@ -78,6 +89,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   const runs = [
     ...s.reviews.map(r => ({ kind: "robot-review" as const, id: r.id, state: r.state, verdict: r.decision?.verdict, createdAt: r.createdAt, key: `robot:${r.candidate}` })),
     ...s.scenes.map(r => ({ kind: "blender-scene" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `scene:${r.request.variant}:${canonical(r.request.requirements)}` })),
+    ...(s.cads ?? []).map(r => ({ kind: "cad-part" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `cad:${r.request.variant}:${canonical(r.request.requirements)}` })),
     ...s.factoryReviews.map(r => ({ kind: "factory-twin" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `factory:${r.criteriaId}` })),
   ];
   const completed = runs.filter(r => r.state === "completed"), running = runs.filter(r => r.state === "running");
@@ -103,7 +115,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   ];
   const oldestOpen = [...open].sort((a, b) => a.history[0].at.localeCompare(b.history[0].at))[0];
   const next: NextStep = running.length ? { stage: "validate", label: "查看运行中的原生任务", detail: "实时查看步骤与几何；完成后结论以保存的记录为准。", ref: { kind: running[0].kind, id: running[0].id } }
-    : !completed.length ? { stage: "design", label: "提交第一个候选进行原生验证", detail: "选择机器人记录、Blender 场景或工厂孪生候选，也可以在 AI 助手中描述意图。" }
+    : !completed.length ? { stage: "design", label: "提交第一个候选进行原生验证", detail: "选择机器人记录、Blender 场景、CAD 零件或工厂孪生候选，也可以在 AI 助手中描述意图。" }
     : oldestOpen ? { stage: "feedback", label: `推进反馈：${NEXT_FEEDBACK[oldestOpen.status]}`, detail: `当前状态“${STATUS[oldestOpen.status]}”；${oldestOpen.observed}`, ref: { kind: "feedback", id: oldestOpen.id } }
     : uncovered.length ? { stage: "evidence", label: "为失败案例记录反馈", detail: `${uncovered[0].label}。失败案例需要绑定反馈并复测。`, ref: { kind: uncovered[0].kind, id: uncovered[0].runId } }
     : !s.campaigns.length ? { stage: "deliver", label: "生成可核验交付与案例草稿", detail: "证据包可在另一台机器重新核验；草稿保留失败与范围限制。" }
@@ -114,6 +126,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   for (const p of s.plans) activity.push({ at: p.createdAt, stage: "design", label: "AI 助手生成计划", detail: p.message, ref: { kind: "plan", id: p.id } });
   for (const r of s.reviews) activity.push({ at: r.createdAt, stage: "validate", label: `Robot Reel 验证 · ${CANDIDATE[r.candidate]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.decision ? VERDICT[r.decision.verdict] : r.state, ref: { kind: "robot-review", id: r.id } });
   for (const r of s.scenes) activity.push({ at: r.createdAt, stage: "validate", label: `Blender 场景 · ${r.request.variant === "occluded" ? "带遮挡" : "无遮挡"}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] : r.state, ref: { kind: "blender-scene", id: r.id } });
+  for (const r of s.cads ?? []) activity.push({ at: r.createdAt, stage: "validate", label: `CAD 零件 · ${CAD_VARIANT[r.request.variant]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] ?? r.verdict : r.state, ref: { kind: "cad-part", id: r.id } });
   for (const r of s.factoryReviews) activity.push({ at: r.createdAt, stage: "validate", label: `工厂孪生评估${r.feedbackId ? "（反馈复测）" : ""}`, detail: `${VERDICT[r.verdict]} · 标准 ${r.criteriaDigest.slice(0, 8)}`, ref: { kind: "factory-twin", id: r.id } });
   for (const f of s.feedback) for (const h of f.history) activity.push({ at: h.at, stage: "feedback", label: `反馈${STATUS[h.status]}`, detail: h.reason, ref: { kind: "feedback", id: f.id } });
   for (const c of s.campaigns) activity.push({ at: c.createdAt, stage: "deliver", label: "生成案例草稿", detail: `${c.channel} · 未发送`, ref: { kind: "campaign", id: c.id } });

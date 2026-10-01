@@ -7,6 +7,8 @@ import { recordCaseFeedback } from "../actions";
 import { FEEDBACK_STATUS } from "../context";
 import type { Review } from "../../src/contracts";
 import type { SceneReview } from "../../src/scenes";
+import type { CadReview } from "../../src/cad";
+import { CAD_CHECK_LABELS, CAD_VARIANTS } from "../context";
 
 const Viewport = lazy(() => import("../viewport"));
 
@@ -78,6 +80,39 @@ function SceneDetail({ scene }: { scene?: SceneReview }) {
   </>;
 }
 
+function cadDetail(id: string, x: Record<string, unknown>): string {
+  const o = x.observed as never, r = x.required as never;
+  if (id === "nema17-interface") { const v = x.observed as { pilotBore: number; boltHoles: number[]; pitch: number[] };
+    return `止口孔 Ø${v.pilotBore}（≥ Ø22.2）；M3 孔 ${v.boltHoles.map(d => `Ø${d}`).join("/")}（Ø3.4）；孔距 ${v.pitch.join("/")}（31.0）`; }
+  if (id === "motor-interference") return `与 NEMA 17 电机机体/止口/轴的布尔交集 ${o} mm³；要求 0`;
+  if (id === "min-wall") return `实测最小壁厚 ${o} mm；要求 ≥ ${r} mm（板厚与孔间韧带）`;
+  if (id === "hole-edge-distance") return `最不利紧固孔边距 ${o} mm；要求 ≥ ${r} mm（1.5×d 经验规则）`;
+  if (id === "mass") return `${o} g（6061 铝名义密度）；上限 ${r} g`;
+  if (id === "envelope") return `包围盒 ${(x.observed as number[]).join(" × ")} mm；上限 ${(x.required as number[]).join(" × ")} mm`;
+  return `单一闭合实体：${o}；OCCT BRepCheck`;
+}
+function CadDetail({ cad }: { cad?: CadReview }) {
+  const c = useApp();
+  const [which, setWhich] = useState<"baseline" | "candidate">("candidate");
+  const live = c.session?.kind === "cad-part" && c.session.running;
+  const model = viewportModel(c.session, cad, live ? c.session!.current ?? which : which, "cad-part");
+  const v = cad ? verdictOf("cad-part", cad.verdict, cad.state) : { label: "CadQuery 原生建模中", tone: "live" as const };
+  const shown = which === "baseline" ? cad?.baseline : cad?.candidate;
+  return <>
+    <Verdict tone={v.tone} eyebrow={`参数化 CAD · NEMA 17 电机支架${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
+      detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何，不含 FEA 或实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
+    <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={model} /></Suspense>
+    <div className="segmented" role="group" aria-label="零件">{(["baseline", "candidate"] as const).map(w =>
+      <button key={w} type="button" aria-pressed={which === w} className={which === w ? "active" : ""} onClick={() => setWhich(w)}>{w === "baseline" ? "基准零件" : "候选零件"}</button>)}</div>
+    {cad?.state === "completed" && shown && <>
+      <ul className="checks">{shown.checks.map(x => <Check key={x.id} passed={x.passed} title={CAD_CHECK_LABELS[x.id]} detail={cadDetail(x.id, x)} />)}</ul>
+      <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />
+        <figcaption>{w === "baseline" ? "基准" : "候选"} · OCCT 投影视图（含隐藏线）</figcaption></figure>)}</div>
+      <Receipts value={{ request: cad.request, requirementDigest: cad.requirementDigest, receipts: cad.receipts, files: cad.files, parameters: { baseline: cad.baseline?.parameters, candidate: cad.candidate?.parameters } }} />
+    </>}
+  </>;
+}
+
 export function Validate() {
   const c = useApp();
   const { project, route, session } = c;
@@ -105,8 +140,9 @@ export function Validate() {
         {session && (session.running || session.recordId === selected?.id) && <Card><LiveSteps session={session} /></Card>}
         {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
         {detailKind === "blender-scene" && <SceneDetail scene={selected ? c.data.scenes.find(s => s.id === selected.id) : undefined} />}
+        {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
         {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
-        {liveKind && liveKind !== "blender-scene" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
+        {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
         {selected && selected.state === "completed" && <>
           <CaseList runId={selected.id} />
           <div className="button-row end"><button type="button" className="secondary" onClick={() => c.navigate("evidence", { kind: selected.kind, id: selected.id })}>查看证据与回放 →</button></div>

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import type { RunKind, State } from "./context";
-import { CANDIDATES, KIND_LABEL } from "./context";
+import { CAD_VARIANTS, CANDIDATES, KIND_LABEL } from "./context";
 
 export type Tone = "ok" | "bad" | "warn" | "info" | "muted" | "live";
 export function Chip({ tone = "muted", children }: { tone?: Tone; children: ReactNode }) {
@@ -44,6 +44,8 @@ export function projectRuns(data: State, projectId?: string): RunItem[] {
       verdict: r.decision?.verdict, title: CANDIDATES[r.candidate], revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...data.scenes.filter(r => r.projectId === projectId).map(r => ({ kind: "blender-scene" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: r.request.variant === "occluded" ? "带遮挡候选布局" : "无遮挡布局", revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
+    ...(data.cads ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "cad-part" as const, id: r.id, createdAt: r.createdAt, state: r.state,
+      verdict: r.verdict, title: `NEMA 17 支架 · ${CAD_VARIANTS[r.request.variant][0]}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.factoryReviews ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "factory-twin" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: `维护/能源方案 · 标准 ${r.criteriaDigest.slice(0, 6)}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -51,6 +53,7 @@ export function projectRuns(data: State, projectId?: string): RunItem[] {
 const VERDICTS: Record<RunKind, Record<string, [string, Tone]>> = {
   "robot-review": { "accepted-in-recorded-panel": ["记录样本内通过", "ok"], rejected: ["拒绝采用", "bad"], "needs-more-evidence": ["需要更多证据", "warn"] },
   "blender-scene": { "accepted-static-scene": ["静态场景检查通过", "ok"], rejected: ["场景检查拒绝", "bad"] },
+  "cad-part": { "accepted-cad-part": ["零件检查通过", "ok"], rejected: ["零件检查拒绝", "bad"] },
   "factory-twin": { "accepted-illustrative": ["演示仿真范围内通过", "ok"], rejected: ["维护方案拒绝", "bad"] },
 };
 export function verdictOf(kind: RunKind, verdict: string | undefined, state: string): { label: string; tone: Tone } {

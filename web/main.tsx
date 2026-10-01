@@ -56,7 +56,7 @@ function App() {
   }, []);
   useEffect(() => { if (innerWidth >= 900) localStorage.setItem("pai-assistant", assistant ? "open" : "closed"); }, [assistant]);
 
-  const toast = useCallback((message: string, tone: "ok" | "bad" = "ok") => setToasts(t => [...t.slice(-3), { id: ++seq.current, message, tone }]), []);
+  const toast = useCallback((message: string, tone: "ok" | "bad" = "ok") => setToasts(t => [...t.filter(x => x.tone === "bad").slice(-1), { id: ++seq.current, message, tone }]), []);
   const dismiss = useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
   const navigate = useCallback((view: ViewId, params: Record<string, string | undefined> = {}) => {
     const q = new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] !== undefined)).toString();
@@ -81,6 +81,7 @@ function App() {
     ...VIEWS.map(v => ({ id: `go-${v.id}`, label: `前往：${v.index ? `${v.index} ` : ""}${v.label}`, run: () => navigate(v.id) })),
     { id: "new", label: "新建评审任务", run: () => navigate("requirements", { new: "1" }) },
     { id: "scene", label: "生成并检查 Blender 场景（默认参数）", run: () => { if (ctx?.project && data?.capabilities.blender) void runScene(ctx, "occluded", { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true }); else navigate("design", { lane: "scene" }); } },
+    { id: "cad", label: "CAD 零件：NEMA 17 电机支架", run: () => navigate("design", { lane: "cad" }) },
     { id: "factory", label: "工厂维护与能源评审", run: () => navigate("design", { lane: "factory" }) },
     ...(["persp", "top", "front", "right", "camera"] as const).map(v => ({ id: `view-${v}`, label: `视图：${{ persp: "透视", top: "顶视", front: "前视", right: "右视", camera: "检查相机" }[v]}`,
       hint: { persp: "5", top: "7", front: "1", right: "3", camera: "0" }[v], run: () => dispatchEvent(new CustomEvent("pai-view", { detail: v })) })),

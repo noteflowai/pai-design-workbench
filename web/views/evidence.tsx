@@ -19,6 +19,7 @@ export function Evidence() {
     {run.kind === "robot-review" && <RobotEvidence id={run.id} />}
     {run.kind === "blender-scene" && <SceneEvidence id={run.id} />}
     {run.kind === "factory-twin" && <FactoryEvidence id={run.id} />}
+    {run.kind === "cad-part" && <CadEvidence id={run.id} />}
     <CaseList runId={run.id} />
   </>;
 }
@@ -68,4 +69,24 @@ function FactoryEvidence({ id }: { id: string }) {
     <ul className="plain">{r.consistency.map(x => <li key={x.id}>✓ {x.detail}</li>)}</ul>
     <details className="receipts"><summary>上游摘要（仅对照，不参与验收）</summary><pre>{JSON.stringify(r.upstreamSummary, null, 2)}</pre></details>
   </Card>;
+}
+
+function CadEvidence({ id }: { id: string }) {
+  const c = useApp();
+  const cad = (c.data.cads ?? []).find(x => x.id === id)!;
+  const files = [["part.step", "下载可编辑 STEP"], ["part.stl", "下载 STL"], ["part.glb", "下载 GLB"], ["assembly.glb", "下载装配 GLB"], ["checks.json", "下载原生检查"]] as const;
+  return <>
+    <Card title="原生 CAD 文件" aside={<small>下载前校验 SHA-256 · CadQuery {cad.candidate?.cadquery} / OCCT {cad.candidate?.ocp}</small>}>
+      <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件工程视图`} src={`/api/cad/${id}/files/${w}/drawing.svg`} /><figcaption>{w === "baseline" ? "基准零件" : "候选零件"} · SVG 投影</figcaption></figure>)}</div>
+      <div className="button-row">{files.map(([f, label]) => <a key={f} className="button secondary" href={`/api/cad/${id}/files/candidate/${f}`}>{label}</a>)}</div>
+    </Card>
+    <Card title="参数与建模特征">
+      <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">参数</th><th scope="col">基准</th><th scope="col">候选</th></tr></thead>
+        <tbody>{Object.keys((cad.baseline?.parameters ?? {}) as Record<string, number>).map(k => <tr key={k}><td>{k}</td>
+          <td>{String((cad.baseline?.parameters as Record<string, number>)[k])}</td><td>{String((cad.candidate?.parameters as Record<string, number> | undefined)?.[k] ?? "—")}</td></tr>)}
+          <tr><td>mass (g)</td><td>{cad.baseline?.mass}</td><td>{cad.candidate?.mass}</td></tr></tbody></table></div>
+      <div className="table-wrap" style={{ marginTop: 12 }}><table className="data-table"><thead><tr><th scope="col">零件</th><th scope="col">特征</th><th scope="col">SHA-256</th></tr></thead>
+        <tbody>{(["baseline", "candidate"] as const).flatMap(w => (cad.stages?.[w] ?? []).map(s => <tr key={`${w}-${s.index}`}><td>{w === "baseline" ? "基准" : "候选"}</td><td>{s.index}. {s.label}</td><td><code>{s.sha256.slice(0, 12)}</code></td></tr>))}</tbody></table></div>
+    </Card>
+  </>;
 }

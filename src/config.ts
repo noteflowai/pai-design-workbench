@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 export interface Config {
   workspace: string; state: string; web: string;
   robotRoot: string; stressSource: string; evalarcRoot: string; controlRoot: string; radarFile: string;
-  port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; repository: string;
+  port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
   listenHost?: string; publicOrigin?: string;
   albAuth?: { albArn: string; issuer: string; clientId: string };
   authLogoutUrl?: string;
@@ -34,6 +34,7 @@ export function configuration(): Config {
     controllerEntrypoint: process.env.PAI_CONTROLLER_ENTRYPOINT,
     controllerDatabase: process.env.PAI_CONTROLLER_DATABASE,
     blender: process.env.PAI_BLENDER,
+    cadquery: process.env.PAI_CADQUERY_PYTHON,
     listenHost, publicOrigin, albAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,
   };

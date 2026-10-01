@@ -345,7 +345,7 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
 .composer-foot small { font-size: 11px; }
 
 /* Viewport (dark CAD surface) */
-.viewport { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 190px; grid-template-rows: minmax(0, 1fr) auto; border-radius: var(--radius); overflow: hidden;
+.viewport { user-select: none; -webkit-user-select: none; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 190px; grid-template-rows: minmax(0, 1fr) auto; border-radius: var(--radius); overflow: hidden;
   background: var(--vp); border: 1px solid var(--vp-line); min-height: 480px; color: var(--vp-ink); box-shadow: var(--shadow); }
 .viewport-loading { display: grid; place-items: center; color: #8fb0aa; font-size: 12px; }
 .viewport-canvas { position: relative; min-height: 420px; min-width: 0; }
@@ -445,3 +445,4 @@ main { container-type: inline-size; container-name: work; }
   .loop ol { grid-template-columns: 1fr 1fr; }
   .stage::after { display: none; }
 }
+.scene-previews.drawings img { background: #fff; object-fit: contain; border: 1px solid var(--line); padding: 6px; }

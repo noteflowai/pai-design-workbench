@@ -29,6 +29,11 @@ cd "$RELEASE"
 NODE_BIN="/var/lib/pai/data/state/tools/node-v24.21.0-linux-x64/bin"
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm ci
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm prune --omit=dev
+# Native parametric CAD: hash-locked CadQuery 2.8.0 / OCCT 7.9 in persistent state; idempotent. Fails before any switch.
+if ! python3 -c "import ensurepip" 2>/dev/null; then
+  DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3.12-venv >/dev/null
+fi
+runuser -u pai -- python3 tools/setup_cadquery.py
 PREVIOUS=$(readlink -f /opt/pai/current)
 systemctl stop pai-workbench.service
 ln -sfn "$RELEASE" /opt/pai/current.next

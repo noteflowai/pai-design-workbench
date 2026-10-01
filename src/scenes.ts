@@ -11,7 +11,7 @@ import type { LiveBus } from "./live.js";
 
 export interface SceneStage { index: number; id: string; label: string; file: string; sha256: string; objects: string[] }
 export interface SceneRay { origin: number[]; target: number[]; hit: number[] | null; firstHit: string | null; visible: boolean; frame: "gltf-y-up" }
-const NativeEvent = z.discriminatedUnion("type", [
+export const NativeEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("stage"), index: z.number().int().min(1).max(16), id: z.string().regex(/^[a-z-]{1,24}$/),
     label: z.string().max(80), file: z.string().regex(/^stages\/\d{2}-[a-z-]{1,24}\.glb$/), objects: z.array(z.string().max(80)).max(32) }).strict(),
   z.object({ type: z.literal("ray"), origin: z.array(z.number()).length(3), target: z.array(z.number()).length(3),
