@@ -1,6 +1,12 @@
 # 工业设计典型测试用例
 
-`npm run test:suite` 在同一个工作台里，用原生工具依次执行 14 个有代表性的工业设计用例。每个用例的预期在执行前就写在脚本里。“通过”表示原生结果与预期一致，不表示设计被采用，有些用例的预期本来就是拒绝。最近一次实际运行：14/14 通过，回执见 [industrial-suite.json](evidence/industrial-suite.json)。
+`npm run test:suite` 在同一个工作台里，用原生工具依次执行有代表性的工业设计用例。每个用例的预期在执行前就写在脚本里。“通过”表示原生结果与预期一致，不表示设计被采用，有些用例的预期本来就是拒绝。
+
+默认运行 23 个用例，CI 跑的就是这一组。另有两个用例需要显式开启：
+- A3：设置 `PAI_SUITE_LIVE_AI=1`，调用真实模型，消耗 1 次真实尝试。
+- X1：设置 `PAI_AGENTCORE_SANDBOX_ARN`，使用 AgentCore 云端沙箱。
+
+最近一次实际运行开启了这两项：25/25 通过（2026-10-02），回执见 [industrial-suite.json](evidence/industrial-suite.json)。
 
 运行环境：Blender 5.2.2 LTS；CadQuery 2.8.0 / OCCT 7.9.3（哈希锁定安装）；Robot Reel `6124cee3cba5`；Factory Twin `b3ee5c7d2c55`；EvalArc 独立对照。
 
@@ -20,6 +26,17 @@
 | F2 | 工厂维护与能源 | 显式放宽标准 | Factory Twin v0.18.0 | 放宽标准必须冻结为新版本 | 演示范围内通过 | 通过；产生新的标准摘要，旧结论仍为拒绝 |
 | F3 | 数据完整性 | 篡改上游摘要（seeds 与 manifest 一起伪造） | 一致性校验 | 上游自报结果不能被直接采信 | 返回 422 | 422 FACTORY_SUMMARY_INCONSISTENT |
 | A1 | AI 助手 | 对话中放宽壁厚约束 | 意图解析 → 类型化计划 | AI 计划必须标出放宽，并且没有验收权 | 放宽被标出；不执行 | minWallMm 标记为放宽；authority none；未执行 |
+| G1 | 生成代码 | AI 或工程师写的 CadQuery 代码，板厚 2.5 mm | AST 策略 + 进程锁定 + bubblewrap → OCCT + EvalArc | 文字生成 CAD 的结论不能由生成者自己决定 | 拒绝；只有壁厚失败；沙箱结果 ok | 拒绝；min-wall 实测 2.5；回执含 cadquery-sandbox |
+| G2 | 生成代码 | 模板代码与预设基准等价 | 沙箱 → 共用 B-Rep 检查 | 证明沙箱通道没有另一套更宽松的检查 | 通过；7 项逐项相同 | 通过；逐项相同；48.368 g |
+| G3 | 生成代码 | 越权代码：导入 os、读 /etc/passwd、取 `__globals__` | AST 静态策略 | 生成代码可能被注入，必须在执行前拦截 | 3 次都返回 422；不产生记录 | 3 × 422 CAD_CODE_POLICY；记录数不变 |
+| G4 | 生成代码 | 资源耗尽：申请 80 GB 内存 | rlimit（地址空间 3 GiB） | 失控代码不能拖垮主机 | 失败；结果为 limit；没有检查证据 | failed；limit；CAD_CODE_LIMIT |
+| S1 | 设计空间 | 24 点原生参数扫描（板厚 × 宽度 × 高度） | CadQuery / OCCT 逐点实测 | 轻量化真正要回答的是：满足全部约束时最轻能做到多少 | 3 个可行点；最轻 t=3、W=60、H=46，37.356 g | 与预期一致；帕累托前沿 12、18、24 |
+| S2 | 设计空间 | 扫描点转为正式候选；伪造来源 | 参数化配方 + EvalArc | 扫描只排序，不验收；来源必须真实 | 通过；质量相同；伪造返回 422 | 通过；37.356 g；0 阻断；422 INVALID_SWEEP_POINT |
+| L1 | 生命周期 | 失败 → 反馈复测关闭 → 扫描选型 → 发布准入 → 批准 → 需求修订 | 全部 CAD 通道 + 发布准入 | 每个失败都要有处置；发布绑定当前需求 | 关闭前准入不通过；关闭后通过；批准后状态为 released；需求改为 v2 后变为 superseded | 与预期一致 |
+| A2 | AI 助手 | 模型计划写 cad-code，同时夹带越权工具 | 执行器（固定回放）→ 契约校验 → 确认后沙箱执行 | 模型输出不可信；越权工具丢弃；只有确认后才执行 | 1 个计划；approve-release 被拒绝；确认前没有记录；确认后通过 | 与预期一致；min-wall 3.5 |
+| M1 | 外部 Agent | 经 MCP 读取证据、自查代码、提议计划 | stdio MCP（官方 SDK） | 开放读取和提议，不开放执行、验收和发布 | 8 个工具，没有执行或发布类；提议后未执行；确认后可读到确认状态 | 与预期一致 |
+| A3 | AI 助手（可选） | 真实模型根据失败证据写修正代码 | Kiro（主→备→二备）→ 契约校验 → 沙箱 | 用真实模型端到端检验 | done；引用的记录都存在；确认执行后 min-wall 通过 | Kiro 主账号 claude-opus-5.5；引用 5 条记录；通过；min-wall 3.5 |
+| X1 | 云端沙箱（可选） | 生成代码在 AgentCore arm64 microVM 中建模 | Amazon Bedrock AgentCore Runtime | 每个任务独立 microVM，无网络、无凭据 | 拒绝；只有壁厚失败；microVM 和 bubblewrap 都启用 | 与预期一致；aarch64 |
 
 ## CAD 用例怎么测量
 

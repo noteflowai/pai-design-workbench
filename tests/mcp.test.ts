@@ -50,7 +50,7 @@ test("MCP exposes reads and proposals only; read tools are annotated read-only",
   try {
     const { tools } = await s.client.listTools();
     const names = tools.map(t => t.name).sort();
-    assert.deepEqual(names, ["pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_workspace", "pai_list_projects", "pai_list_versions", "pai_propose_plan"]);
+    assert.deepEqual(names, ["pai_check_cad_code", "pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_workspace", "pai_list_projects", "pai_list_versions", "pai_propose_plan"]);
     assert.ok(!names.some(n => /approve|release|confirm|execute|feedback|reconcil|run_/.test(n)), "no authority-bearing tool");
     for (const t of tools.filter(t => t.name !== "pai_propose_plan")) assert.equal(t.annotations?.readOnlyHint, true, t.name);
     const propose = tools.find(t => t.name === "pai_propose_plan")!;
@@ -66,6 +66,8 @@ test("MCP exposes reads and proposals only; read tools are annotated read-only",
     assert.equal(record.record.candidate.checks.find((c: { id: string }) => c.id === "min-wall").observed, 2.5);
     const admission = (await s.call("pai_get_admission", { projectId: s.project.id, handle: "cad-1" })).json();
     assert.equal(admission.admissible, false);
+    const checked = await s.call("pai_check_cad_code", { code: "import os\nresult = 1\nMOTOR_AXIS_Z = 28\n" });
+    assert.ok(checked.error ? /CAD_NOT_CONFIGURED/.test(checked.text) : checked.json().ok === false, checked.text);
     const missing = await s.call("pai_get_record", { projectId: s.project.id, handle: "cad-9" });
     assert.ok(missing.error && /NOT_FOUND/.test(missing.text));
   } finally { await s.cleanup(); }

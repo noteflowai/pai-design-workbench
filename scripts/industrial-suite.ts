@@ -11,22 +11,36 @@ import { sha256 } from "../src/domain.js";
 import type { Project, Review } from "../src/contracts.js";
 import type { SceneReview } from "../src/scenes.js";
 import type { AssistantPlan } from "../src/assistant.js";
+import type { CadSweep } from "../src/sweep.js";
+import type { Release } from "../src/release.js";
+import type { Feedback } from "../src/contracts.js";
+import { createServer } from "node:net";
+import { dirname } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const freePort = () => new Promise<number>(resolve => { const srv = createServer().listen(0, "127.0.0.1", () => { const p = (srv.address() as { port: number }).port; srv.close(() => resolve(p)); }); });
 
 /**
  * Representative industrial design test cases across every native lane. Each case states an
  * expectation fixed before execution; "passed" means the native result matched it, not that a
  * design was accepted. Nothing here is physical validation.
  */
-const config = configuration();
-assert.ok(config.blender && config.cadquery, "Run npm run setup:native and npm run setup:cad first");
-const state = join(config.state, "industrial-suite", randomUUID());
+const env = configuration();
+assert.ok(env.blender && env.cadquery, "Run npm run setup:native and npm run setup:cad first");
+const root = join(env.state, "industrial-suite", randomUUID());
+const port = await freePort();
+// The main suite workbench runs everything locally; remote AgentCore transports are exercised by their own case.
+const config = { ...env, port, agentcoreAgentArn: undefined, agentcoreSandboxArn: undefined };
+const state = join(root, "main");
 const { app } = await createApp({ ...config, state });
-const headers = { host: `127.0.0.1:${config.port}`, "content-type": "application/json" };
-const call = async (method: "POST" | "GET", url: string, payload?: unknown) => {
+await app.listen({ host: "127.0.0.1", port });
+const headers = { host: `127.0.0.1:${port}`, "content-type": "application/json" };
+const call = async (method: "POST" | "GET" | "PATCH", url: string, payload?: unknown) => {
   const r = await app.inject({ method, url, headers, payload: payload === undefined ? undefined : JSON.stringify(payload) });
   return { status: r.statusCode, body: r.json() };
 };
-const ok = async <T>(method: "POST" | "GET", url: string, payload?: unknown) => {
+const ok = async <T>(method: "POST" | "GET" | "PATCH", url: string, payload?: unknown) => {
   const r = await call(method, url, payload); assert.equal(r.status, 200, JSON.stringify(r.body)); return r.body as T;
 };
 type Case = { id: string; domain: string; title: string; tool: string; rationale: string; expected: string; run: () => Promise<{ actual: string; evidence: Record<string, unknown>; matched: boolean }> };
@@ -38,6 +52,9 @@ const robot = async (candidate: string) => ok<Review>("POST", `${P}/reviews`, { 
 const scene = (variant: string, maxFootprintArea = 12) => ok<SceneReview>("POST", `${P}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant,
   requirements: { maxFootprintArea, targetEnvelopeRadius: 1.4, requireTargetVisible: true } });
 const cad = (variant: string, requirements = DEFAULT_CAD_REQUIREMENTS) => ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant, requirements });
+const template = await readFile(join(config.repository, "native/cad_template.py"), "utf8");
+const generated = (code: string) => ({ requestId: randomUUID(), projectRevision: 1, variant: "generated", requirements: DEFAULT_CAD_REQUIREMENTS, source: { language: "cadquery-2.8", code } });
+let sweep: CadSweep | undefined;
 const lost = (r: Review) => r.stress!.pairs.filter(p => p.condition === r.candidate && p.reference_success && !p.condition_success).map(p => p.seed);
 
 const cases: Case[] = [
@@ -136,6 +153,180 @@ const cases: Case[] = [
       return { matched: Boolean(step) && direction === "relaxed" && plan.authority === "none" && plan.confirmations.length === 0,
         actual: `${step?.tool}；minWallMm ${direction}；authority ${plan.authority}；确认 ${plan.confirmations.length}`, evidence: { planId: plan.id, warnings: step?.warnings } };
     } },
+  // ---------------------------------------------------------------- generated CadQuery code (OS sandbox)
+  { id: "G1", domain: "生成代码（沙箱）", title: "AI/工程师写的 CadQuery 代码：板厚 2.5 mm", tool: "AST 策略 + 进程锁定 + bubblewrap → CadQuery / OCCT + EvalArc",
+    rationale: "文字生成 CAD 的价值取决于结论不能由生成者自己决定：代码只产出实体，结论来自与预设相同的 B-Rep 检查。",
+    expected: "rejected；仅 min-wall 失败（实测 2.5）；沙箱结果 ok；回执含 cadquery-sandbox", run: async () => {
+      const c = await ok<CadReview>("POST", `${P}/cad`, generated(template.replace("T = 4.0 ", "T = 2.5 ")));
+      const wall = c.candidate?.checks.find(x => x.id === "min-wall")?.observed;
+      return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["min-wall"]' && wall === 2.5 && c.sandbox?.status === "ok"
+          && c.receipts.some(r => r.adapter === "cadquery-sandbox"),
+        actual: `${c.verdict}；失败 ${failed(c.candidate).join(",")}；min-wall ${wall} mm；沙箱 ${c.sandbox?.status}`, evidence: { cadId: c.id, codeSha256: c.sandbox?.codeSha256 } };
+    } },
+  { id: "G2", domain: "生成代码（沙箱）", title: "模板代码与预设基准等价", tool: "沙箱 → 共用 B-Rep 检查",
+    rationale: "同一几何经两条路径得到同一组实测值，证明沙箱通道没有另一套“更宽松”的检查。",
+    expected: "accepted-cad-part；7 项检查与预设 reference 逐项相同；48.368 g", run: async () => {
+      const c = await ok<CadReview>("POST", `${P}/cad`, generated(template));
+      const same = JSON.stringify(c.candidate!.checks.map(x => [x.id, x.passed, x.observed])) === JSON.stringify(c.baseline!.checks.map(x => [x.id, x.passed, x.observed]));
+      return { matched: c.verdict === "accepted-cad-part" && same && c.candidate!.mass === c.baseline!.mass, actual: `${c.verdict}；逐项相同 ${same}；${c.candidate!.mass} g`, evidence: { cadId: c.id } };
+    } },
+  { id: "G3", domain: "生成代码（沙箱）", title: "越权代码：导入 os、读 /etc/passwd、取 __globals__", tool: "AST 静态策略",
+    rationale: "生成代码可能被注入；越权代码必须在执行前被拒绝，且不留下任何证据记录。",
+    expected: "3 次都返回 422 CAD_CODE_POLICY；CAD 记录数不变", run: async () => {
+      const before = (await ok<{ cads: unknown[] }>("GET", "/api/state")).cads.length;
+      const attacks = [template.replace("import cadquery as cq", "import cadquery as cq\nimport os"), template + "\nx = open('/etc/passwd').read()\n", template + "\nleak = cq.Workplane.__init__.__globals__\n"];
+      const codes = [];
+      for (const code of attacks) { const r = await call("POST", `${P}/cad`, generated(code)); codes.push(`${r.status} ${r.body.error}`); }
+      const after = (await ok<{ cads: unknown[] }>("GET", "/api/state")).cads.length;
+      return { matched: codes.every(c => c === "422 CAD_CODE_POLICY") && after === before, actual: `${codes.join("；")}；记录 ${before} → ${after}`, evidence: {} };
+    } },
+  { id: "G4", domain: "生成代码（沙箱）", title: "资源耗尽：申请 80 GB 内存", tool: "rlimit（地址空间 3 GiB）",
+    rationale: "失控代码不能拖垮主机；超限只得到失败记录，没有检查证据，也不自动重试。",
+    expected: "failed；沙箱结果 limit；没有候选检查", run: async () => {
+      const c = await ok<CadReview>("POST", `${P}/cad`, generated(template + "\nblob = [0] * (10 ** 10)\n"));
+      return { matched: c.state === "failed" && c.sandbox?.status === "limit" && !c.candidate, actual: `${c.state}；沙箱 ${c.sandbox?.status}；${c.error?.split(":")[0]}`, evidence: { cadId: c.id } };
+    } },
+  // ---------------------------------------------------------------- design-space sweep
+  { id: "S1", domain: "设计空间探索", title: "支架 24 点原生参数扫描（板厚 × 宽度 × 高度）", tool: "CadQuery / OCCT 逐点 B-Rep 实测",
+    rationale: "轻量化的真实问题是“在所有约束下最轻是多少”；逐点原生建模实测，而不是代理模型。",
+    expected: "24 点；3 个可行；最轻可行点 t=3、W=60、H=46（37.356 g）；与预设同参数的点逐项一致", run: async () => {
+      const sw = await ok<CadSweep>("POST", `${P}/cad-sweeps`, { requestId: randomUUID(), projectRevision: 1, requirements: DEFAULT_CAD_REQUIREMENTS,
+        grid: { thickness: [2.5, 3, 3.5, 4], width: [50, 55, 60], plateHeight: [43.5, 46], pilotBore: [22.5] } });
+      sweep = sw;
+      const r = sw.result!, light = r.points.find(p => p.index === r.lightestFeasible)!;
+      const ref = r.points.find(p => p.parameters.thickness === 4 && p.parameters.width === 60 && p.parameters.plateHeight === 46)!;
+      const light2 = r.points.find(p => p.parameters.thickness === 2.5 && p.parameters.width === 60 && p.parameters.plateHeight === 46)!;
+      return { matched: sw.state === "completed" && r.points.length === 24 && r.feasibleCount === 3 && light.parameters.thickness === 3 && light.parameters.width === 60
+          && light.parameters.plateHeight === 46 && light.mass === 37.356 && ref.mass === 48.368 && JSON.stringify(light2.failed) === '["min-wall"]',
+        actual: `${r.points.length} 点；可行 ${r.feasibleCount}；最轻 t=${light.parameters.thickness} W=${light.parameters.width} H=${light.parameters.plateHeight} ${light.mass} g；前沿 ${sw.pareto?.join(",")}`,
+        evidence: { sweepId: sw.id, pareto: sw.pareto } };
+    } },
+  { id: "S2", domain: "设计空间探索", title: "扫描点转为正式候选；伪造来源被拒绝", tool: "参数化配方 + EvalArc",
+    rationale: "扫描只排序不验收：选中的点必须作为普通候选重新原生评审，且来源必须真实。",
+    expected: "accepted-cad-part；质量与扫描点相同；EvalArc 0 阻断；伪造参数返回 422 INVALID_SWEEP_POINT", run: async () => {
+      const light = sweep!.result!.points.find(p => p.index === sweep!.result!.lightestFeasible)!;
+      const c = await ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "parametric", requirements: DEFAULT_CAD_REQUIREMENTS,
+        parameters: light.parameters, fromSweep: { sweepId: sweep!.id, point: light.index } });
+      const forged = await call("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "parametric", requirements: DEFAULT_CAD_REQUIREMENTS,
+        parameters: { ...light.parameters, thickness: 2.5 }, fromSweep: { sweepId: sweep!.id, point: light.index } });
+      return { matched: c.verdict === "accepted-cad-part" && c.candidate!.mass === light.mass && c.diff?.blocking_changes === 0 && forged.status === 422 && forged.body.error === "INVALID_SWEEP_POINT",
+        actual: `${c.verdict}；${c.candidate!.mass} g；blocking ${c.diff?.blocking_changes}；伪造 ${forged.status} ${forged.body.error}`, evidence: { cadId: c.id } };
+    } },
+  // ---------------------------------------------------------------- full lifecycle to release
+  { id: "L1", domain: "生命周期闭环", title: "失败 → 反馈复测关闭 → 扫描选型 → 发布准入 → 批准 → 需求修订后废止", tool: "全部 CAD 通道 + 发布准入",
+    rationale: "工业交付要求每个失败都有处置、发布绑定当前需求，需求变化后旧发布自动失效。",
+    expected: "未关闭失败时准入不通过；关闭后通过；R1 批准为 released；需求 v2 后 superseded", run: async () => {
+      const lp = await ok<Project>("POST", "/api/projects", { title: "Bracket release", intendedDecision: "Release the lightest bracket that keeps every check",
+        requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
+      const LP = `/api/projects/${lp.id}`;
+      const light = await ok<CadReview>("POST", `${LP}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "lightweight", requirements: DEFAULT_CAD_REQUIREMENTS });
+      const sw = await ok<CadSweep>("POST", `${LP}/cad-sweeps`, { requestId: randomUUID(), projectRevision: 1, requirements: DEFAULT_CAD_REQUIREMENTS,
+        grid: { thickness: [3], width: [60], plateHeight: [46], pilotBore: [22.5] } });
+      const pick = await ok<CadReview>("POST", `${LP}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "parametric", requirements: DEFAULT_CAD_REQUIREMENTS,
+        parameters: sw.result!.points[0].parameters, fromSweep: { sweepId: sw.id, point: 1 } });
+      const admission = async () => ok<{ id: string; passed: boolean }[]>("GET", `${LP}/admission?kind=cad-part&runId=${pick.id}`);
+      const blocked = (await admission()).filter(c => !c.passed).map(c => c.id);
+      let f = await ok<Feedback>("POST", "/api/feedback", { runId: light.id, evidenceKind: "cad-part", kind: "design-check", checkId: "min-wall", seed: null,
+        expected: "Plates at least 3 mm", observed: "Lightweight variant has 2.5 mm plates", actorKind: "maintainer" });
+      for (const status of ["reproducible", "assigned", "fix-proposed"]) f = await ok<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status, reason: "Restore 4 mm plates, same requirements" });
+      const re = await ok<CadReview>("POST", `${LP}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: DEFAULT_CAD_REQUIREMENTS, feedbackId: f.id });
+      f = await ok<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "rechecked", reason: "Recheck passes min-wall", recheckRunId: re.id });
+      f = await ok<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "closed", reason: "Closed; nominal geometry only" });
+      const open = (await admission()).filter(c => !c.passed).map(c => c.id);
+      let rel = await ok<Release>("POST", `${LP}/releases`, { requestId: randomUUID(), projectRevision: 1, evidenceKind: "cad-part", runId: pick.id, title: "NEMA 17 bracket t=3 mm", notes: "Sweep-selected" });
+      rel = await ok<Release>("PATCH", `${LP}/releases/${rel.id}`, { expectedRevision: rel.revision, decision: "approve", reason: "All admission checks pass" });
+      await ok("PATCH", LP, { title: lp.title, intendedDecision: lp.intendedDecision, expectedRevision: 1,
+        requirements: { minSuccessRate: 0.6, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
+      const after = (await ok<{ releases: Release[] }>("GET", "/api/state")).releases.find(r => r.id === rel.id)!;
+      return { matched: blocked.includes("failures-dispositioned") && open.length === 0 && rel.maturity === "released" && after.maturity === "superseded" && pick.verdict === "accepted-cad-part",
+        actual: `关闭前未通过 ${blocked.join(",")}；关闭后未通过 ${open.length} 项；${rel.number} ${rel.maturity} → 需求 v2 后 ${after.maturity}`, evidence: { projectId: lp.id, releaseId: rel.id } };
+    } },
+  // ---------------------------------------------------------------- AI planner and external agents
+  { id: "A2", domain: "AI 助手", title: "模型计划：写 cad-code 并夹带越权工具", tool: "执行器（固定回放）→ 契约校验 → 确认后沙箱执行",
+    rationale: "模型输出是不可信的：越权工具被丢弃，合法计划必须经核对门槛与人工确认才执行，结论仍由原生检查给出。",
+    expected: "1 个 cad-code 计划；approve-release 被拒绝；确认前无记录；确认后 accepted（min-wall 3.5）", run: async () => {
+      const fake = join(config.repository, "tests/fixtures/fake-executor.mjs");
+      const dir = join(root, "ai"), ledger = join(dir, "ledger.sqlite3");
+      await mkdir(dir, { recursive: true, mode: 0o700 }); await writeFile(ledger, "");
+      const aiConfig = { ...config, state: dir, controllerEntrypoint: fake, controllerDatabase: ledger, controlRoot: dirname(fake), port: await freePort() };
+      const ai = await createApp(aiConfig);
+      try {
+        const h = { host: `127.0.0.1:${aiConfig.port}`, "content-type": "application/json" };
+        const inj = async <T>(method: "POST" | "GET", url: string, payload?: unknown) => { const r = await ai.app.inject({ method, url, headers: h, payload: payload === undefined ? undefined : JSON.stringify(payload) }); assert.equal(r.statusCode, 200, r.body); return r.json() as T; };
+        const p = await inj<Project>("POST", "/api/projects", { title: "AI bracket", intendedDecision: "Model-written geometry only through native checks",
+          requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
+        process.env.FAKE_EXECUTOR = JSON.stringify({ attempts: [{ profile: "kiro-primary", status: "succeeded", answer: "```json\n" + JSON.stringify({ kind: "plan", plans: [
+          { ref: "p1", tool: "cad-code", title: "3.5 mm 板厚", payload: { code: template.replace("T = 4.0 ", "T = 3.5 ") } },
+          { ref: "p2", tool: "approve-release", payload: {} }] }) + "\n```" }] });
+        const plan = await inj<AssistantPlan>("POST", "/api/assistant/ai", { requestId: randomUUID(), projectId: p.id, message: "写一个板厚 3.5 mm 的支架" });
+        const before = (await inj<{ cads: unknown[] }>("GET", "/api/state")).cads.length;
+        const step = plan.plans[0];
+        await inj("POST", `/api/assistant/plans/${plan.id}/preflight`, { planId: step.id });
+        const c = await inj<CadReview>("POST", `/api/projects/${p.id}/cad`, { ...step.payload, requestId: randomUUID() });
+        const conf = await inj<AssistantPlan>("POST", `/api/assistant/plans/${plan.id}/confirmations`, { planId: step.id, recordKind: "cad-review", recordId: c.id });
+        const rejected = plan.interpretation.some(x => /已拒绝 AI 计划 p2（approve-release）/.test(x));
+        const wall = c.candidate?.checks.find(x => x.id === "min-wall")?.observed;
+        return { matched: plan.state === "done" && plan.plans.length === 1 && step.tool === "cad-code" && rejected && before === 0 && c.verdict === "accepted-cad-part" && wall === 3.5 && conf.confirmations[0].match === "as-proposed",
+          actual: `${plan.state}；计划 ${plan.plans.map(x => x.tool).join(",")}；越权被拒 ${rejected}；确认前记录 ${before}；${c.verdict} min-wall ${wall}`, evidence: { planId: plan.id, cadId: c.id } };
+      } finally { delete process.env.FAKE_EXECUTOR; await ai.app.close(); }
+    } },
+  { id: "M1", domain: "外部 Agent（MCP）", title: "外部 Agent 读证据、自查代码、提议计划", tool: "stdio MCP（官方 SDK）",
+    rationale: "企业里的 AI 客户端各不相同；开放读取与提议，但不开放执行、验收与发布。",
+    expected: "8 个工具，无执行/发布类；代码自查发现 import os；提议后未执行；确认后可读到确认状态", run: async () => {
+      const client = new Client({ name: "Suite Agent", version: "1.0.0" });
+      await client.connect(new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", join(config.repository, "src/mcp.ts")],
+        env: { PATH: process.env.PATH ?? "", PAI_URL: `http://127.0.0.1:${port}` }, stderr: "pipe", cwd: config.repository }));
+      try {
+        const tool = async (name: string, args: Record<string, unknown> = {}) => JSON.parse(((await client.callTool({ name, arguments: args })) as { content: { text: string }[] }).content[0].text);
+        const names = (await client.listTools()).tools.map(t => t.name);
+        const check = await tool("pai_check_cad_code", { code: template.replace("import cadquery as cq", "import cadquery as cq\nimport os") });
+        const prop = await tool("pai_propose_plan", { projectId: project.id, intent: "评估紧凑化方案", plans: [{ ref: "p1", tool: "cad-review", title: "紧凑化", payload: { variant: "compact" } }] });
+        const pending = await tool("pai_get_plan", { planId: prop.planId });
+        const plan = await ok<AssistantPlan>("GET", `/api/assistant/plans/${prop.planId}`);
+        const c = await ok<CadReview>("POST", `${P}/cad`, { ...plan.plans[0].payload, requestId: randomUUID() });
+        await ok("POST", `/api/assistant/plans/${prop.planId}/confirmations`, { planId: "p1", recordKind: "cad-review", recordId: c.id });
+        const done = await tool("pai_get_plan", { planId: prop.planId });
+        const forbidden = names.filter(n => /approve|release|confirm|execute|feedback|reconcil/.test(n));
+        return { matched: names.length === 8 && forbidden.length === 0 && check.ok === false && check.violations.some((v: string) => v.includes("os")) && prop.authority === "none"
+            && pending.steps[0].confirmed === null && done.steps[0].confirmed?.match === "as-proposed" && c.verdict === "rejected",
+          actual: `${names.length} 个工具；禁用类 ${forbidden.length}；自查违规 ${check.violations.length}；确认前 ${pending.steps[0].confirmed}；确认后 ${done.steps[0].confirmed?.match}；${c.verdict}`, evidence: { planId: prop.planId } };
+      } finally { await client.close(); }
+    } },
+  // Real model (spends one attempt on the reviewed ledger); opt-in so CI never calls an engine.
+  ...(process.env.PAI_SUITE_LIVE_AI === "1" && config.controllerEntrypoint && config.controllerDatabase ? [{ id: "A3", domain: "AI 助手", title: "真实模型：根据失败证据写修正代码",
+    tool: "受控执行器（Kiro 主→备→二备）→ 契约校验 → 沙箱", rationale: "端到端检验真实模型：答案引用已存记录，计划经确认后由原生检查决定结论。",
+    expected: "done；引用存在的记录；至少 1 个 cad-code 计划；确认执行后 min-wall 通过", run: async () => {
+      const plan = await ok<AssistantPlan>("POST", "/api/assistant/ai", { requestId: randomUUID(), projectId: project.id,
+        message: "最近一次生成代码的支架板厚 2.5 mm 没有通过最小壁厚。请用 cad-code 工具从模板出发写一份 CadQuery 代码，只把板厚改为 3.5 mm，其余不变，并说明依据。" });
+      const step = plan.plans.find(p => p.tool === "cad-code");
+      if (plan.state !== "done" || !step) return { matched: false, actual: `${plan.state}；计划 ${plan.plans.map(p => p.tool).join(",")}；${plan.interpretation.join(" | ").slice(0, 200)}`, evidence: { planId: plan.id } };
+      await ok("POST", `/api/assistant/plans/${plan.id}/preflight`, { planId: step.id });
+      const c = await ok<CadReview>("POST", `${P}/cad`, { ...step.payload, requestId: randomUUID() });
+      await ok("POST", `/api/assistant/plans/${plan.id}/confirmations`, { planId: step.id, recordKind: "cad-review", recordId: c.id });
+      const minWall = c.candidate?.checks.find(x => x.id === "min-wall");
+      return { matched: c.state === "completed" && minWall?.passed === true,
+        actual: `${plan.state}；${plan.ai?.engine?.profile} ${plan.ai?.engine?.model}；引用 ${plan.answer?.citations.map(x => x.handle).join(",") ?? "无"}；${c.verdict}；min-wall ${minWall?.observed}`,
+        evidence: { planId: plan.id, cadId: c.id, attempts: plan.ai?.attempts.map(a => `${a.profile}:${a.errorKind ?? a.status}`) } };
+    } } as Case] : []),
+  ...(env.agentcoreSandboxArn ? [{ id: "X1", domain: "云端沙箱（AgentCore arm64）", title: "生成代码在 Amazon Bedrock AgentCore microVM 中建模", tool: "AgentCore Runtime（BYOC arm64）",
+    rationale: "把不可信代码放到每任务独立、无网络路由、无凭据的 microVM；结论与本地沙箱相同。",
+    expected: "rejected；仅 min-wall（2.5）；transport agentcore；microVM 与 bubblewrap 均启用", run: async () => {
+      const xPort = await freePort();
+      const remote = await createApp({ ...config, state: join(root, "agentcore"), agentcoreSandboxArn: env.agentcoreSandboxArn, port: xPort });
+      try {
+        const h = { host: `127.0.0.1:${xPort}`, "content-type": "application/json" };
+        const inj = async <T>(method: "POST" | "GET", url: string, payload?: unknown) => { const r = await remote.app.inject({ method, url, headers: h, payload: payload === undefined ? undefined : JSON.stringify(payload) }); assert.equal(r.statusCode, 200, r.body); return r.json() as T; };
+        const caps = (await inj<{ capabilities: { cad: { generatedCode: { transport: string; available: boolean; remote?: { arch: string } } } } }>("GET", "/api/state")).capabilities.cad.generatedCode;
+        const p = await inj<Project>("POST", "/api/projects", { title: "AgentCore sandbox", intendedDecision: "Untrusted code in an isolated microVM",
+          requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
+        const c = await inj<CadReview>("POST", `/api/projects/${p.id}/cad`, generated(template.replace("T = 4.0 ", "T = 2.5 ")));
+        const wall = c.candidate?.checks.find(x => x.id === "min-wall")?.observed;
+        return { matched: caps.available && caps.transport === "agentcore" && c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["min-wall"]' && wall === 2.5
+            && c.sandbox?.transport === "agentcore" && c.sandbox?.layers?.microvm === true && c.sandbox?.layers?.bubblewrap === true,
+          actual: `${c.verdict}；失败 ${failed(c.candidate).join(",")}；min-wall ${wall}；${c.sandbox?.transport} ${caps.remote?.arch}；层 ${Object.entries(c.sandbox?.layers ?? {}).filter(([, v]) => v).map(([k]) => k).join("+")}`,
+          evidence: { cadId: c.id, adapters: c.receipts.map(r => r.adapter) } };
+      } finally { await remote.app.close(); }
+    } } as Case] : []),
 ];
 
 const results = [];

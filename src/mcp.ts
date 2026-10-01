@@ -16,7 +16,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /** Only a loopback HTTP workbench: the MCP server never sends workspace data to another host. */
@@ -143,6 +143,13 @@ export function createMcpServer(api: Fetch, agentName?: string): McpServer {
         changes: p.changes.filter(c => c.direction !== "same"), warnings: p.warnings })),
       rejected: plan.interpretation.filter(x => x.startsWith("已拒绝")), citations: plan.answer?.citations.map(c => c.handle) ?? [] };
   }));
+
+  server.registerTool("pai_check_cad_code", {
+    title: "检查 CadQuery 代码（静态策略）", annotations: READ,
+    description: "在提议 cad-code 计划之前，用工作台的沙箱静态策略检查代码（只解析语法树，不执行）。返回是否合规和违规清单。"
+      + "真正的建模只在维护者确认计划后，于隔离沙箱中执行。",
+    inputSchema: { code: z.string().min(1).max(20_000).describe("完整的 CadQuery 程序；模板见 pai_get_workspace 的 tools.cad-code.template") },
+  }, guard(async ({ code }) => api("/cad/code-check", { method: "POST", body: { code } })));
 
   server.registerTool("pai_get_plan", {
     title: "计划状态", annotations: READ,
