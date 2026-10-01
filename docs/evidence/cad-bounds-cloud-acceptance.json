@@ -1,0 +1,40 @@
+{
+  "verified_at": "2026-10-01T07:45:36.903575+00:00",
+  "release_hash": "90362101b08799f7c66be0df3c44a15c3e67c9c594c2cb28a687d4599e038437",
+  "source_commit": "858d7c91666c943edc722fde9a67f22e58fb5f3c",
+  "hosted_sources_match_tested_tree": true,
+  "original_documents_preserved": 67,
+  "original_step_hashes_preserved": 18,
+  "native_health": 200,
+  "active_records_before_switch": 0,
+  "old_release_retained": true,
+  "checked_at": "2026-10-01T07:46:47.802892+00:00",
+  "rules_sha256": "19b057a609f0476b3ce6833ead0f57a41d7e7a619520e4295ef600cac98de6cf",
+  "all_four_shared_listener_rules_unchanged": true,
+  "pai_anonymous_status": 302,
+  "cognito_required": true,
+  "wordpress_status": 200,
+  "wordpress_url": "https://www.oneai.host/",
+  "same_vpc_and_alb": true,
+  "ci": "https://github.com/noteflowai/pai-design-workbench/actions/runs/36830499113",
+  "tested_tree": "4415a221ff20ef043c5d5e8b1de5bf753c5517ea",
+  "merge_tree_matches_tested_tree": true,
+  "authenticated_browser_acceptance": {
+    "result": "passed",
+    "nominal_envelope_mm": [
+      60,
+      30,
+      50
+    ],
+    "candidate_native_checks_passed": 7,
+    "authenticated_step_download_hash_verified": true,
+    "mobile_width": 390,
+    "document_horizontal_overflow": false,
+    "javascript_errors": 0,
+    "new_maintainer_reviews": 1,
+    "independent_users_observed": 0,
+    "physical_validation": false
+  },
+  "private_records_and_credentials_included": false,
+  "scope": "Maintainer acceptance of nominal geometry and authentication. No independent user adoption, model-generation result, FEA, manufacturing tolerance or physical validation."
+}
