@@ -17,6 +17,8 @@ from pathlib import Path
 
 import cadquery as cq
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+from OCP.BRepBndLib import BRepBndLib
+from OCP.Bnd import Bnd_Box
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepClass3d import BRepClass3d_SolidClassifier
@@ -173,8 +175,12 @@ common = cq.Shape.cast(BRepAlgoAPI_Common(part.wrapped, motor.val().wrapped).Sha
 interference = max(0.0, common.Volume())
 volume = part.Volume()
 mass = volume * DENSITY
-bb = part.BoundingBox()
-size = [round(bb.xlen, 3), round(bb.ylen, 3), round(bb.zlen, 3)]
+# Staged GLB exports populate triangulations. Default CadQuery bounds may then
+# include mesh margins; acceptance must use the underlying geometric entities.
+bb = Bnd_Box()
+BRepBndLib.AddOptimal_s(part.wrapped, bb, False, False)
+bounds = bb.Get()
+size = [round(bounds[i + 3] - bounds[i], 3) for i in range(3)]
 valid = BRepCheck_Analyzer(part.wrapped).IsValid() and len(part.Solids()) == 1
 event({"type": "measure", "mass": round(mass, 2), "minWall": round(min_wall[1], 3), "interference": round(interference, 3)})
 
@@ -189,7 +195,7 @@ checks = [
     {"id": "hole-edge-distance", "passed": bool(edge_ok), "observed": worst_edge["edgeDistance"], "required": worst_edge["required"], "unit": "mm",
      "method": f"Hole centre to outer boundary of its mounting face ≥ {req['edgeDistanceFactor']} × d (DFM rule of thumb)", "holes": edge_rows},
     {"id": "mass", "passed": mass <= req["maxMassG"] + 1e-9, "observed": round(mass, 2), "required": req["maxMassG"], "unit": "g", "method": "B-Rep volume × 6061 aluminium 2.70 g/cm³"},
-    {"id": "envelope", "passed": all(s <= m + 1e-6 for s, m in zip(size, req["maxEnvelopeMm"])), "observed": size, "required": req["maxEnvelopeMm"], "unit": "mm", "method": "Axis-aligned bounding box"},
+    {"id": "envelope", "passed": all(s <= m + 1e-6 for s, m in zip(size, req["maxEnvelopeMm"])), "observed": size, "required": req["maxEnvelopeMm"], "unit": "mm", "method": "OCCT AddOptimal axis-aligned bounds; triangulation and shape-tolerance enlargement disabled"},
 ]
 cq.exporters.export(body, str(out / "part.step"))
 cq.exporters.export(body, str(out / "part.stl"), tolerance=0.02, angularTolerance=0.1)
