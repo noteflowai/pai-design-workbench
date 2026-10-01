@@ -10,11 +10,11 @@ import type { CadReview } from "../src/cad";
 type Which = "baseline" | "candidate";
 type CadRequirementsLike = { maxMassG: number; minWallMm: number; edgeDistanceFactor: number };
 export interface LiveSession {
-  requestId: string; title: string; kind: RunKind; running: boolean; recordId?: string; verdict?: string; state?: string;
+  requestId: string; title: string; kind: RunKind | "assistant"; running: boolean; recordId?: string; verdict?: string; state?: string;
   steps: { id: string; label: string; status: string; detail?: string }[];
   stages: Record<Which, Stage[]>; rays: Partial<Record<Which, Ray>>; render: Partial<Record<Which, { sample: number; samples: number }>>; current?: Which;
 }
-export type LiveTrack = <T>(requestId: string, title: string, kind: RunKind, work: () => Promise<T>) => Promise<T>;
+export type LiveTrack = <T>(requestId: string, title: string, kind: RunKind | "assistant", work: () => Promise<T>) => Promise<T>;
 
 /** One live session at a time; the assistant and the stage views both feed it. Presentation only. */
 export function useLiveSession() {
@@ -88,12 +88,42 @@ const SUGGESTIONS = [
   "验证相机偏移的 SmolVLA 记录评审",
 ];
 
+const PROFILE_NAME: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
+const ERR: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时", invalid_output: "协议校验未通过" };
+const STATE_CHIP: Record<string, [string, string]> = { done: ["已完成", "ok"], reconcile: ["待核对", "warn"], interrupted: ["已中断 · 待核对", "warn"],
+  deferred: ["达到尝试上限", "muted"], blocked: ["执行器拒绝", "bad"], "invalid-output": ["输出无效", "bad"], running: ["运行中", "live"] };
+const CITE_VIEW: Record<string, [string, string?]> = { review: ["validate", "robot-review"], "scene-review": ["validate", "blender-scene"], "cad-review": ["validate", "cad-part"],
+  "factory-review": ["validate", "factory-twin"], feedback: ["feedback"], release: ["deliver"], project: ["overview"], "project-version": ["requirements"], "factory-criteria": ["requirements"] };
+function openCitation(c: ReturnType<typeof useApp>, x: { kind: string; id: string }) {
+  const [view, kind] = CITE_VIEW[x.kind] ?? ["overview"];
+  if (view === "validate") c.navigate("validate", { kind, id: x.id });
+  else if (view === "feedback") c.navigate("feedback", { id: x.id });
+  else c.navigate(view as "overview");
+}
+function EngineMeta({ plan }: { plan: AssistantPlan }) {
+  if (plan.source !== "model") return <div className="meta"><span className="chip muted">规则解析 · 无模型调用</span><span className="chip muted">权限：无</span></div>;
+  const [label, tone] = STATE_CHIP[plan.state ?? "done"] ?? [plan.state ?? "", "muted"];
+  const e = plan.ai?.engine;
+  return <div className="meta">
+    <span className={`chip ${tone}`}>{label}</span>
+    {e && <span className="chip info" title={`版本 ${e.engineVersion ?? "未知"} · 模型依据 ${e.modelEvidence ?? "未知"}`}>{PROFILE_NAME[e.profile] ?? e.profile} · {e.model ?? "模型未知"}</span>}
+    <span className="chip muted">权限：无</span>
+    {(plan.ai?.attempts.length ?? 0) > 1 && <ol className="fallback" aria-label="引擎回退链">{plan.ai!.attempts.map(a =>
+      <li key={a.profile} className={a.status === "succeeded" ? "ok" : "bad"}>{PROFILE_NAME[a.profile] ?? a.profile}{a.status === "succeeded" ? " ✓" : ` · ${ERR[a.errorKind ?? ""] ?? a.errorKind ?? a.status}`}</li>)}</ol>}
+  </div>;
+}
+
 /** Docked AI assistant: intent → typed plan → human confirmation → same native routes as the forms. */
 export function Assistant({ onClose }: { onClose: () => void }) {
   const c = useApp();
   const { project, session } = c;
   const plans = (c.data.assistantPlans ?? []).filter(p => !project || !p.projectId || p.projectId === project.id).slice(-8);
   const [message, setMessage] = useState("");
+  const aiAvailable = Boolean(c.data.capabilities.modelProposal);
+  const [mode, setMode] = useState<"ai" | "rules">(() => (localStorage.getItem("pai-assistant-mode") as "ai" | "rules" | null) ?? "ai");
+  const useAi = aiAvailable && mode === "ai";
+  useEffect(() => { localStorage.setItem("pai-assistant-mode", mode); }, [mode]);
+  const [reconcileReason, setReconcileReason] = useState("已核对：文本请求，执行器拒绝了客户端工具与文件权限，工作区没有变化。");
   const [thinking, setThinking] = useState(false);
   const [running, setRunning] = useState<string>();
   const timeline = useRef<HTMLDivElement>(null);
@@ -109,8 +139,15 @@ export function Assistant({ onClose }: { onClose: () => void }) {
     e?.preventDefault();
     if (!text.trim()) return;
     setThinking(true);
-    try { await api<AssistantPlan>("/assistant/plans", { requestId: crypto.randomUUID(), projectId: project?.id, message: text.trim() }); setMessage(""); await c.refresh(); }
-    catch (error) { c.toast(error instanceof Error ? error.message : String(error), "bad"); } finally { setThinking(false); }
+    try {
+      const body = { requestId: crypto.randomUUID(), projectId: project?.id, message: text.trim() };
+      if (useAi) {
+        setMessage("");
+        await c.track(body.requestId, "AI 引擎规划", "assistant", () => api<AssistantPlan>("/assistant/ai", body));
+      } else { await api<AssistantPlan>("/assistant/plans", body); setMessage(""); }
+      await c.refresh();
+    }
+    catch (error) { c.toast(error instanceof Error ? error.message : String(error), "bad"); await c.refresh(); } finally { setThinking(false); }
   }
 
   async function execute(plan: AssistantPlan, step: ToolPlan) {
@@ -148,6 +185,8 @@ export function Assistant({ onClose }: { onClose: () => void }) {
 
   return <div className="assistant-inner" id="studio">
     <div className="assistant-head"><div><strong>AI 助手</strong><small>意图 → 类型化计划 → 你确认 → 原生执行</small></div>
+      {aiAvailable && <div className="segmented mode" role="group" aria-label="解析方式">{([["ai", "AI 引擎"], ["rules", "规则"]] as const).map(([id, label]) =>
+        <button key={id} type="button" aria-pressed={mode === id} className={mode === id ? "active" : ""} onClick={() => setMode(id)}>{label}</button>)}</div>}
       <button type="button" className="ghost" aria-label="关闭 AI 助手" onClick={onClose}>×</button></div>
     <div className="chat-timeline" ref={timeline} aria-live="polite">
       {plans.length === 0 && <div className="chat-empty"><p>用专业语言描述设计意图。助手把对话解析为可审查的计划，显示每项约束的收紧或放宽；只有你确认后才调用原生工具。它没有验收权。</p>
@@ -155,8 +194,18 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       {plans.map(plan => <div key={plan.id} className="turn">
         <div className="bubble user">{plan.message}</div>
         <div className="bubble assistant">
-          <div className="meta"><span className="chip muted">{plan.model.used ? "受控模型" : "确定性解析 · 无模型调用"}</span><span className="chip muted">权限：无</span></div>
-          {plan.interpretation.map((line, i) => <p key={i}>{line}</p>)}
+          <EngineMeta plan={plan} />
+          {plan.interpretation.map((line, i) => <p key={i} className={line.startsWith("已拒绝") ? "rejected-line" : ""}>{line}</p>)}
+          {plan.answer && <div className="ai-answer"><p>{plan.answer.text}</p>
+            {plan.answer.citations.length > 0 ? <div className="citations" role="group" aria-label="引用的记录">{plan.answer.citations.map(x =>
+              <button key={x.handle} type="button" className="cite" title={x.label} onClick={() => openCitation(c, x)}>{x.label}</button>)}</div>
+              : <small className="no-cite">未引用记录，请自行核实</small>}</div>}
+          {plan.source === "model" && (plan.state === "reconcile" || plan.state === "interrupted") && !plan.ai?.reconciliation && <div className="reconcile" role="group" aria-label="核对引擎影响">
+            <p className="warning">⚠ 这次运行的引擎原生影响未经核实（{plan.ai?.engine ? PROFILE_NAME[plan.ai.engine.profile] ?? plan.ai.engine.profile : "未返回"}）。核对前不能执行其计划，也不能发起新的 AI 请求；不会自动重试。</p>
+            <textarea rows={2} aria-label="核对说明" value={reconcileReason} onChange={e => setReconcileReason(e.target.value)} />
+            <button type="button" className="secondary" disabled={c.busy || reconcileReason.trim().length < 5} onClick={() => void c.perform(() =>
+              api(`/assistant/plans/${plan.id}/reconciliation`, { reason: reconcileReason }), "已记录核对结果；账本与回执保持不变。")}>记录核对结果</button></div>}
+          {plan.ai?.reconciliation && <small className="reconciled">已核对 · {plan.ai.reconciliation.actor} · {plan.ai.reconciliation.reason}</small>}
           {plan.plans.map(step => {
             const done = plan.confirmations.find(x => x.planId === step.id), key = `${plan.id}:${step.id}`;
             const changed = step.changes.filter(x => x.direction !== "same");
@@ -192,7 +241,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       <label className="visually-hidden" htmlFor="studio-input">设计意图</label>
       <textarea id="studio-input" ref={input} rows={3} maxLength={2000} value={message} placeholder="描述意图，例如：生成带遮挡的工作单元，占地 ≤ 12 m²"
         onChange={e => setMessage(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(); }} />
-      <div className="composer-foot"><small>{c.data.capabilities.modelProposal ? "受控模型可作为计划步骤调用" : "未配置受控模型 · 不调用模型"} · Ctrl/⌘+Enter</small>
+      <div className="composer-foot"><small>{useAi ? "AI 引擎：Kiro 主→备→二备→Codex→Claude" : aiAvailable ? "规则解析 · 不调用模型" : "未配置 AI 引擎 · 规则解析"} · Ctrl/⌘+Enter</small>
         <button type="submit" disabled={thinking || !message.trim()}>生成计划 ↵</button></div>
     </form>
   </div>;

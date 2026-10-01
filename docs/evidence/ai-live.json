@@ -1,0 +1,98 @@
+{
+  "schema": "pai-ai-live-1",
+  "checkedAt": "2026-10-01T06:25:30.228Z",
+  "executor": "noteflow-text-executor ec007f0 (acpx 0.19.3)",
+  "ledger": "dedicated PAI attempt-only ledger (money_limits null)",
+  "results": {
+    "kiro-answer": {
+      "state": "done",
+      "engine": {
+        "profile": "kiro-primary",
+        "model": "claude-opus-5.5",
+        "version": "2.24.0"
+      },
+      "attempts": [
+        "kiro-primary:succeeded"
+      ],
+      "effects": "none",
+      "plans": [],
+      "citations": [
+        "cad-1:cad-review",
+        "project:project"
+      ],
+      "rejectedPlans": 0,
+      "error": null,
+      "seconds": 16
+    },
+    "kiro-plan": {
+      "state": "done",
+      "engine": {
+        "profile": "kiro-primary",
+        "model": "claude-opus-5.5",
+        "version": "2.24.0"
+      },
+      "attempts": [
+        "kiro-primary:succeeded"
+      ],
+      "effects": "none",
+      "plans": [
+        {
+          "tool": "cad-review",
+          "changes": [
+            "variant:changed"
+          ]
+        }
+      ],
+      "citations": [
+        "cad-1:cad-review",
+        "project:project",
+        "version-1:project-version"
+      ],
+      "rejectedPlans": 0,
+      "error": null,
+      "seconds": 23
+    },
+    "codex-answer": {
+      "state": "reconcile",
+      "engine": null,
+      "attempts": [
+        "codex:invalid_output"
+      ],
+      "effects": null,
+      "plans": [],
+      "citations": [],
+      "rejectedPlans": 0,
+      "error": null,
+      "seconds": 19,
+      "reconciled": true
+    },
+    "claude-answer": {
+      "state": "reconcile",
+      "engine": {
+        "profile": "claude",
+        "model": "default",
+        "version": "0.84.0"
+      },
+      "attempts": [
+        "claude:succeeded"
+      ],
+      "effects": "unknown",
+      "plans": [],
+      "citations": [
+        "cad-1:cad-review",
+        "project:project"
+      ],
+      "rejectedPlans": 0,
+      "error": null,
+      "seconds": 16,
+      "reconciled": true
+    }
+  },
+  "promptAndAnswerContentRecorded": false,
+  "notes": [
+    "Kiro primary answered both runs; no quota fallback was needed this time.",
+    "Claude answered with valid citations; native effects are unverified by the executor, so the run was held for reconciliation and reconciled by the maintainer.",
+    "Codex failed executor protocol validation before work started ('Conflicting ACP model advertisements', invalid_output). This is the executor's open Codex gate; PAI recorded it as needing reconciliation and did not retry.",
+    "Ledger after verification: 4 admissions used of 20, money_limits null."
+  ]
+}

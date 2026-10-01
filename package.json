@@ -23,7 +23,8 @@
     "check": "npm run typecheck && npm test && npm run build",
     "setup:cad": "python3 tools/setup_cadquery.py",
     "test:cad": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-e2e.ts",
-    "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts"
+    "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts",
+    "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

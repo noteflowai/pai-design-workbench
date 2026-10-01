@@ -516,3 +516,20 @@ main { padding-bottom: calc(48px + var(--status)); }
 .compare th, .compare td { text-align: center; } .compare th[scope="row"], .compare thead th:first-child { text-align: left; white-space: nowrap; }
 .compare td.fail { background: var(--bad-soft); color: var(--bad); font-weight: 700; }
 .compare .sel { box-shadow: inset 0 0 0 2px var(--brand); }
+
+/* AI engine receipts, cited answers and reconciliation */
+.assistant-head { flex-wrap: wrap; }
+.segmented.mode button { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+.fallback { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; padding: 0; width: 100%; font-size: 11px; }
+.fallback li { padding: 2px 6px; border-radius: 4px; background: var(--sunken); color: var(--ink-2); }
+.fallback li.bad { background: var(--bad-soft); color: var(--bad); } .fallback li.ok { background: var(--ok-soft); color: var(--ok); }
+.fallback li + li::before { content: "→ "; color: var(--ink-3); }
+.ai-answer { margin-top: 8px; padding: 10px; border-left: 3px solid var(--brand); background: var(--sunken); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ai-answer p { white-space: pre-wrap; font-size: 13px; color: var(--ink); }
+.citations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cite { min-height: 28px; padding: 2px 8px; font-size: 11px; font-weight: 600; background: var(--surface); color: var(--brand-2); border: 1px solid var(--line-2); border-radius: 999px; white-space: normal; text-align: left; }
+.cite::before { content: "↗ "; } .cite:hover:not(:disabled) { background: var(--brand-soft); border-color: var(--brand); }
+.no-cite { color: var(--warn); }
+.rejected-line { color: var(--bad) !important; font-size: 12px !important; }
+.reconcile { display: grid; gap: 6px; margin-top: 8px; }
+.reconciled { display: block; margin-top: 6px; color: var(--ok); }

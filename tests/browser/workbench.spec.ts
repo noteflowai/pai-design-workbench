@@ -145,10 +145,11 @@ test("AI assistant plan runs native Blender live in the professional viewport", 
   await createProject(page);
   const assistant = page.getByRole("complementary", { name: "AI 助手" });
   await expect(assistant).toBeVisible();
+  await assistant.getByRole("button", { name: "规则", exact: true }).click();
   await assistant.locator("#studio-input").fill("生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m");
   await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
   const card = assistant.getByRole("article", { name: /计划 Blender 原生场景/ });
-  await expect(assistant.getByText("确定性解析 · 无模型调用").first()).toBeVisible();
+  await expect(assistant.getByText("规则解析 · 无模型调用").first()).toBeVisible();
   await expect(card.getByText("— → occluded")).toBeVisible();
   await card.getByRole("button", { name: "确认执行" }).click();
   await expect(page.getByRole("heading", { name: "原生验证", level: 1 })).toBeVisible();
@@ -185,6 +186,7 @@ test("factory criteria are frozen first; real Factory Twin seeds stay failed thr
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
   await createProject(page);
   const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await assistant.getByRole("button", { name: "规则", exact: true }).click();
   await assistant.locator("#studio-input").fill("评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C");
   await page.keyboard.press("Control+Enter");
   const review = assistant.getByRole("article", { name: /计划 导入已复核/ });
@@ -324,5 +326,62 @@ test("release gate: blocked until failures are closed, approval, compare matrix 
   await noOverflow(page);
   await expect(page.getByRole("contentinfo", { name: "状态栏" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("release-mobile.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test("AI engine: Kiro fallback receipt, cited answer, validated plan, reconciliation gate", async ({ page }, testInfo) => {
+  test.setTimeout(240_000);
+  const { writeFile } = await import("node:fs/promises");
+  const spec = (o: unknown) => writeFile(".state/browser/fake-executor.json", JSON.stringify(o));
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  // The two intended 409 rejections surface as toasts; Chrome also logs them as resource errors.
+  page.on("console", m => { if (m.type() === "error" && !/status of 409/.test(m.text())) errors.push(m.text()); });
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await assistant.getByRole("button", { name: "AI 引擎", exact: true }).click();
+  const out = (o: unknown) => "```json\n" + JSON.stringify(o) + "\n```";
+  await spec({ attempts: [{ profile: "kiro-primary", status: "failed", errorKind: "quota" }, { profile: "kiro-backup", status: "succeeded", answer: out({
+    kind: "plan", interpretation: ["保持壁厚 3 mm，复测紧凑化方案"], answer: { text: "cad-1 因最小壁厚 2.5 mm < 3 mm 被拒绝。", citations: ["cad-1"] },
+    plans: [{ ref: "p1", tool: "cad-review", title: "复测紧凑化方案", payload: { variant: "compact" } }, { ref: "p2", tool: "approve-release", payload: {} }] }) }] });
+  await assistant.locator("#studio-input").fill("为什么轻量化被拒绝？给出复测方案");
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  const fallback = assistant.getByRole("list", { name: "引擎回退链" }).last();
+  await expect(fallback).toContainText("Kiro 主账号 · 额度不足");
+  await expect(fallback).toContainText("Kiro 备用账号 ✓");
+  await expect(assistant.getByText("Kiro 备用账号 · claude-opus-5.5").last()).toBeVisible();
+  await expect(assistant.getByText(/已拒绝 AI 计划 p2（approve-release）/)).toBeVisible();
+  const cite = assistant.getByRole("group", { name: "引用的记录" }).last().getByRole("button", { name: /CAD 零件 · lightweight/ });
+  await cite.click();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible();
+  const card = assistant.getByRole("article", { name: "计划 复测紧凑化方案" });
+  await expect(card.getByText("— → compact").or(card.getByText("lightweight → compact"))).toBeVisible();
+  await card.getByRole("button", { name: "确认执行" }).click();
+  await expect(card.getByText(/已执行 · 与计划一致/)).toBeVisible({ timeout: 180_000 });
+  // An answer whose native effects are unverified blocks plans and further AI runs until reconciled.
+  await spec({ action: "reconcile", reason: "effects unknown", attempts: [{ profile: "claude", status: "succeeded", effects: "unknown", model: "default", version: "0.84.0",
+    answer: out({ kind: "plan", plans: [{ ref: "p1", tool: "robot-review", title: "相机偏移记录评审", payload: { candidate: "camera" } }] }) }] });
+  await assistant.locator("#studio-input").fill("再评一次相机偏移");
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  await expect(assistant.getByRole("group", { name: "核对引擎影响" })).toBeVisible();
+  await assistant.getByRole("article", { name: "计划 相机偏移记录评审" }).getByRole("button", { name: "确认执行" }).click();
+  await expect(page.getByRole("alert")).toContainText("尚未核对");
+  await page.getByRole("alert").getByRole("button", { name: "关闭通知" }).click();
+  await assistant.locator("#studio-input").fill("还有别的吗");
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  await expect(page.getByRole("alert")).toContainText("尚未核对");
+  await page.getByRole("alert").getByRole("button", { name: "关闭通知" }).click();
+  await assistant.getByRole("button", { name: "记录核对结果" }).click();
+  await expect(assistant.getByText(/已核对 · local-maintainer/)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("ai-desktop.png") });
+  const state = await (await page.request.get("/api/state")).json();
+  const runs = state.assistantPlans.filter((p: { source?: string }) => p.source === "model");
+  expect(runs.map((p: { state: string }) => p.state)).toEqual(["done", "reconcile"]);
+  expect(runs.every((p: { authority: string }) => p.authority === "none")).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
   expect(errors).toEqual([]);
 });

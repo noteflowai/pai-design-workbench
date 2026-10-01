@@ -17,6 +17,8 @@ import { reviewScene, type SceneReview } from "./scenes.js";
 import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
 import { LiveBus, type Stamped } from "./live.js";
 import { confirmPlan, createPlan, type AssistantPlan } from "./assistant.js";
+import { createAiPlan, reconcileAi } from "./ai.js";
+import { controllerConfigured, PROFILES } from "./controller.js";
 import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
 import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
@@ -142,7 +144,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       blender: Boolean(config.blender),
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
-      assistant: { mode: "deterministic intent to typed plans; confirmation required", modelInvocation: Boolean(config.controllerEntrypoint && config.controllerDatabase) },
+      assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? PROFILES : [] },
       liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));
@@ -226,6 +228,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return review;
   });
   app.post("/api/assistant/plans", async request => createPlan(store, request.body, Boolean(config.controllerEntrypoint && config.controllerDatabase)));
+  app.post("/api/assistant/ai", async (request, reply) =>
+    executeNative(reply, request.body, "assistant-plan", "assistant/plans", async () => { const r = await createAiPlan(store, config, request.body, lifecycle, live); return { ...r, state: r.state ?? "done" }; }));
+  app.get("/api/assistant/plans/:id", async (request, reply) => {
+    const plan = store.get<AssistantPlan & { state?: string }>("assistant-plan", paramId(request.params));
+    if (!plan) throw new DomainError("NOT_FOUND", "Assistant plan not found", 404);
+    return nativeResponse({ ...plan, state: plan.state ?? "done" }, reply, "assistant/plans");
+  });
+  app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {
     const scene = store.get<SceneReview>("scene-review", paramId(request.params));

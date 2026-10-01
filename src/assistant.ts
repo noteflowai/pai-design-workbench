@@ -30,7 +30,18 @@ export interface ToolPlan {
 export interface AssistantPlan {
   id: string; requestId: string; projectId?: string; projectRevision?: number; message: string; createdAt: string;
   interpretation: string[]; plans: ToolPlan[]; unmatched: boolean;
-  authority: "none"; model: { used: false; reason: string };
+  authority: "none"; model: { used: boolean; reason: string };
+  /** Model-sourced plans: executor outcome, engine receipts and any human reconciliation. */
+  source?: "rules" | "model";
+  state?: "running" | "done" | "reconcile" | "deferred" | "blocked" | "invalid-output" | "interrupted";
+  ai?: {
+    action?: string; reason?: string; effects?: string; reportSha256?: string; error?: string;
+    engine?: { profile: string; provider: string; model: string | null; engineVersion: string | null; modelEvidence: string | null };
+    attempts: { profile: string; provider: string; status: string; errorKind: string | null; model: string | null }[];
+    reconciliation?: { reason: string; at: string; actor: string };
+  };
+  answer?: { text: string; citations: { handle: string; kind: string; id: string; label: string }[] };
+  finishedAt?: string;
   confirmations: { planId: string; recordKind: string; recordId: string; at: string; match: "as-proposed" | "edited-before-execution" }[];
 }
 export const ConfirmPlan = z.object({
@@ -39,7 +50,7 @@ export const ConfirmPlan = z.object({
 }).strict();
 
 const num = (text: string, pattern: RegExp) => { const m = pattern.exec(text); return m ? Number(m[1]) : undefined; };
-function compare(field: string, from: unknown, to: unknown, stricter: "higher" | "lower" | "true"): PlanChange {
+export function compare(field: string, from: unknown, to: unknown, stricter: "higher" | "lower" | "true"): PlanChange {
   if (from === undefined) return { field, from: null, to, direction: "new" };
   if (canonical(from) === canonical(to)) return { field, from, to, direction: "same" };
   if (typeof from === "number" && typeof to === "number") {
@@ -49,7 +60,7 @@ function compare(field: string, from: unknown, to: unknown, stricter: "higher" |
   if (typeof from === "boolean" && typeof to === "boolean" && stricter === "true") return { field, from, to, direction: to ? "tightened" : "relaxed" };
   return { field, from, to, direction: "changed" };
 }
-const relaxWarning = (changes: PlanChange[]) => changes.some(c => c.direction === "relaxed")
+export const relaxWarning = (changes: PlanChange[]) => changes.some(c => c.direction === "relaxed")
   ? ["放宽了已冻结的约束：只会生成新的冻结版本，既有结论和失败案例保持不变。"] : [];
 
 export interface PlannerContext { project?: Project; lastScene?: SceneReview; lastCriteria?: FactoryCriteria; lastCad?: CadReview; modelConfigured: boolean }
@@ -217,6 +228,10 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
   if (!plan) throw new DomainError("NOT_FOUND", "Assistant plan not found", 404);
   const step = plan.plans.find(p => p.id === change.planId);
   if (!step) throw new DomainError("NOT_FOUND", "Plan step not found", 404);
+  // Plans from a model run are usable only when its effects are verified or a human has reconciled them.
+  if (plan.source === "model" && !(plan.state === "done" || (plan.state === "reconcile" && plan.ai?.reconciliation))) {
+    throw new DomainError("AI_RECONCILIATION_REQUIRED", "该 AI 运行的引擎影响尚未核对；先记录核对结果再执行其计划", 409);
+  }
   const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
     "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);
