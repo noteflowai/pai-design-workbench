@@ -69,7 +69,7 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 | 环节 | 实现与职责 |
 |---|---|
 | 专业研究 | Radar 原始快照、来源链接、来源自报等级与日期；不直接决定验收 |
-| 领域设计 | 冻结需求、比较条件；Blender 原生场景、射线/投影与几何检查；参数化 CAD/动力学待接入 |
+| 领域设计 | 冻结需求、比较条件；Blender 原生场景、射线/投影与几何检查；CadQuery/OCCT 参数化零件；动力学待接入 |
 | 运行控制 | NoteFlow 原生 text-proposal flow；使用既有预算账本，不初始化或重置预算 |
 | 原生验收 | Robot Reel 核验记录与配对统计；生成稳定种子 ID 的 JUnit，交由 EvalArc 对照 |
 | AI 工作室 | 确定性意图解析为 Zod 校验的计划；确认后走同一 API；受控模型仅作为显式计划步骤 |
