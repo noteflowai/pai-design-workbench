@@ -5,6 +5,7 @@ import type { SceneReview } from "../src/scenes";
 import type { FactoryCriteria, FactoryCriteriaValues, FactoryReview } from "../src/factory";
 import type { AssistantPlan } from "../src/assistant";
 import type { CadReview, CadRequirements } from "../src/cad";
+import type { CadSweep, SweepGrid } from "../src/sweep";
 import type { Release } from "../src/release";
 import type { ProjectVersion } from "../src/contracts";
 import type { Lifecycle, StageId, EvidenceKind } from "../src/lifecycle";
@@ -13,12 +14,12 @@ import type { LiveSession, LiveTrack } from "./studio";
 export type RunKind = EvidenceKind;
 export type ViewId = "overview" | StageId;
 export type State = {
-  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[];
+  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; cadSweeps?: CadSweep[];
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
   capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
-    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string } }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
+    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
 export const VIEWS: { id: ViewId; label: string; short: string; index?: number }[] = [
   { id: "overview", label: "项目总览", short: "总览" },
@@ -46,6 +47,7 @@ export function useApp(): Ctx {
 export const CAD_VARIANTS: Record<string, [string, string]> = {
   reference: ["基准设计", "4 mm 板厚 · Ø22.5 止口 · 完整安装板"], lightweight: ["轻量化", "板厚降至 2.5 mm 以减重"],
   "undersize-bore": ["止口孔偏小", "止口孔 Ø21.5 mm（电机止口 Ø22）"], compact: ["紧凑化", "降低安装板高度与宽度"],
+  parametric: ["参数化", "指定板厚、宽度、安装板高度与止口孔径"],
   generated: ["生成代码", "CadQuery 代码在隔离沙箱中建模"],
 };
 /** Code handed from the assistant or a recheck to the CAD editor; session-scoped, never sent anywhere else. */

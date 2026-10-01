@@ -70,6 +70,9 @@ jobs:
       - name: Generated CadQuery code in the OS sandbox (layers, template equivalence, recheck, limits)
         if: matrix.node == '24.21.0'
         run: npm run test:cad-code
+      - name: Native design-space sweep (preset equivalence, lightest feasible point, provenance)
+        if: matrix.node == '24.21.0'
+        run: npm run test:cad-sweep
       - name: Representative industrial design test cases across all native lanes
         if: matrix.node == '24.21.0'
         run: npm run test:suite
@@ -87,6 +90,7 @@ jobs:
             .state/evidence/blender-e2e.json
             .state/evidence/cad-e2e.json
             .state/evidence/cad-code-e2e.json
+            .state/evidence/cad-sweep-e2e.json
             .state/evidence/industrial-suite.json
             test-results/
           retention-days: 14

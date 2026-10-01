@@ -19,7 +19,7 @@ import { CadRequest, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 export const AssistantInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
 }).strict();
-export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "robot-review" | "cad-review" | "cad-code"
+export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "robot-review" | "cad-review" | "cad-code" | "cad-sweep"
   | "factory-criteria" | "factory-review" | "model-proposal";
 export interface PlanChange { field: string; from: unknown; to: unknown; direction: "new" | "same" | "tightened" | "relaxed" | "changed" }
 export interface ToolPlan {
@@ -46,7 +46,7 @@ export interface AssistantPlan {
   confirmations: { planId: string; recordKind: string; recordId: string; at: string; match: "as-proposed" | "edited-before-execution" }[];
 }
 export const ConfirmPlan = z.object({
-  planId: z.string().regex(/^p[0-9]{1,2}$/), recordKind: z.enum(["project", "scene-review", "review", "factory-criteria", "factory-review", "proposal", "cad-review"]),
+  planId: z.string().regex(/^p[0-9]{1,2}$/), recordKind: z.enum(["project", "scene-review", "review", "factory-criteria", "factory-review", "proposal", "cad-review", "cad-sweep"]),
   recordId: Id,
 }).strict();
 
@@ -243,7 +243,7 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
   // Plans from a model run are usable only when its effects are verified or a human has reconciled them.
   preflightPlan(store, planId, change.planId);
   const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
-    "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review" } as const)[step.tool];
+    "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review", "cad-sweep": "cad-sweep" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);
   const record = store.get<Record<string, unknown>>(change.recordKind, change.recordId);
   if (!record) throw new DomainError("NOT_FOUND", "Executed record not found", 404);

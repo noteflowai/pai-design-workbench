@@ -1,0 +1,37 @@
+{
+  "schema": "pai-cad-sweep-e2e-1",
+  "checkedAt": "2026-10-01T13:41:04.180Z",
+  "result": "passed",
+  "points": 12,
+  "seconds": 94,
+  "feasible": 2,
+  "lightestFeasible": {
+    "parameters": {
+      "thickness": 3,
+      "width": 60,
+      "plateHeight": 46,
+      "pilotBore": 22.5
+    },
+    "massG": 37.356
+  },
+  "referenceMassG": 48.368,
+  "pareto": [
+    8,
+    12
+  ],
+  "presetPointsReproduced": [
+    "reference",
+    "lightweight",
+    "compact"
+  ],
+  "chosenReview": {
+    "verdict": "accepted-cad-part",
+    "evalarcBlocking": 0
+  },
+  "refused": {
+    "forgedProvenance": "422 INVALID_SWEEP_POINT",
+    "over36Points": 400,
+    "outOfBounds": 400
+  },
+  "physicalValidation": false
+}

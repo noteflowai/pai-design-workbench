@@ -11,6 +11,7 @@ import { compare, relaxWarning, type AssistantPlan, type PlanChange, type PlanTo
 import { SceneRequest, SceneRequirements, type SceneReview } from "./scenes.js";
 import { CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
+import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
@@ -29,7 +30,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "cad-review", "cad-code", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "cad-review", "cad-code", "cad-sweep", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -42,6 +43,7 @@ const ModelPayload = {
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
   "factory-review": z.object({ criteria: z.string().min(1).max(40) }).strict(),
 } as const;
@@ -51,6 +53,7 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "robot-review": "Robot Reel 历史记录评审：candidate 为 reference/camera/dim",
   "scene-review": "Blender 工作单元：variant clear/occluded；requirements 可只写要改的字段",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
+  "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
   "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
     + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 MOTOR_AXIS_Z（电机轴高度 mm）赋值。坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
     + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
@@ -231,6 +234,21 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: p.variant, direction: context.lastCad ? (context.lastCad.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `CadQuery 参数化零件：NEMA 17 电机支架 · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };
+  }
+  if (t === "cad-sweep") {
+    const p = parsed as { grid: SweepGrid; requirements: Partial<CadRequirements> };
+    const prev = context.lastCad?.request.requirements;
+    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
+    const payload = { projectRevision: opts.revision, requirements, grid: p.grid };
+    SweepRequest.parse({ ...payload, requestId: placeholder });
+    const points = Object.values(p.grid).reduce((n, v) => n * new Set(v).size, 1);
+    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"), compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
+      compare("edgeDistanceFactor", prev?.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
+      compare("requireNoInterference", prev?.requireNoInterference, requirements.requireNoInterference, "true"),
+      { field: "grid", from: null, to: `${points} 个点`, direction: "new" }];
+    return { ...base, title: opts.title ?? `设计空间扫描：${points} 个点`, route: route("cad-sweeps"), method: "POST", payload, changes,
+      warnings: [...relaxWarning(changes), `约 ${Math.ceil(points * 6 / 60)} 分钟；只比较网格上实测过的点，不作验收结论。`, ...note],
+      evidence: "每个点的原生 B-Rep 建模与 7 项检查；最轻可行点与帕累托前沿" };
   }
   if (t === "cad-code") {
     if (!context.cadCode) throw new Error("生成代码通道不可用（沙箱未就绪）");

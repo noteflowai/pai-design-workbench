@@ -1,6 +1,6 @@
 {
   "name": "pai-design-workbench",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "A TypeScript workbench connecting PAI design requirements, native validation, replay and feedback.",
   "type": "module",
@@ -26,7 +26,8 @@
     "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts",
     "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts",
     "mcp": "node dist/src/mcp.js",
-    "test:cad-code": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-code-e2e.ts"
+    "test:cad-code": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-code-e2e.ts",
+    "test:cad-sweep": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-sweep-e2e.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

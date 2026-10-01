@@ -20,7 +20,12 @@ import { ISOLATION, sandboxArgs, sandboxRuntime, sandboxStatus, type SandboxRunt
 export const CAD_CHECKS = ["solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope"] as const;
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
 /** "generated": the candidate solid comes from CadQuery code (AI, external agent or maintainer) run in the OS sandbox. */
-export const CAD_VARIANTS = [...CAD_PRESETS, "generated"] as const;
+export const CAD_VARIANTS = [...CAD_PRESETS, "parametric", "generated"] as const;
+/** Bounded explicit parameters of the trusted recipe (variant "parametric", e.g. a chosen sweep point); mirrors native/cad_recipe.py BOUNDS. */
+export const CadParameters = z.object({
+  thickness: z.number().min(2).max(8), width: z.number().min(46).max(80), plateHeight: z.number().min(40).max(60), pilotBore: z.number().min(21).max(24),
+}).strict();
+export type CadParameters = z.infer<typeof CadParameters>;
 export const CadSource = z.object({ language: z.literal("cadquery-2.8"), code: z.string().min(40).max(20_000) }).strict();
 export type CadSource = z.infer<typeof CadSource>;
 export const CAD_FILES = ["part.step", "part.stl", "part.glb", "assembly.glb", "drawing.svg", "checks.json"] as const;
@@ -33,8 +38,13 @@ export type CadRequirements = z.infer<typeof CadRequirements>;
 export const DEFAULT_CAD_REQUIREMENTS: CadRequirements = { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] };
 export const CadRequest = z.object({
   requestId: Id, projectRevision: z.number().int().positive(), variant: z.enum(CAD_VARIANTS),
-  requirements: CadRequirements, feedbackId: Id.optional(), source: CadSource.optional(),
-}).strict().refine(r => (r.variant === "generated") === Boolean(r.source), { message: "variant generated requires source code, and only generated takes source", path: ["source"] });
+  requirements: CadRequirements, feedbackId: Id.optional(), source: CadSource.optional(), parameters: CadParameters.optional(),
+  /** Provenance only: the sweep and point a parametric candidate was chosen from. */
+  fromSweep: z.object({ sweepId: Id, point: z.number().int().min(1).max(36) }).strict().optional(),
+}).strict()
+  .refine(r => (r.variant === "generated") === Boolean(r.source), { message: "variant generated requires source code, and only generated takes source", path: ["source"] })
+  .refine(r => (r.variant === "parametric") === Boolean(r.parameters), { message: "variant parametric requires parameters, and only parametric takes them", path: ["parameters"] })
+  .refine(r => !r.fromSweep || r.variant === "parametric", { message: "fromSweep only applies to parametric candidates", path: ["fromSweep"] });
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
@@ -128,6 +138,14 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
   const publish: LiveBus["publish"] = (key, event) => live?.publish(key, event);
   if (!config.cadquery) throw new DomainError("CAD_NOT_CONFIGURED", "Set PAI_CADQUERY_PYTHON to a pinned CadQuery interpreter (npm run setup:cad)", 503);
   const generated = request.variant === "generated" ? request.source! : undefined;
+  if (request.fromSweep && !store.requestRun(request.requestId)) {
+    // Provenance must be true: the sweep is this project's, completed, and measured exactly these parameters.
+    const sweep = store.get<{ projectId: string; state: string; result?: { points: { index: number; parameters: unknown }[] } }>("cad-sweep", request.fromSweep.sweepId);
+    const point = sweep?.result?.points.find(p => p.index === request.fromSweep!.point);
+    if (!sweep || sweep.projectId !== project.id || sweep.state !== "completed" || !point || canonical(point.parameters) !== canonical(request.parameters)) {
+      throw new DomainError("INVALID_SWEEP_POINT", "fromSweep must reference a measured point of a completed sweep of this project with identical parameters", 422);
+    }
+  }
   const record: CadReview = { id: randomUUID(), projectId: project.id, projectRevision: request.projectRevision, request,
     requirementDigest: sha256(canonical({ projectRequirements: project.requirements, cadRequirements: request.requirements })),
     state: "running", createdAt: new Date().toISOString(), feedbackId: request.feedbackId,
@@ -149,7 +167,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const native = (file: string) => join(config.repository, "native", file);
     const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
-    const used = ["cad_bracket.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : [])];
+    const used = ["cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
     const scriptHash = sha256(await readFile(script));
@@ -165,7 +183,8 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       const label = `CadQuery ${name === "baseline" ? "基准零件" : "候选零件"}（${variant}）`;
       publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: "running", which: name });
       const input = join(directory, `${name}-input.json`);
-      await writePrivate(input, JSON.stringify({ variant, requirements: request.requirements, ...(codeSha256 ? { codeSha256 } : {}) }));
+      await writePrivate(input, JSON.stringify({ variant, requirements: request.requirements, ...(codeSha256 ? { codeSha256 } : {}),
+        ...(variant === "parametric" ? { parameters: request.parameters } : {}) }));
       await mkdir(target, { recursive: true, mode: 0o700 });
       const sandboxed = Boolean(generated && name === "candidate");
       if (sandboxed) await buildGenerated(config, publish, record, directory, runtime!, generated!, codeSha256!, request.requestId);

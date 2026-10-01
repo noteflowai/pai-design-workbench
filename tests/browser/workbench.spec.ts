@@ -493,3 +493,41 @@ test("generated CadQuery code: policy check, sandboxed build, native failure, re
   await noOverflow(page);
   expect(errors).toEqual([]);
 });
+
+test("design-space sweep: native points on a scatter, lightest feasible point becomes a normal accepted candidate", async ({ page }, testInfo) => {
+  test.setTimeout(420_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  const panel = page.locator(".card", { has: page.getByRole("heading", { name: "设计空间扫描" }) });
+  await panel.getByRole("textbox", { name: /板厚 t/ }).fill("2.5, 3, 4");
+  await panel.getByRole("textbox", { name: /宽度 W/ }).fill("60");
+  await panel.getByRole("textbox", { name: /安装板高度 H/ }).fill("46");
+  await expect(panel.getByText(/^3 个点/)).toBeVisible();
+  await panel.getByRole("button", { name: "运行扫描" }).click();
+  await expect(panel.getByRole("group", { name: "质量与最小壁厚散点图" })).toBeVisible({ timeout: 240_000 });
+  await expect(panel.getByText(/3 个点中 2 个满足全部 7 项检查/)).toBeVisible();
+  await expect(panel.getByRole("button", { name: /点 \d：t=2.5 .*未通过 最小壁厚/ })).toBeVisible();
+  // Default selection is the lightest feasible point; keyboard selection works on the plot.
+  await expect(panel.locator(".sweep-pick")).toContainText("t=3 · W=60 · H=46");
+  await panel.getByRole("button", { name: /点 \d：t=4 / }).press("Enter");
+  await expect(panel.locator(".sweep-pick")).toContainText("t=4");
+  await panel.getByRole("button", { name: /点 \d：t=3 / }).click();
+  await panel.getByRole("button", { name: "以此参数生成正式候选" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 240_000 });
+  const state = await (await page.request.get("/api/state")).json();
+  const cad = state.cads.at(-1);
+  expect(cad.request).toMatchObject({ variant: "parametric", parameters: { thickness: 3, width: 60, plateHeight: 46 } });
+  expect(cad.request.fromSweep.sweepId).toBe(state.cadSweeps.at(-1).id);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await expect(panel.getByRole("button", { name: "查看已生成的候选 →" })).toBeVisible();
+  await expect(panel.getByRole("textbox", { name: /板厚 t/ })).toHaveValue("2.5, 3, 4");
+  await expect(panel.getByText(/^3 个点/)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("sweep-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  expect(errors).toEqual([]);
+});

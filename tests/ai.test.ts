@@ -192,3 +192,19 @@ test("cad-code plans: offered only with a working sandbox; same contracts plus t
     assert.equal(s.store.list("cad-review").length, before, "planning never runs code");
   } finally { await s.cleanup(); }
 });
+
+test("cad-sweep plans are validated against the bounded grid and carry no authority", async () => {
+  const s = await setup();
+  try {
+    const plans = [
+      { ref: "p1", tool: "cad-sweep", title: "找最轻可行板厚", payload: { grid: { thickness: [2.5, 3, 3.5], width: [60], plateHeight: [46], pilotBore: [22.5] } } },
+      { ref: "p2", tool: "cad-sweep", payload: { grid: { thickness: [1, 2], width: [60], plateHeight: [46], pilotBore: [22.5] } } },
+    ];
+    const r = await s.ask("找出保持全部检查的最轻支架", { attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "plan", plans }) }] });
+    const plan = r.body as AssistantPlan;
+    assert.deepEqual(plan.plans.map(p => [p.id, p.tool, p.route]), [["p1", "cad-sweep", `/projects/${s.project.id}/cad-sweeps`]]);
+    assert.ok(plan.plans[0].changes.some(c => c.field === "grid" && c.to === "3 个点"));
+    assert.ok(plan.interpretation.some(x => /已拒绝 AI 计划 p2（cad-sweep）：参数不符合 schema/.test(x)));
+    assert.equal(s.store.list("cad-sweep").length, 0, "planning never runs a sweep");
+  } finally { await s.cleanup(); }
+});

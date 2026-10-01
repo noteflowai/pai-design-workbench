@@ -3,6 +3,7 @@ import { api, requestIdFor } from "../api";
 import { CANDIDATES, useApp } from "../context";
 import { Card, Chip, Empty, ViewHeader, time } from "../ui";
 import { runCad, runFactory, runReview, runScene } from "../actions";
+import { SweepPanel } from "./sweep";
 import { CAD_DRAFT_KEY, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import type { CandidateId } from "../../src/contracts";
 
@@ -114,9 +115,9 @@ function CadLane() {
   const feedback = q.get("feedback") ? c.data.feedback.find(f => f.id === q.get("feedback") && f.status === "fix-proposed") : undefined;
   const generated = variant === "generated";
   if (!cap) return <Empty title="未配置 CadQuery">运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
-  return <Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
+  return <><Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
     {feedback && <p className="notice" role="status">反馈复测：修改代码后提交，新回执将绑定到反馈「{feedback.observed.slice(0, 40)}」；零件要求保持不变。</p>}
-    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) => {
+    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).filter(([id]) => id !== "parametric").map(([id, [label, note]]) => {
       const off = id === "generated" && !sandbox?.available;
       return <label key={id} className={`option ${variant === id ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? sandbox?.reason : undefined}>
         <input type="radio" name="cad-variant" value={id} checked={variant === id} disabled={off} onChange={() => setVariant(id)} />
@@ -147,5 +148,7 @@ function CadLane() {
         const requirements = original?.request.requirements ?? { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm };
         void runCad(c, variant, requirements, generated ? code : undefined, feedback);
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
-  </Card>;
+  </Card>
+  {!feedback && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
+  </>;
 }

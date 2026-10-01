@@ -549,3 +549,22 @@ pre.code { white-space: pre; overflow-wrap: normal; overflow-x: auto; max-height
 .code-source { margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--surface); }
 .code-source summary { cursor: pointer; font-size: 12.5px; font-weight: 600; }
 .notice { padding: 8px 12px; border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--brand-2); font-size: 13px; margin: 0 0 12px; }
+
+/* Design-space sweep */
+.sweep-axes { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.sweep-plot { width: 100%; max-width: 640px; height: auto; display: block; margin: 8px 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sweep-plot .axis { stroke: var(--line-2); } .sweep-plot .req { stroke: var(--warn); stroke-dasharray: 4 3; }
+.sweep-plot text { font-size: 10px; fill: var(--ink-3); } .sweep-plot .req-label { fill: var(--warn); }
+.sweep-plot .pt { cursor: pointer; stroke: #fff; stroke-width: 1.5; } .sweep-plot .pt.ok { fill: var(--ok); } .sweep-plot .pt.bad { fill: var(--bad); opacity: .75; }
+.sweep-plot .pt.sel { stroke: var(--ink); stroke-width: 2.5; } .sweep-plot .pt:focus-visible { outline: none; stroke: var(--brand); stroke-width: 3; }
+.sweep-plot .pareto { fill: none; stroke: var(--ok); stroke-width: 1.5; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; font-size: 12px; color: var(--ink-3); margin: 0 0 8px; }
+.legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.legend .dot.ok { background: var(--ok); } .legend .dot.bad { background: var(--bad); } .legend .dot.ring { border: 1.5px solid var(--ok); }
+.sweep-pick { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--sunken); margin: 8px 0; }
+.sweep-pick > span { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; }
+.sweep-pick button { margin-left: auto; }
+.sweep-table { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+.sweep-table th, .sweep-table td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.sweep-table th:last-child, .sweep-table td:last-child { text-align: left; white-space: normal; }
+.sweep-table tr { cursor: pointer; } .sweep-table tr.fail td { color: var(--ink-3); } .sweep-table tr.sel td { background: var(--brand-soft); }

@@ -126,7 +126,7 @@ export function Validate() {
   const { project, route, session } = c;
   const runs = projectRuns(c.data, project?.id);
   const kind = route.params.get("kind") as RunKind | null, id = route.params.get("id");
-  const live = session?.running && session.kind !== "assistant" ? { ...session, kind: session.kind as RunKind } : undefined;
+  const live = session?.running && session.kind !== "assistant" && session.kind !== "cad-sweep" ? { ...session, kind: session.kind as RunKind } : undefined;
   const selected: RunItem | undefined = runs.find(r => r.id === id) ?? (live && !id ? undefined : runs.find(r => !kind || r.kind === kind));
   const liveKind = live && !selected ? live.kind : undefined;
   if (!project) return <><ViewHeader step="阶段 3 / 6 · 原生验证" title="原生验证" /><Empty title="先冻结需求" action={<button type="button" onClick={() => c.navigate("requirements", { new: "1" })}>新建评审任务</button>} /></>;
@@ -145,7 +145,7 @@ export function Validate() {
           <small>{time(r.createdAt)} · 需求 v{r.revision} · {r.id.slice(0, 8)}</small></button>; })}
       </nav>
       <div className="detail">
-        {session && session.kind !== "assistant" && (session.running || session.recordId === selected?.id) && <Card><LiveSteps session={session} /></Card>}
+        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && (session.running || session.recordId === selected?.id) && <Card><LiveSteps session={session} /></Card>}
         {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
         {detailKind === "blender-scene" && <SceneDetail scene={selected ? c.data.scenes.find(s => s.id === selected.id) : undefined} />}
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
