@@ -222,6 +222,17 @@ export function createPlan(store: Store, input: unknown, modelConfigured: boolea
   return claimed === record.id ? record : store.get<AssistantPlan>("assistant-plan", claimed)!;
 }
 
+/** Gate checked before a plan step runs any native tool, and again when its execution is recorded. */
+export function preflightPlan(store: Store, planId: string, stepId: string): { planId: string; stepId: string; allowed: true } {
+  const plan = store.get<AssistantPlan>("assistant-plan", planId);
+  if (!plan) throw new DomainError("NOT_FOUND", "Assistant plan not found", 404);
+  if (!plan.plans.some(p => p.id === stepId)) throw new DomainError("NOT_FOUND", "Plan step not found", 404);
+  if (plan.source === "model" && !(plan.state === "done" || (plan.state === "reconcile" && plan.ai?.reconciliation))) {
+    throw new DomainError("AI_RECONCILIATION_REQUIRED", "该 AI 运行的引擎影响尚未核对；先记录核对结果再执行其计划", 409);
+  }
+  return { planId, stepId, allowed: true };
+}
+
 /** Link an executed record to its plan; records whether the user edited the proposal first. */
 export function confirmPlan(store: Store, planId: string, input: unknown): AssistantPlan {
   const change = ConfirmPlan.parse(input);
@@ -230,9 +241,7 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
   const step = plan.plans.find(p => p.id === change.planId);
   if (!step) throw new DomainError("NOT_FOUND", "Plan step not found", 404);
   // Plans from a model run are usable only when its effects are verified or a human has reconciled them.
-  if (plan.source === "model" && !(plan.state === "done" || (plan.state === "reconcile" && plan.ai?.reconciliation))) {
-    throw new DomainError("AI_RECONCILIATION_REQUIRED", "该 AI 运行的引擎影响尚未核对；先记录核对结果再执行其计划", 409);
-  }
+  preflightPlan(store, planId, change.planId);
   const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
     "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);

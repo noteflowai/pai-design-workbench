@@ -375,8 +375,10 @@ test("AI engine: Kiro fallback receipt, cited answer, validated plan, reconcilia
   await assistant.locator("#studio-input").fill("再评一次相机偏移");
   await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
   await expect(assistant.getByRole("group", { name: "核对引擎影响" })).toBeVisible();
+  const reviewsBefore = (await (await page.request.get("/api/state")).json()).reviews.length;
   await assistant.getByRole("article", { name: "计划 相机偏移记录评审" }).getByRole("button", { name: "确认执行" }).click();
   await expect(page.getByRole("alert")).toContainText("尚未核对");
+  expect((await (await page.request.get("/api/state")).json()).reviews.length, "an unreconciled plan must not start a native run").toBe(reviewsBefore);
   await page.getByRole("alert").getByRole("button", { name: "关闭通知" }).click();
   await assistant.locator("#studio-input").fill("还有别的吗");
   await assistant.getByRole("button", { name: "生成计划 ↵" }).click();

@@ -42,7 +42,7 @@ const FACTORY_CHECK: Record<string, string> = { "output-per-seed": "单种子产
 const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性" };
 const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络" };
-export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板" };
+export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", generated: "生成代码" };
 const CANDIDATE: Record<string, string> = { reference: "基准设置", camera: "相机偏移", dim: "弱光设置" };
 
 function latestBy<T extends { createdAt: string }>(items: T[], key: (item: T) => string): T[] {
@@ -51,6 +51,7 @@ function latestBy<T extends { createdAt: string }>(items: T[], key: (item: T) =>
   return [...map.values()];
 }
 
+const cadKey = (x: CadReview) => `${x.request.variant}:${x.sandbox?.codeSha256 ?? ""}:${canonical(x.request.requirements)}`;
 export function failingCases(s: LifecycleSnapshot): FailingCase[] {
   const cases: FailingCase[] = [];
   const bind = (c: Omit<FailingCase, "feedbackId" | "feedbackStatus">): FailingCase => {
@@ -71,10 +72,12 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
       }
     }
   }
-  for (const cad of latestBy((s.cads ?? []).filter(x => x.state === "completed" && !x.feedbackId), x => canonical(x.request.requirements) + x.request.variant)) {
+  // A candidate is its variant plus requirements; generated parts are also identified by their code, so a later
+  // passing code revision never hides the failure of a different one.
+  for (const cad of latestBy((s.cads ?? []).filter(x => x.state === "completed" && !x.feedbackId), cadKey)) {
     for (const check of cad.baseline?.checks ?? []) {
       if (check.passed && cad.candidate?.checks.find(c => c.id === check.id)?.passed === false) {
-        cases.push(bind({ kind: "cad-part", runId: cad.id, seed: null, checkId: check.id, label: `CAD ${CAD_CHECK[check.id] ?? check.id}：基准通过，${CAD_VARIANT[cad.request.variant]}失败` }));
+        cases.push(bind({ kind: "cad-part", runId: cad.id, seed: null, checkId: check.id, label: `CAD ${CAD_CHECK[check.id] ?? check.id}：基准通过，${CAD_VARIANT[cad.request.variant]}${cad.sandbox ? `（代码 ${cad.sandbox.codeSha256.slice(0, 8)}）` : ""}失败` }));
       }
     }
   }
@@ -91,7 +94,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   const runs = [
     ...s.reviews.map(r => ({ kind: "robot-review" as const, id: r.id, state: r.state, verdict: r.decision?.verdict, createdAt: r.createdAt, key: `robot:${r.candidate}` })),
     ...s.scenes.map(r => ({ kind: "blender-scene" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `scene:${r.request.variant}:${canonical(r.request.requirements)}` })),
-    ...(s.cads ?? []).map(r => ({ kind: "cad-part" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `cad:${r.request.variant}:${canonical(r.request.requirements)}` })),
+    ...(s.cads ?? []).map(r => ({ kind: "cad-part" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `cad:${cadKey(r)}` })),
     ...s.factoryReviews.map(r => ({ kind: "factory-twin" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `factory:${r.criteriaId}` })),
   ];
   const completed = runs.filter(r => r.state === "completed"), running = runs.filter(r => r.state === "running");

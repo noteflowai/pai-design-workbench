@@ -158,6 +158,8 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       const resolved: Record<string, string> = {};
       for (const x of plan.confirmations) resolved[x.planId] = x.recordId;
       if (step.dependsOn && !resolved[step.dependsOn]) throw new Error(`请先确认前置计划 ${step.dependsOn}`);
+      // Server gate before any native tool runs (unreconciled AI runs, missing steps).
+      await api(`/assistant/plans/${plan.id}/preflight`, { planId: step.id });
       let projectId = project?.id, revision = project?.revision;
       const projectStep = plan.plans.find(p => ["create-project", "update-requirements"].includes(p.tool));
       if (projectStep && resolved[projectStep.id] && step.id !== projectStep.id) {

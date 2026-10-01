@@ -94,3 +94,18 @@ test("factory failing seeds become lifecycle cases; API exposes lifecycles per p
     assert.equal((await app.inject({ url: `/api/projects/${randomUUID()}/lifecycle`, headers: h })).statusCode, 404);
   } finally { await app.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+test("generated CAD parts are distinct candidates: a passing code revision never hides another revision's failure", () => {
+  const checks = (wall: boolean) => ({ checks: ["solid-valid", "min-wall"].map(id => ({ id, passed: id === "min-wall" ? wall : true })) });
+  const requirements = { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] };
+  const part = (code: string, wall: boolean, at: string) => ({ id: randomUUID(), projectId: project.id, projectRevision: 1, state: "completed", createdAt: at,
+    verdict: wall ? "accepted-cad-part" : "rejected", request: { variant: "generated", requirements, source: { language: "cadquery-2.8", code } },
+    sandbox: { codeSha256: code.padEnd(64, "0"), isolation: [], status: "ok" }, baseline: checks(true), candidate: checks(wall) });
+  const thin = part("a1", false, "2026-10-01T01:00:00.000Z"), revised = part("b2", true, "2026-10-01T02:00:00.000Z");
+  const l = computeLifecycle({ ...empty(), cads: [thin, revised] } as unknown as LifecycleSnapshot);
+  assert.deepEqual(l.failingCases.map(c => [c.runId, c.checkId]), [[thin.id, "min-wall"]]);
+  assert.match(l.failingCases[0].label, /生成代码（代码 a1000000）失败/);
+  // Same code and requirements is the same candidate: as for presets, its latest run stands.
+  const same = part("a1", true, "2026-10-01T03:00:00.000Z");
+  assert.equal(computeLifecycle({ ...empty(), cads: [thin, same] } as unknown as LifecycleSnapshot).failingCases.length, 0);
+});

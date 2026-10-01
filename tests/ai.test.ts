@@ -113,6 +113,8 @@ test("unverified engine effects block plans and new runs until a human reconcili
     assert.equal(plan.state, "reconcile"); assert.equal(plan.ai!.engine!.profile, "codex"); assert.equal(plan.plans.length, 1);
     const review = { id: randomUUID(), projectId: s.project.id, createdAt: new Date().toISOString(), state: "completed", candidate: "camera", request: { candidate: "camera" } };
     s.store.insert("review", review as never);
+    const pre = await s.call("POST", `/api/assistant/plans/${plan.id}/preflight`, { planId: "p1" });
+    assert.equal(pre.status, 409, "the gate runs before any native tool is started"); assert.equal(pre.body.error, "AI_RECONCILIATION_REQUIRED");
     let c = await s.call("POST", `/api/assistant/plans/${plan.id}/confirmations`, { planId: "p1", recordKind: "review", recordId: review.id });
     assert.equal(c.status, 409); assert.equal(c.body.error, "AI_RECONCILIATION_REQUIRED");
     r = await s.ask("再问一次", { attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "clarify", interpretation: ["?"] }) }] });
@@ -120,6 +122,7 @@ test("unverified engine effects block plans and new runs until a human reconcili
     assert.equal((await s.call("POST", `/api/assistant/plans/${plan.id}/reconciliation`, { reason: "x" })).status, 400);
     const rec = await s.call("POST", `/api/assistant/plans/${plan.id}/reconciliation`, { reason: "Codex 会话无工具调用；工作区未改动" });
     assert.equal(rec.body.ai.reconciliation.actor, "local-maintainer");
+    assert.equal((await s.call("POST", `/api/assistant/plans/${plan.id}/preflight`, { planId: "p1" })).status, 200);
     c = await s.call("POST", `/api/assistant/plans/${plan.id}/confirmations`, { planId: "p1", recordKind: "review", recordId: review.id });
     assert.equal(c.status, 200);
     r = await s.ask("再问一次", { attempts: [{ profile: "kiro-primary", status: "succeeded", answer: out({ kind: "clarify", interpretation: ["需要哪个零件？"] }) }] });

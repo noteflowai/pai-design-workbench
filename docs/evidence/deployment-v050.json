@@ -1,0 +1,71 @@
+{
+  "schema": "pai-aws-verification-v050",
+  "site": "https://pai.oneai.host",
+  "release": "24954541e4c270490c9d12ca2bc24b364061184a04cfef3ad6b459361878a65e",
+  "sourceCommit": "ffc44df",
+  "checkedAt": "2026-10-01T11:52:10.358Z",
+  "capabilities": {
+    "generatedCode": true,
+    "reason": null,
+    "isolation": [
+      "no-network",
+      "read-only-root",
+      "hidden-home-state-credentials",
+      "pid-ipc-uts-user-namespaces",
+      "no-capabilities",
+      "clear-environment",
+      "writable-output-only",
+      "rlimit-cpu-memory-files",
+      "audit-hook",
+      "restricted-builtins"
+    ],
+    "engines": [
+      "kiro-primary",
+      "kiro-backup",
+      "kiro-backup2"
+    ]
+  },
+  "generated": {
+    "state": "completed",
+    "verdict": "accepted-cad-part",
+    "sandbox": "ok",
+    "failed": [],
+    "minWall": 3.5,
+    "adapters": [
+      "cadquery-native",
+      "cadquery-sandbox",
+      "cadquery-sandbox-check",
+      "evalarc-native"
+    ],
+    "codeSha256": "4009e7e13c221358cee5e39ab421ed51d2196675b0cf1b7ede7ff987a6d435f1",
+    "seconds": 16
+  },
+  "ai": {
+    "state": "done",
+    "engine": "kiro-primary",
+    "model": "claude-opus-5.5",
+    "seconds": 29,
+    "attempts": [
+      "kiro-primary:succeeded"
+    ],
+    "tools": [
+      "cad-code"
+    ],
+    "rejected": [],
+    "codeLines": 31,
+    "secondsSource": "stored createdAt→finishedAt of the assistant-plan record"
+  },
+  "aiExecuted": {
+    "match": "as-proposed",
+    "state": "completed",
+    "verdict": "accepted-cad-part",
+    "sandbox": "ok",
+    "error": null,
+    "failed": [],
+    "minWall": 3.5
+  },
+  "result": "passed",
+  "consoleErrors": 0,
+  "promptAndAnswerContentRecorded": false,
+  "note": "Verification ran twice: the first pass completed the editor/sandbox steps and started the real Kiro request but its wait ended early (state still running); the resumed pass confirmed the same AI run's cad-code plan. One real Kiro attempt was used; nothing was replayed."
+}

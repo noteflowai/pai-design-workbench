@@ -16,7 +16,7 @@ import { Store } from "./store.js";
 import { reviewScene, type SceneReview } from "./scenes.js";
 import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
 import { LiveBus, type Stamped } from "./live.js";
-import { confirmPlan, createPlan, type AssistantPlan } from "./assistant.js";
+import { confirmPlan, createPlan, type AssistantPlan, preflightPlan } from "./assistant.js";
 import { contextView, createAiPlan, createExternalPlan, reconcileAi, resolveHandle } from "./ai.js";
 import { controllerConfigured, PROFILES } from "./controller.js";
 import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
@@ -261,6 +261,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
+  app.post("/api/assistant/plans/:id/preflight", async request =>
+    preflightPlan(store, paramId(request.params), z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict().parse(request.body).planId));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {
     const scene = store.get<SceneReview>("scene-review", paramId(request.params));
