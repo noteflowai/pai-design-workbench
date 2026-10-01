@@ -41,6 +41,8 @@
 | `test:native` / `test:blender` / `test:cad` / `test:suite` | 全部通过；14 个工业用例与预期一致 |
 | 界面复查 | 1440/1280/1024/768/390 px 逐页无溢出、裁切、遮挡或过小控件 |
 
+线上验收（发布包 `3709ae89…02d9`，[CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36816402095) 三个作业通过）：Cognito 登录后实际执行 CAD 失败 → 反馈 → 复测；关闭反馈前准入 2 项未通过、按钮禁用，关闭后 5 项通过；创建并批准 R1，审批人记录为 Cognito 身份；候选对比矩阵显示 1 项失败；修订需求为 v2 后 R1 自动变为已废止。跨源审批请求 403，未登录访问版本历史重定向到登录，已有反馈与 CAD 文件摘要不变，390 px 无横向溢出，控制台无错误。WordPress 路由 100/110/default 不变、公网 200、目标健康。回执：[线上流程](evidence/deployment-result-v030.json)、[基础设施](evidence/deployment-infra-v030.json)；截图：[发布](evidence/cloud-v030-release.png)、[对比](evidence/cloud-v030-compare.png)、[手机](evidence/cloud-v030-mobile.png)。本轮新增 2 个维护者验收任务（第一次验收在截图步骤超时，已批准的发布保留）；独立参与人数仍为 0。
+
 截图：[发布](evidence/release-desktop.png)、[候选对比](evidence/release-compare.png)、[手机](evidence/release-mobile.png)。
 
 ## 0.2.2 界面复查发布（2026-10-01）

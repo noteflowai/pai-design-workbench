@@ -1,0 +1,37 @@
+{
+  "schema": "pai-aws-deployment-verification-4",
+  "site": "https://pai.oneai.host",
+  "checkedAt": "2026-10-01T04:56:18.564Z",
+  "version": "0.3.0",
+  "before": {
+    "projects": 14,
+    "cads": 7,
+    "feedback": 6,
+    "releases": 1
+  },
+  "flow": {
+    "projectId": "c6413173-11c3-4610-94bb-c365c569e9eb",
+    "release": "R1",
+    "admissionBlockedBeforeClose": 2,
+    "admissionPassedAfterClose": 5,
+    "approverIsCognito": true,
+    "compareFailCells": 1,
+    "revisionSupersededRelease": true,
+    "versions": 2
+  },
+  "guards": {
+    "crossOriginReleaseApprovalRejected": true,
+    "anonymousVersions": 302,
+    "mobileNoOverflow": true,
+    "existingRecordsUnchanged": true
+  },
+  "result": "passed",
+  "consoleErrors": 0,
+  "independentParticipants": 0,
+  "physicalValidated": false,
+  "modelProposalExecuted": false,
+  "testedCodeCommit": "a4035871abb5c9065f409cd4cce1c9983d79a80e",
+  "releaseSha256": "3709ae89f38115ee7507a9fab74773b7ba9f2e67156e6bf1aea4b9dbd74002d9",
+  "ciRun": "https://github.com/noteflowai/pai-design-workbench/actions/runs/36816402095",
+  "note": "A first run of this script stopped at a screenshot timeout after approving a release; that maintainer project and release remain on the host."
+}
