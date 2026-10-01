@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import type { Adapters } from "../src/adapters.js";
@@ -24,7 +24,8 @@ const quota = (profile: string) => ({ profile, status: "failed", errorKind: "quo
 async function setup() {
   const dir = await mkdtemp(join(tmpdir(), "pai-ai-"));
   const ledger = join(dir, "ledger.sqlite3"); await writeFile(ledger, "");
-  const config = { ...configuration(), state: dir, controllerEntrypoint: fake, controllerDatabase: ledger };
+  // Self-contained: the fake executor's directory is its control root, independent of the host's checkouts.
+  const config = { ...configuration(), state: dir, controllerEntrypoint: fake, controllerDatabase: ledger, controlRoot: dirname(fake) };
   const { app, store, workbench } = await createApp(config, {} as Adapters);
   const p = workbench.createProject(task);
   const cad = { id: randomUUID(), projectId: p.id, projectRevision: 1, request: { requestId: randomUUID(), projectRevision: 1, variant: "lightweight", requirements: DEFAULT_CAD_REQUIREMENTS },
