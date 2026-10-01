@@ -1,0 +1,57 @@
+{
+  "schema": "pai-aws-ai-verification-1",
+  "site": "https://pai.oneai.host",
+  "checkedAt": "2026-10-01T08:33:38.788Z",
+  "capabilities": {
+    "mode": "typed plans; confirmation required",
+    "modelInvocation": true,
+    "engines": [
+      "kiro-primary",
+      "kiro-backup",
+      "kiro-backup2"
+    ]
+  },
+  "reconciled": [
+    "4c8ba9f9-eefb-47e7-913e-d23835e51490"
+  ],
+  "ai": {
+    "state": "done",
+    "engine": "kiro-primary",
+    "model": "claude-opus-5.5",
+    "attempts": [
+      "kiro-primary:succeeded"
+    ],
+    "citations": [
+      "cad-1:cad-review",
+      "project:project",
+      "version-1:project-version"
+    ],
+    "plans": [
+      {
+        "tool": "cad-review",
+        "variant": "reference",
+        "minWallMm": 3
+      },
+      {
+        "tool": "cad-review",
+        "variant": "compact",
+        "minWallMm": 3
+      }
+    ],
+    "rejectedPlans": 0,
+    "seconds": 30,
+    "authority": "none"
+  },
+  "confirmed": {
+    "match": "as-proposed",
+    "verdict": "rejected",
+    "variant": "compact"
+  },
+  "guards": {
+    "crossOriginAiRejected": true,
+    "anonymousAi": 302
+  },
+  "result": "passed",
+  "consoleErrors": 0,
+  "promptAndAnswerContentRecorded": false
+}

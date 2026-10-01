@@ -10,7 +10,8 @@
 
 ```text
 浏览器 → 现有 ALB HTTPS → Cognito 登录 → 独立 EC2 工作台
-                                     ├─ Node 24.21 LTS + Blender 5.2.2 LTS
+                                     ├─ Node 24.21 LTS + Blender 5.2.2 LTS + CadQuery 2.8
+                                     ├─ AI：NoteFlow 执行器 ec007f0 + Kiro CLI 2.24.0（主→备→二备）
                                      ├─ 加密 gp3 持久化卷：SQLite、原生文件与回执
                                      └─ AWS Backup：每日快照，保留 14 天
 ```
@@ -51,6 +52,20 @@ python3 tools/aws_operator.py login-file
 ```
 
 第二条只将凭据写入被 Git 忽略的 `.state/deploy/admin-login.json`，权限为 0600；终端不打印密码。`send --script /path/to/reviewed-script.sh` 与 `result --command-id ID` 可用于明确授权的实例检查。不要在检查脚本中打印凭据。
+
+## AI 引擎
+
+托管站点只启用 Kiro 主账号、备用账号和二备账号。Codex 依赖个人登录，Claude 需要额外的 Bedrock 授权，所以都不在托管端启用。
+
+- **密钥。** 三个密钥保存在 Secrets Manager 的 `pai-workbench/kiro-keys`。实例角色只能读取；运维角色只能写入和描述，通过 `python3 tools/aws_operator.py put-ai-keys` 从本机密钥文件上传，终端不显示任何值。
+- **执行器源码。** 按固定提交打包成单独的 S3 资产（`ExecutorKey`），不进入 Git，也不进入发布包。
+- **发布时的安装。** `infra/install_ai.sh` 以 `pai` 用户身份执行：
+  - 校验 SHA-256 后安装 Kiro 和执行器；
+  - 把密钥写成仅属主可读写（0600）的文件；
+  - 按 `tools/ai-ledger-policy.json` 创建独立账本（只限尝试次数：每天 20 次，单次运行最多 5 次，Kiro 12 次，不设金额上限）。已有账本只复用，不替换也不重置；
+  - 写入 systemd drop-in。
+- **沙箱。** 服务单元使用 `ProtectSystem=strict`，Kiro 和 acpx 的状态目录 `~/.kiro`、`~/.acpx`、`~/.cache`、`~/.local` 单独设为可写，存放凭据的 `~/.config` 对服务保持只读。
+- **出错时。** 引擎回执显示 `work_started=false`、`effects=unknown` 时，界面要求人工核对，不会自动重放。
 
 ## 持久化与更新
 

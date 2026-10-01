@@ -78,6 +78,12 @@ flowchart LR
 
 **Factory Twin.** Evidence is byte-identical upstream `seeds.json` + `manifest.json` (bundled from Robot Reel `b3ee5c7`, Apache-2.0, extracted from git objects). Criteria are a separate frozen record that must exist before import. Consistency is checked by recomputing the upstream summary; acceptance is computed per seed from frozen criteria only. With default criteria the real panel is rejected: seeds 3 and 11 lose output, seed 10 delivers 74% EV service. No upstream tool is executed and the hosted Robot Reel verifier stays at `6124cee3cba5`.
 
+## AI engine through the bounded executor
+
+The model is an untrusted planner. `src/controller.ts` writes `request.json` + `prompt.txt` and runs the pinned NoteFlow executor (`acpx` 0.19.3; Kiro CLI 2.24.0 `claude-opus-5.5`, Codex/Claude ACP adapters). The executor owns profile routing, credentials, the attempt-only ledger and receipts; PAI treats a run as an answer only if the flow completed, exit 0, a report exists and effects are `none`. Everything else is shown with its per-attempt receipts and waits for a human reconciliation. Model output becomes ordinary typed plans (same contracts, same relax diff, same confirmation and execution path) and cited answers whose handles must resolve to stored records. The model never gains approve, release or feedback authority.
+
+One OCI image (see [CONTAINER.md](CONTAINER.md)) contains the workbench, the executor, Kiro and the native tools; the hosted host installs the same pins with the same installer. Credentials are runtime mounts or Secrets Manager values, never image layers.
+
 ## Lifecycle-first workspace
 
 The UI is organised around the review lifecycle rather than one long page. `src/lifecycle.ts` derives, from durable records only, the status of each stage (requirements, design, validate, evidence, feedback, deliver), the retained failing cases with their bound feedback, the next step and an activity log. The rail shows each stage's status and metric; the overview shows the loop and the next step; every view is deep-linkable (`#/validate?kind=cad-part&id=…`). Validation and feedback use a master–detail layout; the docked assistant shares the same live session as the forms. Container queries follow the width of the work area, so docking the assistant never breaks the layout; at 390 px the rail becomes a horizontal stage bar and the assistant a full-screen sheet.
