@@ -3,6 +3,7 @@ import { realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { command } from "./adapters.js";
+import { invokeRuntime } from "./agentcore.js";
 import type { Config } from "./config.js";
 
 /**
@@ -14,7 +15,8 @@ import type { Config } from "./config.js";
  */
 export const ISOLATION = ["no-network", "read-only-root", "hidden-home-state-credentials", "pid-ipc-uts-user-namespaces", "no-capabilities",
   "clear-environment", "writable-output-only", "rlimit-cpu-memory-files", "audit-hook", "restricted-builtins"] as const;
-export interface SandboxStatus { available: boolean; reason?: string; bwrap?: string }
+export interface SandboxStatus { available: boolean; reason?: string; bwrap?: string; transport?: "local" | "agentcore";
+  remote?: { bubblewrap: boolean; internet: boolean; arch: string; version?: string } }
 export interface SandboxRuntime { python: string; venv: string; native: string }
 
 const HIDE = ["/tmp", "/var/tmp", "/home", "/root", "/run", "/mnt", "/media", "/srv", "/var/lib", "/opt/ai", "/etc/pai"];
@@ -50,6 +52,18 @@ export function sandboxStatus(config: Config): Promise<SandboxStatus> {
   if (hit) return hit;
   const probe = (async (): Promise<SandboxStatus> => {
     if (!config.cadquery) return { available: false, reason: "CadQuery 未配置" };
+    if (config.agentcoreSandboxArn) {
+      // Explicitly configured remote sandbox: verify in a fresh microVM that it really has no route out and that bubblewrap works.
+      try {
+        const p = await invokeRuntime<{ microvm?: boolean; network?: { internet?: boolean }; bubblewrap?: { active?: boolean }; arch?: string; version?: string }>(
+          config.agentcoreSandboxArn, { op: "probe" }, { timeoutMs: 120_000 });
+        const remote = { bubblewrap: Boolean(p.bubblewrap?.active), internet: p.network?.internet !== false, arch: p.arch ?? "?", version: p.version };
+        if (!p.microvm || remote.internet) return { available: false, transport: "agentcore", remote, reason: "AgentCore 沙箱自检未通过（缺少 microVM 边界或可以访问互联网）" };
+        return { available: true, transport: "agentcore", remote };
+      } catch (error) {
+        return { available: false, transport: "agentcore", reason: `AgentCore 沙箱不可用：${error instanceof Error ? error.message.slice(0, 160) : "未知"}` };
+      }
+    }
     const bwrap = config.bwrap ?? "bwrap";
     try {
       const runtime = await sandboxRuntime(config);
@@ -57,7 +71,7 @@ export function sandboxStatus(config: Config): Promise<SandboxStatus> {
       const r = await command(bwrap, sandboxArgs(config, runtime, { readOnly: [], writable: [] }, [runtime.python, "-I", "-c", script]), "/", undefined, 20_000);
       if (r.exitCode !== 0) return { available: false, bwrap, reason: `bubblewrap 无法创建隔离环境：${r.stderr.trim().split("\n").at(-1)?.slice(0, 160) ?? `exit ${r.exitCode}`}` };
       if (r.stdout.trim() !== "isolated False") return { available: false, bwrap, reason: "沙箱自检未通过（网络或主目录可见）" };
-      return { available: true, bwrap };
+      return { available: true, bwrap, transport: "local" };
     } catch (error) {
       return { available: false, bwrap, reason: `bubblewrap 不可用：${error instanceof Error ? error.message.slice(0, 160) : "未知"}` };
     }

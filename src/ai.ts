@@ -15,7 +15,7 @@ import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
-import { controllerConfigured, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
+import { controllerConfigured, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
 import type { Lifecycle } from "./lifecycle.js";
 
 /**
@@ -370,7 +370,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
     && (p.state === "running" || ((p.state === "reconcile" || p.state === "interrupted") && !p.ai?.reconciliation)));
   if (open) throw new DomainError(open.state === "running" ? "AI_BUSY" : "AI_RECONCILIATION_REQUIRED",
     open.state === "running" ? "已有一个 AI 请求在执行" : "上一次 AI 运行的引擎影响尚未核对；先在助手中记录核对结果", 409);
-  const allowed = (config.aiProfiles ?? PROFILES) as Profile[];
+  const allowed = enabledProfiles(config);
   if (request.profiles?.some(p => !allowed.includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "该部署未启用所请求的 AI 引擎", 422);
   const profiles = request.profiles ? allowed.filter(p => request.profiles!.includes(p)) : allowed;
   const record: AssistantPlan = { id: randomUUID(), requestId: request.requestId, projectId: project?.id, projectRevision: project?.revision,

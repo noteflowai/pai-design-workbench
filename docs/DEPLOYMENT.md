@@ -71,6 +71,10 @@ python3 tools/aws_operator.py login-file
 
 发布脚本会安装 bubblewrap，并加载 `infra/apparmor-bwrap`。这是 Ubuntu 24.04 推荐的按应用授权配置：只给 `/usr/bin/bwrap` 开放非特权用户命名空间，系统级限制保持开启。沙箱内部仍然丢弃全部特权、不能联网。服务启动时会做一次探测，不通过就禁用该通道，见 [CAD_CODE.md](CAD_CODE.md)。
 
+## Amazon Bedrock AgentCore
+
+沙箱和执行 Agent 的 arm64 运行时部署在两个独立的栈 `PAIAgentCoreBase` 和 `PAIAgentCoreRuntime` 中，使用专用 VPC，不改动 WordPress 所在的 VPC 和工作台栈。托管站点目前仍在主机上本地运行这两项；如果要改用 AgentCore，需要给实例角色增加 `bedrock-agentcore:InvokeAgentRuntime` 权限并设置两个 ARN。详见 [AGENTCORE.md](AGENTCORE.md)。
+
 ## 持久化与更新
 
 数据位于 `/var/lib/pai/data/state`，单进程 SQLite WAL 数据库及同一卷上的原生文件共同快照。删除栈保留数据卷、备份 vault、登录用户池和管理员 Secret。运行实例的 systemd 服务失败后重启，并保留任务身份；EC2 状态与 ALB 不健康目标有 CloudWatch 告警，未配置外发通知。

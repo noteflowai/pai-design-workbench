@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.7
+# PAI images for Amazon Bedrock AgentCore Runtime (BYOC): linux/arm64, HTTP contract on 0.0.0.0:8080, each < 2 GB.
+#
+#   --target sandbox  CadQuery 2.8 / OCCT 7.9 (slim hash lock) + shared native checks + bubblewrap. No credentials.
+#   --target agent    Node 24 LTS + Kiro CLI 2.24.0 + NoteFlow bounded executor (ec007f0). Keys from Secrets Manager.
+#
+# Built natively on arm64 by CodeBuild (infra/agentcore.ts). Every download is pinned: base image digest,
+# tools/runtime-pins.json and native/cadquery-runtime-requirements.txt (--require-hashes).
+ARG BASE=public.ecr.aws/docker/library/ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+
+FROM ${BASE} AS os
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN useradd --uid 1001 --create-home --home-dir /home/pai --shell /usr/sbin/nologin pai
+
+# ---------------------------------------------------------------- sandbox
+FROM os AS sandbox
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates python3 python3-venv bubblewrap \
+      libgl1 libegl1 libx11-6 libxrender1 libxext6 libxi6 libxkbcommon0 libsm6 libfontconfig1 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY native/cadquery-runtime-requirements.txt /opt/pai/cadquery-runtime-requirements.txt
+RUN python3 -m venv /opt/cadquery && /opt/cadquery/bin/python -m pip install -q --no-cache-dir --no-input --require-hashes --no-deps --only-binary :all: \
+      -r /opt/pai/cadquery-runtime-requirements.txt \
+    && /opt/cadquery/bin/python -W ignore -c "import cadquery as cq; assert cq.__version__ == '2.8.0'" \
+    && find /opt/cadquery -name __pycache__ -prune -exec rm -rf {} + && rm -rf /opt/cadquery/lib/python3*/site-packages/pip
+COPY native/cad_bracket.py native/cad_recipe.py native/cad_checks.py native/cad_sweep.py native/cad_code_policy.py \
+     native/cad_lockdown.py native/cad_sandbox.py native/cad_generated.py native/cad_template.py native/cad_reopen.py /opt/pai/native/
+COPY agentcore/server.py /opt/pai/agentcore/server.py
+ARG PAI_IMAGE_VERSION=dev
+ENV PAI_ROLE=sandbox PAI_NATIVE=/opt/pai/native PAI_CADQUERY_PYTHON=/opt/cadquery/bin/python PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} HOME=/home/pai PORT=8080
+USER pai
+WORKDIR /home/pai
+EXPOSE 8080
+CMD ["python3", "-B", "/opt/pai/agentcore/server.py"]
+
+# ---------------------------------------------------------------- agent (build stage)
+FROM os AS agent-build
+ARG TARGETARCH
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl git xz-utils unzip python3 && rm -rf /var/lib/apt/lists/*
+COPY tools/runtime-pins.json tools/install_ai_runtime.py /opt/pai/tools/
+RUN set -eu; arch=$([ "$TARGETARCH" = "arm64" ] && echo linux-arm64 || echo linux-x64); \
+    v=$(python3 -c "import json;print(json.load(open('/opt/pai/tools/runtime-pins.json'))['node']['version'])"); \
+    h=$(python3 -c "import json;print(json.load(open('/opt/pai/tools/runtime-pins.json'))['node']['sha256']['$arch'])"); \
+    curl -fsSL -o /tmp/node.tar.xz "https://nodejs.org/dist/v$v/node-v$v-$arch.tar.xz"; echo "$h  /tmp/node.tar.xz" | sha256sum -c -; \
+    tar -xJf /tmp/node.tar.xz -C /opt && mv /opt/node-v$v-$arch /opt/node && rm /tmp/node.tar.xz
+ENV PATH=/opt/node/bin:$PATH
+COPY vendor/executor-ec007f070db8.tar /tmp/executor.tar
+RUN python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /tmp/executor.tar \
+    && mv /opt/ai/noteflow-text-executor-ec007f070db8 /opt/ai/executor \
+    && cd /opt/ai/executor && rm -rf node_modules/typescript node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl /root/.npm \
+    && rm -f /tmp/executor.tar
+
+# ---------------------------------------------------------------- agent
+FROM os AS agent
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates python3 && rm -rf /var/lib/apt/lists/*
+COPY --from=agent-build /opt/node /opt/node
+COPY --from=agent-build /opt/ai /opt/ai
+RUN ln -s /opt/ai/kiro-2.24.0/kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && ln -s /opt/ai/kiro-2.24.0/kirocli/bin/kiro-cli-chat /usr/local/bin/kiro-cli-chat \
+    && kiro-cli-chat --version | grep -q 2.24.0 && test "$(cat /opt/ai/executor/.pai-installed)" = "ec007f070db8b012bea49ae622055e7e291787be"
+COPY tools/agentcore-ledger-policy.json /opt/pai/agentcore-ledger-policy.json
+COPY agentcore/server.py /opt/pai/agentcore/server.py
+ARG PAI_IMAGE_VERSION=dev
+ENV PAI_ROLE=agent PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin PAI_CONTROL_ROOT=/opt/ai/executor PAI_LEDGER_DIR=/mnt/ledger \
+    PAI_LEDGER_POLICY=/opt/pai/agentcore-ledger-policy.json PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2 \
+    PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} HOME=/home/pai PORT=8080
+USER pai
+WORKDIR /home/pai
+EXPOSE 8080
+CMD ["python3", "-B", "/opt/pai/agentcore/server.py"]

@@ -18,7 +18,7 @@ import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_
 import { LiveBus, type Stamped } from "./live.js";
 import { confirmPlan, createPlan, type AssistantPlan, preflightPlan } from "./assistant.js";
 import { contextView, createAiPlan, createExternalPlan, reconcileAi, resolveHandle } from "./ai.js";
-import { controllerConfigured, PROFILES } from "./controller.js";
+import { controllerConfigured, controllerTransport, enabledProfiles } from "./controller.js";
 import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
 import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
@@ -149,7 +149,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
-      assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? config.aiProfiles ?? PROFILES : [] },
+      assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
+        transport: controllerTransport(config) ?? null },
       liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));

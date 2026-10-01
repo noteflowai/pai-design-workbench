@@ -27,9 +27,11 @@
     "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts",
     "mcp": "node dist/src/mcp.js",
     "test:cad-code": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-code-e2e.ts",
-    "test:cad-sweep": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-sweep-e2e.ts"
+    "test:cad-sweep": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-sweep-e2e.ts",
+    "test:agentcore-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/agentcore-live.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "3.1144.0",
     "@fastify/static": "10.1.5",
     "@modelcontextprotocol/sdk": "1.31.0",
     "aws-jwt-verify": "5.2.1",

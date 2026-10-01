@@ -14,7 +14,7 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 **AI 助手**停靠在右侧，把对话解析成类型化的工具计划，并标出每项约束是收紧还是放宽。计划没有验收权，只有你确认后才调用原生工具。Blender 和 CadQuery 每完成一个构建阶段，几何就通过 SSE 推送到 three.js 专业视口；视口支持轨道操作、视图预设、大纲、检查器、线框/X 光和阶段时间轴，另有 Ctrl+K 命令面板。界面为响应式 Web/PWA。[14 个典型工业设计测试用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
-**AI 引擎**通过受控执行器调用 Kiro（主账号 → 备用账号 → 二备账号），本机还可以使用 Codex 和 Claude。模型回复按同一套契约重新校验后成为计划或附引用的回答，引用必须指向已存记录。影响未核实的运行要先经人工核对，不会自动重试。pai.oneai.host 已启用 Kiro 三个账号。全部组件可装进一个固定版本的镜像，见 [CONTAINER.md](docs/CONTAINER.md)。外部 Agent 可通过本机 [MCP 服务器](docs/MCP.md) 读取记录并提议计划，同样需要人工确认。预设变体不够用时，AI 或维护者可以直接写 CadQuery 代码：代码在三层沙箱（AST 策略、进程锁定、无网络的 bubblewrap）中只产生实体，结论来自与预设相同的原生检查，见 [生成代码通道](docs/CAD_CODE.md)。CAD 通道还提供原生设计空间扫描：逐点建模实测、散点图和帕累托前沿，选中的点作为正式候选进入同一套检查与发布流程。
+**AI 引擎**通过受控执行器调用 Kiro（主账号 → 备用账号 → 二备账号），本机还可以使用 Codex 和 Claude。模型回复按同一套契约重新校验后成为计划或附引用的回答，引用必须指向已存记录。影响未核实的运行要先经人工核对，不会自动重试。pai.oneai.host 已启用 Kiro 三个账号。全部组件可装进一个固定版本的镜像，见 [CONTAINER.md](docs/CONTAINER.md)。外部 Agent 可通过本机 [MCP 服务器](docs/MCP.md) 读取记录并提议计划，同样需要人工确认。预设变体不够用时，AI 或维护者可以直接写 CadQuery 代码：代码在三层沙箱（AST 策略、进程锁定、无网络的 bubblewrap）中只产生实体，结论来自与预设相同的原生检查，见 [生成代码通道](docs/CAD_CODE.md)。沙箱和执行 Agent 也可以作为 arm64 自带容器运行在 Amazon Bedrock AgentCore 上：每个代码任务使用独立 microVM、没有网络路由，账本放在保留的 EFS 上，见 [AGENTCORE.md](docs/AGENTCORE.md)。CAD 通道还提供原生设计空间扫描：逐点建模实测、散点图和帕累托前沿，选中的点作为正式候选进入同一套检查与发布流程。
 
 不执行新的策略推理，不做 FEA、公差叠加、现场安全认证或自动发布。
 

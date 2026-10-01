@@ -1,0 +1,4 @@
+{"schema_version":1,"timezone":"Asia/Singapore","run_attempt_limit":3,"daily_attempt_limit":10,
+ "providers":{"kiro":{"daily_attempt_limit":10}},
+ "profiles":{"kiro-primary":"kiro","kiro-backup":"kiro","kiro-backup2":"kiro"},
+ "money_limits":null}

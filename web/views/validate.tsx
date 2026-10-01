@@ -109,7 +109,8 @@ function CadDetail({ cad }: { cad?: CadReview }) {
     {cad?.sandbox && <details className="code-source" open={cad.state === "failed"}>
       <summary>生成代码 · {cad.request.source!.code.split("\n").length} 行 · sha256 {cad.sandbox.codeSha256.slice(0, 12)} · 沙箱结果 {SANDBOX_STATUS[cad.sandbox.status] ?? cad.sandbox.status}</summary>
       {cad.sandbox.error && <p className="warning">⚠ {cad.sandbox.error}</p>}
-      <p className="muted">隔离：{cad.sandbox.isolation.map(x => ISOLATION_LABEL[x] ?? x).join(" · ")}</p>
+      <p className="muted">{cad.sandbox.transport === "agentcore" ? "运行位置：Amazon Bedrock AgentCore（arm64 microVM）· " : ""}隔离：{cad.sandbox.isolation.map(x => ISOLATION_LABEL[x] ?? x).join(" · ")}
+        {cad.sandbox.layers && ` · 实际启用：${Object.entries(cad.sandbox.layers).filter(([, v]) => v).map(([k]) => ({ astPolicy: "AST 策略", processLockdown: "进程锁定", bubblewrap: "bubblewrap", microvm: "microVM" } as Record<string, string>)[k]).join("、")}`}</p>
       <pre className="code">{cad.request.source!.code}</pre>
     </details>}
     {cad?.state === "completed" && shown && <>

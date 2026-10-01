@@ -10,6 +10,7 @@ import { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { NativeEvent, type SceneStage } from "./scenes.js";
 import { ISOLATION, sandboxArgs, sandboxRuntime, sandboxStatus, type SandboxRuntime } from "./sandbox.js";
+import { invokeRuntime } from "./agentcore.js";
 
 /**
  * Parametric CAD review: a controlled CadQuery/OCCT recipe for a NEMA 17 motor-mount bracket.
@@ -60,7 +61,9 @@ export interface CadReview {
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>;
   /** Generated candidate: code digest, isolation layers and the sandbox outcome. */
-  sandbox?: { codeSha256: string; isolation: readonly string[]; status: "ok" | "policy" | "error" | "limit"; violations?: string[]; error?: string; motorAxisZ?: number };
+  sandbox?: { codeSha256: string; isolation: readonly string[]; status: "ok" | "policy" | "error" | "limit"; violations?: string[]; error?: string; motorAxisZ?: number;
+    /** Where the code ran and which layers the runtime reported as active (AgentCore). */
+    transport?: "local" | "agentcore"; layers?: { astPolicy: boolean; processLockdown: boolean; bubblewrap: boolean; microvm: boolean } };
   scope: "parametric-part-geometry"; physicalValidation: false;
 }
 
@@ -121,6 +124,56 @@ async function buildGenerated(config: Config, publish: LiveBus["publish"], recor
 }
 
 /**
+ * AgentCore sandbox transport: the job runs in a fresh microVM (new session) with no network route or credentials.
+ * It builds and measures with the same native scripts; returned files are written only after their digests verify,
+ * then the local review continues exactly as for a local candidate (EvalArc, lifecycle, feedback).
+ */
+const RemoteFile = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int(), base64: z.string() });
+const RemoteJob = z.object({
+  status: z.enum(["ok", "policy", "error", "limit"]), error: z.string().nullable().optional(), type: z.string().nullable().optional(), violations: z.array(z.string()).optional(),
+  layers: z.object({ astPolicy: z.boolean(), processLockdown: z.boolean(), bubblewrap: z.boolean(), microvm: z.boolean() }),
+  codeSha256: z.string(), motorAxisZ: z.number().optional(), brepSha256: z.string().optional(), version: z.string().optional(),
+  checks: z.unknown().optional(), files: z.record(z.string(), RemoteFile).optional(),
+}).passthrough();
+async function buildRemote(config: Config, publish: LiveBus["publish"], record: CadReview, target: string, source: CadSource, codeSha256: string,
+  requirements: CadRequirements, requestId: string) {
+  record.sandbox = { codeSha256, isolation: ["agentcore-microvm-per-job", "no-network-route", "no-credentials", ...ISOLATION], status: "error", transport: "agentcore" };
+  publish(requestId, { kind: "step", id: "cad-sandbox", label: "在 AgentCore 隔离 microVM 中运行生成代码", status: "running", which: "candidate" });
+  const startedAt = new Date().toISOString();
+  const raw = await invokeRuntime<unknown>(config.agentcoreSandboxArn!, { op: "cad-code", code: source.code, requirements }, { timeoutMs: 600_000 });
+  const finishedAt = new Date().toISOString();
+  const job = RemoteJob.parse(raw);
+  if (job.codeSha256 !== codeSha256) throw new DomainError("CAD_SANDBOX_MISMATCH", "AgentCore sandbox ran different code", 502);
+  record.receipts.push({ adapter: "agentcore-cad-sandbox", command: ["InvokeAgentRuntime", "cad-code", `image ${job.version ?? "?"}`], startedAt, finishedAt,
+    exitCode: job.status === "ok" ? 0 : 1, stdoutSha256: sha256(JSON.stringify({ ...job, files: undefined })), sourceDigests: { code: codeSha256 } });
+  const layers = job.layers;
+  record.sandbox = { ...record.sandbox, status: job.status, violations: job.violations, motorAxisZ: job.motorAxisZ, layers,
+    error: job.status === "ok" ? undefined : (job.status === "policy" ? job.violations?.join("；") : `${job.type ?? job.status}: ${job.error ?? ""}`)?.slice(0, 600) };
+  publish(requestId, { kind: "step", id: "cad-sandbox", label: "在 AgentCore 隔离 microVM 中运行生成代码", status: job.status === "ok" ? "done" : "failed", which: "candidate",
+    detail: job.status === "ok" ? `BREP 实体 · 电机轴 z=${job.motorAxisZ} mm · bubblewrap ${layers.bubblewrap ? "启用" : "未启用"}` : record.sandbox.error?.slice(0, 160) });
+  if (job.status !== "ok") {
+    const code = { policy: "CAD_CODE_POLICY", error: "CAD_CODE_ERROR", limit: "CAD_CODE_LIMIT" }[job.status];
+    throw new DomainError(code, `生成代码没有产生可检查的实体：${record.sandbox.error}`, 422);
+  }
+  if (!layers.microvm) throw new DomainError("CAD_SANDBOX_UNVERIFIED", "AgentCore sandbox did not report a microVM boundary", 502);
+  const files = job.files ?? {};
+  for (const name of [...CAD_FILES, ...Object.keys(files).filter(n => /^stages\/\d{2}-[a-z-]+\.glb$/.test(n))]) {
+    const f = files[name];
+    if (!f) throw new DomainError("CAD_SANDBOX_INCOMPLETE", `AgentCore sandbox did not return ${name}`, 502);
+    const data = Buffer.from(f.base64, "base64");
+    if (data.length !== f.bytes || sha256(data) !== f.sha256) throw new DomainError("CAD_SANDBOX_DIGEST", `${name} digest mismatch`, 502);
+    if (name.startsWith("stages/")) await mkdir(join(target, "stages"), { recursive: true, mode: 0o700 });
+    await writeFile(join(target, name), data, { mode: 0o600 });
+  }
+  record.files["candidate/generated.brep"] = job.brepSha256!;
+  const stages = Object.keys(files).filter(n => n.startsWith("stages/")).sort();
+  record.stages = { ...record.stages, candidate: stages.map((file, i) => ({ index: i + 1, id: file.slice(10, -4), label: i === 0 ? "生成代码的实体" : "装配检查：NEMA 17 电机",
+    file, sha256: files[file].sha256, objects: i === 0 ? ["Bracket"] : ["Bracket", "NEMA 17 motor"] })) };
+  for (const s of record.stages.candidate!) publish(requestId, { kind: "stage", which: "candidate", index: s.index, id: s.id, label: s.label, objects: s.objects,
+    url: `/api/cad/${record.id}/stages/candidate/${s.index}`, sha256: s.sha256 });
+}
+
+/**
  * Generated code is refused before any record exists: no sandbox means no execution, and a policy violation never
  * reaches the sandbox. Call before reviewCad (which must claim its request before its first await).
  */
@@ -176,7 +229,8 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const codeSha256 = generated ? sha256(generated.code) : undefined;
     record.sourceDigests = { ...nativeBefore, ...scriptsBefore, "cadquery-lock": sha256(await readFile(lock)), "cadquery-python": sha256(await readFile(config.cadquery)),
       ...(codeSha256 ? { "generated-code": codeSha256 } : {}) };
-    const runtime = generated ? await sandboxRuntime(config) : undefined;
+    const remote = Boolean(generated && config.agentcoreSandboxArn);
+    const runtime = generated && !remote ? await sandboxRuntime(config) : undefined;
     const bwrap = config.bwrap ?? "bwrap";
     for (const [name, variant] of [["baseline", "reference"], ["candidate", request.variant]] as const) {
       const target = join(directory, name);
@@ -187,7 +241,10 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         ...(variant === "parametric" ? { parameters: request.parameters } : {}) }));
       await mkdir(target, { recursive: true, mode: 0o700 });
       const sandboxed = Boolean(generated && name === "candidate");
-      if (sandboxed) await buildGenerated(config, publish, record, directory, runtime!, generated!, codeSha256!, request.requestId);
+      if (sandboxed && remote) {
+        await buildRemote(config, publish, record, target, generated!, codeSha256!, request.requirements, request.requestId);
+        publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: "done", which: name, detail: "AgentCore microVM" });
+      } else if (sandboxed) await buildGenerated(config, publish, record, directory, runtime!, generated!, codeSha256!, request.requestId);
       let observed = Promise.resolve();
       const observe = (line: string) => {
         if (!line.startsWith("PAI_EVENT ")) return;
@@ -203,6 +260,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
             url: `/api/cad/${record.id}/stages/${name}/${e.index}`, sha256: digest });
         }).catch(() => { /* Presentation events never fail the native review. */ });
       };
+      if (!(sandboxed && remote)) {
       const args = sandboxed
         ? sandboxArgs(config, runtime!, { readOnly: [input, join(directory, "candidate-src")], writable: [target] },
           [runtime!.python, "-I", "-W", "ignore", join(runtime!.native, "cad_generated.py"), "--input", input, "--source", join(directory, "candidate-src"), "--output", target])
@@ -217,6 +275,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: `exit ${r.exitCode}` });
       store.put("cad-review", record);
       if (r.exitCode !== 0) throw new DomainError("CAD_FAILED", "Native CAD production failed; retain receipts and inspect local artifacts", 422);
+      }
       const checks = CadChecks.parse(JSON.parse(await readFile(join(target, "checks.json"), "utf8")));
       if (checks.variant !== variant) throw new DomainError("CAD_CONTEXT", "Native CAD variant mismatch");
       record[name] = checks;

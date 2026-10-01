@@ -67,6 +67,9 @@ jobs:
       - name: Hash-locked CadQuery 2.8 / OCCT 7.9 and native parametric CAD loop
         if: matrix.node == '24.21.0'
         run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py && npm run test:cad'
+      - name: Slim CadQuery runtime lock is current and the AgentCore entrypoint contract holds
+        if: matrix.node == '24.21.0'
+        run: python3 tools/slim_cadquery_lock.py --python .state/tools/cadquery-2.8.0/bin/python --check && python3 -m pip install -q botocore==1.43.82 && python3 -m unittest discover -s tests/agentcore -p 'test_*.py'
       - name: Generated CadQuery code in the OS sandbox (layers, template equivalence, recheck, limits)
         if: matrix.node == '24.21.0'
         run: npm run test:cad-code

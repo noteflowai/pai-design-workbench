@@ -2,6 +2,20 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## Amazon Bedrock AgentCore（arm64 自带容器，2026-10-02）
+
+| 检查 | 实际结果 |
+|---|---|
+| 构建 | CodeBuild 在 arm64 上原生构建两个镜像：沙箱镜像压缩后 0.42 GB；执行器镜像压缩后 0.55 GB，解压后 1.34 GB。都在 AgentCore 2 GB 上限以内。精简 CadQuery 锁的全部原生路径结果与完整锁逐值相同 |
+| 沙箱探测（真实 microVM） | aarch64；无法访问互联网；bubblewrap 可以启用；uid 1001；运行时没有凭据 |
+| 沙箱任务 | 模板 = 预设 reference（48.368 g）；2.5 mm 板厚判为 min-wall 失败（31.85 g）；`import socket` 在执行前被拒绝；死循环 60 s 后以 limit 结束；同一会话再次提交返回 409。质量和实测值与 amd64 相同 |
+| 执行 Agent | Kiro 2.24.0 aarch64、执行器 ec007f0；EFS 账本只创建一次，第二次 init 不替换；在新会话中重放同一 run_id 返回已保存的答案，额度不变；运行时版本从 28b7da0b 更新到 9dbf763b 后，已完成的尝试仍是 1 |
+| 工作台联调 | 本机没有执行器和密钥：AI 请求经 AgentCore 由 Kiro 主账号完成，生成 1 个 cad-code 计划；确认后该代码在 AgentCore 沙箱中建模并通过全部检查；远端沙箱运行的回执为 agentcore-cad-sandbox，EvalArc 对照在本地完成 |
+| `npm test` | 新增 AgentCore 模拟器测试：远端报告经过同一套校验，只开放 Kiro；超时、影响未知和 5xx 都进入待核对，且只调用一次；会话 ID 至少 33 位；只有探测结果为 microVM 且无互联网时才启用远端沙箱。服务端 SigV4 签名与 botocore 逐字节一致 |
+| 日志 | 只有路径和状态码；没有请求体、代码、提示或密钥 |
+
+见 [回执](evidence/agentcore.json) 和 [联调](evidence/agentcore-live.json)。共消耗 1 次真实尝试。
+
 ## 0.6.0 设计空间扫描与线上验收（2026-10-01）
 
 线上（pai.oneai.host，release `11e6f040…48ed2`）：24 个点的扫描在主机上用时 48 s，首个响应为 202，浏览器轮询状态地址拿到结果。满足全部检查的点有 3 个，最轻的是 t=3、W=60、H=46（37.36 g）。由该点生成的正式候选结论为通过，EvalArc 没有阻断项，质量与扫描点一致。390 px 无溢出，控制台无错误，WordPress 不变。见[回执](evidence/deployment-v060.json)、[基础设施](evidence/deployment-infra-v060.json)和[截图](evidence/cloud-sweep.png)。

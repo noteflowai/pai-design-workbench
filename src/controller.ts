@@ -4,6 +4,7 @@ import { z } from "zod";
 import { command, writePrivate } from "./adapters.js";
 import type { Config } from "./config.js";
 import { DomainError, sha256 } from "./domain.js";
+import { invokeRuntime } from "./agentcore.js";
 
 /**
  * Bounded invocation of the existing NoteFlow text executor (acpx FlowRunner + Python admission).
@@ -49,7 +50,17 @@ const Receipt = z.object({
   observed: z.object({ model: z.string().nullable().optional(), engine_version: z.string().nullable().optional(), model_evidence: z.string().nullable().optional() }).passthrough().optional(),
 }).passthrough();
 
-export function controllerConfigured(config: Config) { return Boolean(config.controllerEntrypoint && config.controllerDatabase); }
+/** Local executor (entrypoint + reviewed ledger) or the AgentCore agent runtime (executor and ledger run there). */
+export function controllerConfigured(config: Config) { return Boolean((config.controllerEntrypoint && config.controllerDatabase) || config.agentcoreAgentArn); }
+/** Profiles the AgentCore agent runtime enables (Kiro only; Codex/Claude need personal credentials). */
+export const REMOTE_PROFILES: readonly Profile[] = ["kiro-primary", "kiro-backup", "kiro-backup2"];
+export const controllerTransport = (config: Config): "local" | "agentcore" | undefined =>
+  config.controllerEntrypoint && config.controllerDatabase ? "local" : config.agentcoreAgentArn ? "agentcore" : undefined;
+/** Engines this deployment may use, in reviewed fallback order. */
+export function enabledProfiles(config: Config): Profile[] {
+  const base = controllerTransport(config) === "agentcore" ? REMOTE_PROFILES : PROFILES;
+  return (config.aiProfiles ? base.filter(p => config.aiProfiles!.includes(p)) : [...base]) as Profile[];
+}
 
 /** Read the executor's own per-attempt receipts (read-only) to show the actual fallback chain. */
 export async function readAttempts(stateDir: string, runId: string): Promise<ControllerAttempt[]> {
@@ -77,6 +88,7 @@ export async function runController(config: Config, directory: string, runId: st
   if (Buffer.byteLength(prompt) > 120_000) throw new DomainError("PROMPT_TOO_LARGE", "Context exceeds the executor prompt bound", 422);
   if (!(options.timeoutSeconds >= 1 && options.timeoutSeconds <= 60)) throw new DomainError("INVALID_TIMEOUT", "Executor attempts are limited to 60 s", 422);
   await mkdir(directory, { recursive: true, mode: 0o700 });
+  if (controllerTransport(config) === "agentcore") return runRemote(config, directory, runId, prompt, options);
   const state = join(directory, "native-state");
   await writePrivate(join(directory, "prompt.txt"), prompt);
   await writePrivate(join(directory, "request.json"), JSON.stringify({
@@ -101,23 +113,53 @@ export async function runController(config: Config, directory: string, runId: st
   await writePrivate(join(directory, "stderr.log"), r.stderr.slice(0, 20_000));
   const attempts = await readAttempts(state, runId);
   for (const a of attempts) { const key = `${a.profile}:${a.status}`; if (!seen.has(key)) options.onAttempt?.(a); }
+  return interpret(runId, r.stdout.trim().split("\n").at(-1) ?? "", r.exitCode, attempts, sha256(r.stdout));
+}
+
+/** Same request on the AgentCore agent runtime; its report goes through the same checks as a local run. */
+async function runRemote(config: Config, directory: string, runId: string, prompt: string, options: {
+  profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
+}): Promise<ControllerResult> {
+  if (options.profiles.some(p => !REMOTE_PROFILES.includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "AgentCore 执行器只启用 Kiro 三个账号", 422);
+  await writePrivate(join(directory, "prompt.txt"), prompt);
+  const Remote = z.object({ exitCode: z.number().nullable(), timedOut: z.boolean(), report: z.string(),
+    attempts: z.array(z.object({ profile: z.string(), status: z.string().nullable(), errorKind: z.string().nullable(), model: z.string().nullable(),
+      engineVersion: z.string().nullable(), effects: z.string().nullable(), workStarted: z.boolean().nullable().optional() }).passthrough()) }).passthrough();
+  const raw = await invokeRuntime<unknown>(config.agentcoreAgentArn!, { op: "text-proposal", run_id: runId, prompt, profiles: options.profiles,
+    timeout_seconds: options.timeoutSeconds }, { timeoutMs: 600_000 });
+  const error = z.object({ error: z.string(), message: z.string().optional() }).safeParse(raw);
+  if (error.success) throw new DomainError(error.data.error, `AgentCore 执行器拒绝：${error.data.message ?? error.data.error}`, 502);
+  const r = Remote.parse(raw);
+  await writePrivate(join(directory, "agentcore.json"), JSON.stringify({ ...r, report: undefined, reportSha256: sha256(r.report) }, null, 2));
+  const attempts: ControllerAttempt[] = r.attempts.map(a => ({ profile: a.profile, provider: PROVIDER[a.profile as Profile] ?? "unknown", status: a.status ?? "unknown",
+    errorKind: a.errorKind, effects: a.effects ?? "unknown", model: a.model, engineVersion: a.engineVersion, modelEvidence: null, answered: a.status === "succeeded" }))
+    .sort((a, b) => PROFILES.indexOf(a.profile as Profile) - PROFILES.indexOf(b.profile as Profile));
+  for (const a of attempts) options.onAttempt?.(a);
+  if (r.timedOut || r.exitCode === null) {
+    return { runId, action: "reconcile", reason: "AgentCore executor did not finish within its bound; inspect remote receipts", flowStatus: "unknown", exitCode: -1, attempts, reportSha256: sha256(r.report) };
+  }
+  if (r.exitCode === 0 && !r.report.trim()) throw new DomainError("CONTROLLER_NO_REPORT", "Executor produced no report", 502);
+  return interpret(runId, r.report, r.exitCode, attempts, sha256(r.report));
+}
+
+function interpret(runId: string, line: string, exitCode: number, attempts: ControllerAttempt[], reportSha256: string): ControllerResult {
   let parsed: z.infer<typeof Report>;
-  try { parsed = Report.parse(JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "")); }
+  try { parsed = Report.parse(JSON.parse(line)); }
   catch {
-    return { runId, action: "reconcile", reason: "Executor output could not be parsed; inspect native receipts", flowStatus: "unknown", exitCode: r.exitCode,
-      attempts, reportSha256: sha256(r.stdout) };
+    return { runId, action: "reconcile", reason: "Executor output could not be parsed; inspect native receipts", flowStatus: "unknown", exitCode,
+      attempts, reportSha256 };
   }
   if (parsed.report.run_id !== runId) throw new DomainError("CONTROLLER_MISMATCH", "Executor report belongs to another run", 422);
   const result = parsed.report.result;
   const profile = result?.requested?.profile;
   let action: ControllerAction = parsed.report.action;
   // A "done" report must be backed by a completed flow, a clean exit, an answer and verified absence of effects.
-  if (action === "done" && (parsed.flow_status !== "completed" || r.exitCode !== 0 || !result?.answer || result.effects !== "none")) action = "reconcile";
+  if (action === "done" && (parsed.flow_status !== "completed" || exitCode !== 0 || !result?.answer || result.effects !== "none")) action = "reconcile";
   return {
-    runId, action, reason: parsed.report.reason, flowStatus: parsed.flow_status, exitCode: r.exitCode,
+    runId, action, reason: parsed.report.reason, flowStatus: parsed.flow_status, exitCode,
     answer: typeof result?.answer === "string" ? result.answer : undefined, effects: result?.effects, attempts,
     engine: profile ? { profile, provider: PROVIDER[profile as Profile] ?? "unknown", model: result?.observed?.model ?? null,
       engineVersion: result?.observed?.engine_version ?? null, modelEvidence: result?.observed?.model_evidence ?? null } : undefined,
-    reportSha256: sha256(r.stdout),
+    reportSha256,
   };
 }

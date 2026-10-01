@@ -94,6 +94,10 @@ Text-to-CAD is useful only if generated geometry cannot decide its own verdict. 
 
 The bracket recipe (`native/cad_recipe.py`) is shared by presets, explicit parametric candidates and the sweep, so a sweep point and a review with the same parameters are the same native geometry and the same measurements (asserted in `test:cad-sweep`). The sweep measures each grid point on its own B-Rep — no surrogate model or interpolation — and only ranks measured points. Choosing a point creates an ordinary review with baseline, EvalArc, feedback and release gate; the sweep is linked as provenance, never as acceptance evidence.
 
+## Remote runtimes on Amazon Bedrock AgentCore
+
+Both execution boundaries can move to AgentCore Runtime (BYOC, arm64) without changing what decides a result. The sandbox runtime adds a per-job microVM and an isolated subnet with no route out under the same in-VM layers; the agent runtime runs the same executor against a ledger on a retained EFS volume so accounting survives sessions and version updates. The workbench keeps parsing, validation, EvalArc, lifecycle and confirmation locally; remote outputs are accepted only after the same checks (and digest verification for files). Unanswered calls are uncertain and wait for reconciliation. See [AGENTCORE.md](AGENTCORE.md).
+
 ## Lifecycle-first workspace
 
 The UI is organised around the review lifecycle rather than one long page. `src/lifecycle.ts` derives, from durable records only, the status of each stage (requirements, design, validate, evidence, feedback, deliver), the retained failing cases with their bound feedback, the next step and an activity log. The rail shows each stage's status and metric; the overview shows the loop and the next step; every view is deep-linkable (`#/validate?kind=cad-part&id=…`). Validation and feedback use a master–detail layout; the docked assistant shares the same live session as the forms. Container queries follow the width of the work area, so docking the assistant never breaks the layout; at 390 px the rail becomes a horizontal stage bar and the assistant a full-screen sheet.

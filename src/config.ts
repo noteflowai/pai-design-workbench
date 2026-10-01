@@ -1,3 +1,4 @@
+import { validRuntimeArn } from "./agentcore.js";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,6 +8,8 @@ export interface Config {
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
+  /** Amazon Bedrock AgentCore runtimes (infra/agentcore.ts): remote executor and remote CAD sandbox. */
+  agentcoreAgentArn?: string; agentcoreSandboxArn?: string;
   /** Engines this deployment may use, in fallback order; a subset of the executor's reviewed profiles. */
   aiProfiles?: string[];
   listenHost?: string; publicOrigin?: string;
@@ -48,6 +51,8 @@ export function configuration(): Config {
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
     bwrap: process.env.PAI_BWRAP,
+    agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
+    agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),
     aiProfiles: aiProfiles(process.env.PAI_AI_PROFILES),
     listenHost, publicOrigin, albAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,

@@ -1,0 +1,97 @@
+{
+  "schema": "pai-agentcore-verification-1",
+  "checkedAt": "2026-10-01T17:18:09.299234+00:00",
+  "result": "passed",
+  "region": "ap-northeast-1",
+  "images": {
+    "platform": "linux/arm64",
+    "builtBy": "CodeBuild ARM_CONTAINER (native, no emulation)",
+    "tag": "9dbf763ba1876aeb",
+    "sandbox": {
+      "compressedBytes": 420716812,
+      "digest": "sha256:9942f9265e4976a7610be8a19dec2c49e4e2a9581f1e6f9962959bff53bdc7be",
+      "contents": "CadQuery 2.8.0 / OCP 7.9.3.1.1 (slim hash lock, 13 distributions), bubblewrap, shared native checks"
+    },
+    "agent": {
+      "uncompressedBytes": 1341206079,
+      "compressedBytes": 550502252,
+      "digest": "sha256:49cc31a3317813b230db27260863a81d0a7df3a2e12b58e4de2d317a35f9a970",
+      "contents": "Node 24.21.0, Kiro CLI 2.24.0 aarch64, NoteFlow executor ec007f0"
+    },
+    "limit": "AgentCore Runtime image size limit 2 GB (not adjustable); the 7 GB amd64 single image is split by role"
+  },
+  "runtimes": {
+    "sandbox": "pai_cad_sandbox (VPC, isolated subnets, no NAT/IGW; ECR+logs interface endpoints, S3 gateway scoped to ECR layers)",
+    "agent": "pai_kiro_agent (VPC, private subnets with NAT; EFS access point at /mnt/ledger, uid 1001, 0700)",
+    "auth": "IAM SigV4 only"
+  },
+  "sandboxProbe": {
+    "arch": "aarch64",
+    "kernel": "6.1.161-18.298.amzn2023.aarch64",
+    "internet": false,
+    "bubblewrap": true,
+    "microvm": true,
+    "uid": 1001
+  },
+  "sandboxJobs": {
+    "templateEqualsReference": {
+      "result": true,
+      "massG": 48.368,
+      "layers": [
+        "astPolicy",
+        "processLockdown",
+        "bubblewrap",
+        "microvm"
+      ]
+    },
+    "thinPlates": {
+      "failed": [
+        "min-wall"
+      ],
+      "observedMinWallMm": 2.5,
+      "massG": 31.85
+    },
+    "policyViolation": {
+      "status": "policy",
+      "detail": "import socket refused before execution"
+    },
+    "cpuLoop": {
+      "status": "limit",
+      "seconds": 60.0
+    },
+    "sessionReuse": "409 SESSION_ALREADY_USED (one job per microVM)",
+    "crossArch": "arm64 masses and measured values equal the amd64 results (48.368 g reference, 31.85 g / 2.5 mm thin)"
+  },
+  "agent": {
+    "probe": {
+      "kiro": "2.24.0 aarch64",
+      "executorCommit": "ec007f070db8",
+      "egress": true,
+      "keysFromSecretsManager": true
+    },
+    "ledger": {
+      "createdOnce": true,
+      "secondInitCreated": false,
+      "policy": "tools/agentcore-ledger-policy.json (Kiro only; run 3, day 10)",
+      "persistsAcrossSessions": true,
+      "persistsAcrossRuntimeVersionUpdate": {
+        "from": "28b7da0b11f6727d",
+        "to": "9dbf763ba1876aeb",
+        "finishedAttempts": 1
+      }
+    },
+    "realKiroRun": "see agentcore-live.json (workbench -> AgentCore; kiro-primary done; cad-code plan executed in the AgentCore sandbox, accepted)",
+    "replaySameRunId": {
+      "newSession": true,
+      "action": "done",
+      "reason": "saved answer; no repeat dispatch",
+      "newAttempts": 0
+    }
+  },
+  "logs": {
+    "bodiesLogged": false,
+    "secretsOrCodeInLogs": 0
+  },
+  "realAttemptsUsed": 1,
+  "promptAndAnswerContentRecorded": false
+}
