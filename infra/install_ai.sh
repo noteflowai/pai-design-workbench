@@ -41,6 +41,9 @@ policy = json.loads(Path('$PAI_RELEASE/tools/ai-ledger-policy.json').read_text()
 BudgetLedger.create(Path('$STATE/ai-ledger/ledger.sqlite3'), policy)
 print('ledger ready')
 PY"
+# The unit is ProtectSystem=strict: Kiro and acpx need their own writable state under HOME,
+# while ~/.config (credentials) stays read-only to the service.
+for d in .kiro .acpx .cache .local .local/share .local/state; do runuser -u pai -- install -d -m 0700 "/var/lib/pai/$d"; done
 install -d -m 0755 /etc/systemd/system/pai-workbench.service.d
 cat > /etc/systemd/system/pai-workbench.service.d/ai.conf <<EOF
 [Service]
@@ -49,6 +52,7 @@ Environment=PAI_CONTROLLER_ENTRYPOINT=$ROOT/.runtime/compiled/flows/execute.js
 Environment=PAI_CONTROLLER_DATABASE=$STATE/ai-ledger/ledger.sqlite3
 Environment=PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2
 Environment=PATH=$AI/bin:$NODE_BIN:/usr/local/bin:/usr/bin:/bin
+ReadWritePaths=/var/lib/pai/.kiro /var/lib/pai/.acpx /var/lib/pai/.cache /var/lib/pai/.local
 EOF
 systemctl daemon-reload
 echo "AI runtime ready: $(runuser -u pai -- "$AI/bin/kiro-cli-chat" --version)"
