@@ -385,8 +385,20 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
 
 /* Responsive */
 @media (max-width: 1280px) { :root { --drawer: 356px; --rail: 212px; } main { padding: 24px; } }
-@media (max-width: 1100px) { .app.with-assistant { grid-template-columns: var(--rail) minmax(0, 1fr); }
-  .assistant { position: fixed; right: 0; top: var(--top); bottom: 0; width: min(420px, 100vw); height: auto; z-index: 40; box-shadow: -12px 0 40px #0d1a2026; } }
+/* 1024–1279 with the assistant docked: the rail collapses to stage icons so the work area keeps ≥ 600 px. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .app.with-assistant { --rail: 68px; --drawer: 340px; }
+  .app.with-assistant .rail-text, .app.with-assistant .rail-dot, .app.with-assistant .rail-foot { display: none; }
+  .app.with-assistant .rail a { grid-template-columns: 1fr; justify-items: center; padding: 9px 4px; }
+  .app.with-assistant .brand > span:last-child { display: none; }
+  .app.with-assistant .brand { width: auto; }
+}
+/* Below 1024 the assistant is a modal sheet over the work area, with a backdrop that closes it. */
+@media (max-width: 1023px) { .app.with-assistant { grid-template-columns: var(--rail) minmax(0, 1fr); }
+  .assistant { position: fixed; right: 0; top: var(--top); bottom: 0; width: min(420px, 100vw); height: auto; z-index: 40; box-shadow: -12px 0 40px #0d1a2026; }
+  .assistant-scrim { position: fixed; inset: var(--top) 0 0 0; background: #0d1a2040; z-index: 39; border: 0; border-radius: 0; padding: 0; min-height: 0; }
+  .assistant-scrim:hover:not(:disabled) { background: #0d1a2040; border: 0; } }
+@media (min-width: 1024px) { .assistant-scrim { display: none; } }
 @media (max-width: 760px) {
   :root { --top: 52px; }
   .app, .app.with-assistant { display: block; }
@@ -446,3 +458,20 @@ main { container-type: inline-size; container-name: work; }
   .stage::after { display: none; }
 }
 .scene-previews.drawings img { background: #fff; object-fit: contain; border: 1px solid var(--line); padding: 6px; }
+
+/* Layout review fixes */
+main h1:focus, main h1:focus-visible { outline: none; }
+.app { background: linear-gradient(to right, var(--surface) calc(var(--rail) - 1px), var(--line) calc(var(--rail) - 1px), var(--line) var(--rail), transparent var(--rail)); }
+.brand { min-height: 40px; }
+@media (max-width: 760px) {
+  .app { background: none; }
+  .rail ol, .tabs { scroll-snap-type: x proximity; scrollbar-width: none; }
+  .rail ol::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
+  .rail li, .tabs button { scroll-snap-align: center; }
+  .rail, .tabs { -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
+  .rail { overflow: hidden; } .rail ol { overflow-x: auto; }
+}
+.uncovered { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+/* Viewport controls: ≥ 32 px touch targets (dense CAD toolbars, still usable on touch). */
+.top-right button, .outliner li button { min-height: 32px; }
+.brand { min-width: 40px; }

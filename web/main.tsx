@@ -30,7 +30,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: "ok" | "bad" }[]>([]);
   // Docked on wide screens; on phones it is a full-screen sheet that always starts closed.
-  const [assistant, setAssistant] = useState(() => { if (innerWidth < 900) return false; const saved = localStorage.getItem("pai-assistant"); return saved ? saved === "open" : innerWidth >= 1200; });
+  const [assistant, setAssistant] = useState(() => { if (innerWidth < 1024) return false; const saved = localStorage.getItem("pai-assistant"); return saved ? saved === "open" : innerWidth >= 1280; });
   const { session, track } = useLiveSession();
   const seq = useRef(0), lastView = useRef(route.view);
 
@@ -48,13 +48,24 @@ function App() {
     requestAnimationFrame(() => (document.querySelector("main h1") as HTMLElement | null)?.focus({ preventScroll: true }));
   }, [route.view]);
   useEffect(() => {
+    // On narrow screens the stage bar and tabs scroll sideways; keep the current item in view.
+    requestAnimationFrame(() => document.querySelectorAll('.rail a[aria-current="page"], .tabs [aria-selected="true"]')
+      .forEach(e => e.scrollIntoView({ block: "nearest", inline: "center" })));
+  }, [route.view, route.params.toString()]);
+  useEffect(() => {
     // Crossing into phone width turns the docked assistant into a closed sheet instead of covering the work area.
-    const query = matchMedia("(max-width: 899px)");
+    const query = matchMedia("(max-width: 1023px)");
     const onChange = (e: MediaQueryListEvent) => { if (e.matches) setAssistant(false); };
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
-  useEffect(() => { if (innerWidth >= 900) localStorage.setItem("pai-assistant", assistant ? "open" : "closed"); }, [assistant]);
+  useEffect(() => {
+    if (!assistant || innerWidth >= 1024) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAssistant(false); };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [assistant]);
+  useEffect(() => { if (innerWidth >= 1024) localStorage.setItem("pai-assistant", assistant ? "open" : "closed"); }, [assistant]);
 
   const toast = useCallback((message: string, tone: "ok" | "bad" = "ok") => setToasts(t => [...t.filter(x => x.tone === "bad").slice(-1), { id: ++seq.current, message, tone }]), []);
   const dismiss = useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
@@ -110,13 +121,15 @@ function App() {
       <nav className="rail" aria-label="生命周期">
         <ol>{VIEWS.map(v => { const stage = lifecycle?.stages.find(s => s.id === v.id); return <li key={v.id}>
           <a href={`#/${v.id}`} aria-current={route.view === v.id ? "page" : undefined} className={stage ? `s-${stage.status}` : "s-overview"}
-            aria-label={`${v.index ? `${v.index} ` : ""}${v.label}${stage ? `：${DOT[stage.status]}，${stage.metric}` : ""}`}>
+            aria-label={`${v.index ? `${v.index} ` : ""}${v.label}${stage ? `：${DOT[stage.status]}，${stage.metric}` : ""}`}
+            title={`${v.label}${stage ? ` · ${DOT[stage.status]} · ${stage.metric}` : ""}`}>
             <span className="rail-index" aria-hidden="true">{v.index ?? "◎"}</span>
             <span className="rail-text"><span className="rail-label">{v.label}</span><span className="rail-short" aria-hidden="true">{v.short}</span>{stage && <small>{stage.metric}</small>}</span>
             {stage && <span className="rail-dot" title={DOT[stage.status]} />}</a></li>; })}</ol>
         <p className="rail-foot">反馈 → 复测 → 验证 形成闭环<br />记录仿真 · 合成场景 · 演示孪生<br />尚未现场验证</p>
       </nav>
       <main id="main" aria-busy={busy}>{busy && <div className="busy" role="progressbar" aria-label="正在执行并保存回执" />}{view}</main>
+      {assistant && <button type="button" className="assistant-scrim" aria-label="关闭 AI 助手" onClick={() => setAssistant(false)} />}
       {assistant && <aside className="assistant" aria-label="AI 助手"><Assistant onClose={() => setAssistant(false)} /></aside>}
     </div>
     <Toasts items={toasts} dismiss={dismiss} />

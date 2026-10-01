@@ -67,12 +67,24 @@ function EvLine({ review }: { review: FactoryReview }) {
   </svg>;
 }
 
+function factoryDetail(review: FactoryReview, id: string): string {
+  const k = review.criteria, f = review.aggregate.failingSeeds as Record<string, number[]>;
+  const seeds = (x: string) => f[x]?.length ? `未满足的种子：${f[x].join("、")}` : "全部种子满足";
+  return ({
+    "output-per-seed": `单种子良品损失不超过 ${k.maxOutputLossPerSeed} 件；${seeds("output-per-seed")}`,
+    "demand-intervals": `闭环需量超限区间不超过 ${k.maxClosedIntervalsOverLimit} 个；${seeds("demand-intervals")}`,
+    "hall-comfort": `闭环车间最高温度不超过 ${k.maxHallC} °C；${seeds("hall-comfort")}`,
+    "ev-service": `EV 充电量不低于影子计划的 ${Math.round(k.minEvServiceRatio * 100)}%；${seeds("ev-service")}`,
+    "closed-failures": `闭环非计划故障不超过 ${k.maxClosedFailures} 次；${seeds("closed-failures")}`,
+    "net-output-gain": `面板净良品 ${review.aggregate.netGoodUnitsGain > 0 ? "+" : ""}${review.aggregate.netGoodUnitsGain}${k.requireNetOutputGain ? "（要求 > 0）" : "（未要求）"}；能耗单独报告，不抵消产出`,
+  } as Record<string, string>)[id] ?? id;
+}
 export function FactoryResult({ review }: { review: FactoryReview }) {
   return <>
     <Verdict tone={review.verdict === "rejected" ? "bad" : "ok"} eyebrow={`工厂孪生评审 · ${review.aggregate.pairs} 个配对种子 · 演示仿真`}
       title={review.verdict === "rejected" ? "维护方案拒绝" : "演示仿真范围内通过"}
       detail={`净良品 ${review.aggregate.netGoodUnitsGain > 0 ? "+" : ""}${review.aggregate.netGoodUnitsGain}；改善 ${review.aggregate.pairsImproved} 对、退化 ${review.aggregate.pairsWorse} 对；单位良品电耗平均变化 ${review.aggregate.meanImportIntensityChange} kWh（不抵消其他约束）。`} />
-    <ul className="checks">{review.checks.map(x => <Check key={x.id} passed={x.passed} title={CHECK_LABELS[x.id]} detail={x.detail} />)}</ul>
+    <ul className="checks">{review.checks.map(x => <Check key={x.id} passed={x.passed} title={CHECK_LABELS[x.id]} detail={factoryDetail(review, x.id)} />)}</ul>
     <div className="charts"><figure><figcaption>良品增减（闭环 − 影子）</figcaption><Bars review={review} /></figure><figure><figcaption>EV 充电服务（闭环 / 影子计划）</figcaption><EvLine review={review} /></figure></div>
     <div className="table-wrap"><table className="seed-table"><caption className="visually-hidden">逐种子结果</caption>
       <thead><tr><th scope="col">种子</th><th scope="col">良品增减</th><th scope="col">EV 服务</th><th scope="col">车间最高</th><th scope="col">超限</th><th scope="col">故障</th><th scope="col">指令</th></tr></thead>

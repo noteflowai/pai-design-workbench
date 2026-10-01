@@ -53,7 +53,7 @@ elif args.action in ("send", "apply-release"):
         script = args.script.read_text()
     response = operator.client("ssm").send_command(
         InstanceIds=[outputs["InstanceId"]], DocumentName="AWS-RunShellScript",
-        Parameters={"commands": [script], "executionTimeout": ["600"]},
+        Parameters={"commands": [script], "executionTimeout": ["1800"]},
         Comment="PAI workbench authorized deployment verification",
     )
     print(response["Command"]["CommandId"])

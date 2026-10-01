@@ -79,7 +79,17 @@ test("full lifecycle: requirement, native review, replay, feedback recheck, hand
   await page.getByRole("button", { name: "保存为 v2" }).click();
   await expect(page.getByText(/需求已修订为 v2/)).toBeVisible();
   await expect(page.getByRole("combobox", { name: "选择已有任务" })).toContainText("v2");
+  for (const width of [1024, 1280, 1440]) {
+    // The docked assistant must sit beside the work area, never on top of it.
+    await page.setViewportSize({ width, height: 800 });
+    if (await page.getByRole("complementary", { name: "AI 助手" }).count() === 0) await page.getByRole("button", { name: "AI 助手" }).click();
+    const [mainBox, asideBox] = await Promise.all([page.locator("main").boundingBox(), page.getByRole("complementary", { name: "AI 助手" }).boundingBox()]);
+    expect(mainBox!.x + mainBox!.width).toBeLessThanOrEqual(asideBox!.x + 1);
+    expect(mainBox!.width).toBeGreaterThanOrEqual(560);
+    await noOverflow(page);
+  }
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("complementary", { name: "AI 助手" })).toHaveCount(0);
   await rail(page, /原生验证/).click();
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("validate-mobile.png"), fullPage: true });

@@ -134,7 +134,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       const body = step.method === "POST" ? { ...payload, requestId: requestIdFor(`pai-plan-${plan.id}-${step.id}`) } : payload;
       const run = () => api<{ id: string; state?: string }>(route, body, step.method);
       const kind = nativeKind[step.tool];
-      if (kind) { c.navigate("validate", { kind }); if (window.innerWidth < 900) onClose(); }
+      if (kind) { c.navigate("validate", { kind }); if (window.innerWidth < 1024) onClose(); }
       const record = kind ? await c.track(body.requestId, step.title, kind, run) : await run();
       await api(`/assistant/plans/${plan.id}/confirmations`, { planId: step.id, recordKind: recordKind[step.tool], recordId: record.id });
       if (step.tool === "create-project") { c.selectProject(record.id); c.navigate("overview"); }
