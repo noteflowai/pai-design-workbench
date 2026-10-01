@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-10-01T02:44:19.106802+00:00",
+  "result": "passed",
+  "version": "0.2.0",
+  "releaseSha256": "a217550db577081f15173f41aa623ab3cddd6da1d533f34cc800f2eb638b1daf",
+  "commit": "5d37dabdadc653affeacd621e6eebe5c7f4b23a3",
+  "documentCount": 47,
+  "rowsSha256": "93da681877a70ad4545bc467490af8e2d44a1f3edfaaf82e83705ad5480d7121",
+  "allRowsUnchanged": true,
+  "running": 0,
+  "sqliteIntegrity": "ok",
+  "hostedCadFilesUnchanged": true,
+  "cadIds": [
+    "79759f92-0626-49cc-8904-c1fcfa18a6e5",
+    "e1109b3d-f50f-4d70-b89b-ff452c58ad1f"
+  ],
+  "feedbackClosed": true,
+  "requirementsUnchanged": true,
+  "oldReleaseRetained": true,
+  "noAutomaticReplay": true,
+  "independentParticipants": 0
+}

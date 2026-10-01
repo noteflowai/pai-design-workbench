@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-10-01T02:43:03.668Z",
+  "result": "passed",
+  "site": "https://pai.oneai.host",
+  "cognito": true,
+  "projectId": "f87948dd-48e1-4dee-a6af-2e7fb108849e",
+  "cadIds": [
+    "79759f92-0626-49cc-8904-c1fcfa18a6e5",
+    "e1109b3d-f50f-4d70-b89b-ff452c58ad1f"
+  ],
+  "verdicts": [
+    "rejected",
+    "accepted-cad-part"
+  ],
+  "failedChecks": [
+    "min-wall"
+  ],
+  "feedbackClosed": true,
+  "requirementsUnchanged": true,
+  "files": [
+    {
+      "runId": "79759f92-0626-49cc-8904-c1fcfa18a6e5",
+      "which": "baseline",
+      "sha256": "73685a59b4e3d6ac45b2248616adfb9c3b2d03b66012edc4c3bd9663d55e6e0f",
+      "bytes": 67966
+    },
+    {
+      "runId": "79759f92-0626-49cc-8904-c1fcfa18a6e5",
+      "which": "candidate",
+      "sha256": "589208004fe7fe366ff9dcba0f26cac78c9ab5b1d3762f492ce561ceab7ac5e3",
+      "bytes": 68072
+    },
+    {
+      "runId": "e1109b3d-f50f-4d70-b89b-ff452c58ad1f",
+      "which": "baseline",
+      "sha256": "77dd030fca5a9ddf6500e87d3c6c5043bdc918d1cb26d71cf10a2bf647d320d7",
+      "bytes": 67966
+    },
+    {
+      "runId": "e1109b3d-f50f-4d70-b89b-ff452c58ad1f",
+      "which": "candidate",
+      "sha256": "99c2c7347073ddd6b25010f167ba38f2493f96e77fc411269828138c52e394b4",
+      "bytes": 67966
+    }
+  ],
+  "independentParticipants": 0,
+  "modelProposalConfigured": false,
+  "physicalValidation": false
+}

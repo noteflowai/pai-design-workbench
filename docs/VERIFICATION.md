@@ -16,6 +16,16 @@
 
 截图：[总览](evidence/overview-desktop.png)、[CAD](evidence/cad-desktop.png)、[CAD 手机](evidence/cad-mobile.png)。演示视频由 `scripts/record-demo.mjs` 在本地实际录制，原生计算全程真实执行；`tools/render_demo.py` 用 ffmpeg freezedetect 找出画面静止的等待片段并按 6 倍速播放，不剪切、不调换顺序。
 
+## 0.2.0 发布与云端复核（2026-10-01）
+
+[发布 v0.2.0](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.0)，提交 `5d37dab`，发布包 `a217550d…b1daf`。[最终发布 PR CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36806224444) 的 LTS、Current 与基础设施三个作业全部通过；隔离副本也用 Node 24.21.0 完成 39 组检查、真实 Blender/CAD、14 个工业用例和六条浏览器流程。
+
+线上同功能源码版本实际执行 CAD：轻量化候选仅 min-wall 失败；恢复基准参数、保持需求摘要不变后通过，反馈关闭；原生 B-Rep 实时阶段、工程视图、STEP 下载、390px 布局与控制台检查通过。随后 0.2.0 元数据版本原子切换，47 条文档记录的逐行汇总摘要完全一致，SQLite integrity 为 ok，四份 STEP 摘要与关闭反馈保留。未自动重放任务，旧发布目录仍保留。
+
+切换后重新验证 Cognito/ALB 认证、原记录与 STEP 文件、390px 无横向溢出、跨源写入 403、未登录 STEP 下载重定向及退出返回登录页。WordPress 公网 200；同 VPC/ALB；四条 ALB 路由（100、110、120、default）摘要均不变；目标健康；持久卷加密、备份保留 14 天。快照恢复仍未演练。
+
+回执：[CAD 文件与反馈](evidence/deployment-cad-v020.json)、[47 条记录持久化](evidence/deployment-persistence-v020.json)、[手机与认证边界](evidence/deployment-ui-v020.json)、[共享基础设施](evidence/deployment-infra-v020.json)。[线上手机截图](evidence/cloud-v020-mobile.png)。本轮新增一个维护者任务、两个 CAD 检查和一条关闭反馈；独立参与人数仍为 0，模型提案未配置，没有新策略推理或物理验证。
+
 ## AI 工作室、实时视口与工厂孪生（2026-09-30 第二轮）
 
 本地 Node 22.23.3（CI 另用 24.21 LTS 与 26.10 Current）、Blender 5.2.2 LTS、Chromium（SwiftShader WebGL）实际运行：

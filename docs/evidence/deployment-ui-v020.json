@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-10-01T02:44:46.375Z",
+  "result": "passed",
+  "site": "https://pai.oneai.host",
+  "phoneWidth": 390,
+  "noHorizontalOverflow": true,
+  "consoleErrors": 0,
+  "crossOriginWrite": 403,
+  "anonymousCadFile": 302,
+  "logoutReturnedToLogin": true,
+  "independentParticipants": 0
+}
