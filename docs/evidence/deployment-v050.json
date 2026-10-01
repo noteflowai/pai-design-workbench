@@ -67,5 +67,26 @@
   "result": "passed",
   "consoleErrors": 0,
   "promptAndAnswerContentRecorded": false,
-  "note": "Verification ran twice: the first pass completed the editor/sandbox steps and started the real Kiro request but its wait ended early (state still running); the resumed pass confirmed the same AI run's cad-code plan. One real Kiro attempt was used; nothing was replayed."
+  "note": "Verification ran twice: the first pass completed the editor/sandbox steps and started the real Kiro request but its wait ended early (state still running); the resumed pass confirmed the same AI run's cad-code plan. One real Kiro attempt was used; nothing was replayed.",
+  "lifecycleFix": {
+    "release": "a06d76b828978c071e9728b3b26d330b89b3b0169db91dc43f499abdb37763c6",
+    "checkedAt": "2026-10-01T12:47:19.051Z",
+    "health": "ok",
+    "cads": [
+      {
+        "verdict": "rejected",
+        "code": "5c8ca21c"
+      },
+      {
+        "verdict": "accepted-cad-part",
+        "code": "4009e7e1"
+      }
+    ],
+    "failingCases": [
+      "CAD 最小壁厚：基准通过，生成代码（代码 5c8ca21c）失败"
+    ],
+    "next": "为失败案例记录反馈",
+    "overflow390": false,
+    "consoleErrors": 0
+  }
 }
