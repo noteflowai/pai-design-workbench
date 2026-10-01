@@ -1,0 +1,39 @@
+{
+  "schema": "pai-aws-verification-v060",
+  "site": "https://pai.oneai.host",
+  "release": "11e6f0407b8a3fd5821cf9959bc8e63aae7bd62a85d7832aaeb80ba3f9e48ed2",
+  "sourceCommit": "0de73bf",
+  "checkedAt": "2026-10-01T14:37:36.300Z",
+  "initialStatus": 202,
+  "sweep": {
+    "points": 24,
+    "seconds": 48,
+    "feasible": 3,
+    "lightest": {
+      "thickness": 3,
+      "width": 60,
+      "plateHeight": 46,
+      "pilotBore": 22.5,
+      "massG": 37.356
+    },
+    "pareto": [
+      12,
+      18,
+      24
+    ],
+    "receipt": [
+      "cadquery-sweep:0"
+    ]
+  },
+  "candidate": {
+    "variant": "parametric",
+    "verdict": "accepted-cad-part",
+    "fromSweep": true,
+    "massG": 37.356,
+    "evalarcBlocking": 0
+  },
+  "overflow390": false,
+  "note": "First hosted attempt (release 6858cb9e) completed the sweep natively in 45 s but the UI stopped at running: /api/cad-sweeps was missing from the client's 202 status allowlist. Fixed in 0de73bf with a guard test; this pass is on the fixed release.",
+  "result": "passed",
+  "consoleErrors": 0
+}
