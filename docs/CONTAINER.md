@@ -19,13 +19,13 @@
 
 ```bash
 python3 tools/package_executor.py
-docker build --build-context executor=.state/deploy --build-arg PAI_UID=$(id -u) -t pai-workbench:0.4.0 .
+docker build --build-context executor=.state/deploy --build-arg PAI_UID=$(id -u) -t pai-workbench:0.5.0 .
 docker run -d --name pai --network host \
   -e PAI_CONTROLLER_DATABASE=/ledger/ledger.sqlite3 -e PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2 \
   -v pai-data:/data -v ~/.local/state/pai-design-workbench/budget:/ledger \
   -v ~/.config/agent-cli/env:/home/pai/.config/agent-cli/env:ro \
   -v ~/.config/kiro-failover:/home/pai/.config/kiro-failover:ro \
-  pai-workbench:0.4.0
+  pai-workbench:0.5.0
 ```
 
 - **凭据只在运行时挂载，从不写入镜像。** 镜像里没有任何密钥；`docker history` 中也没有。

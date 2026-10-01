@@ -16,7 +16,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /** Only a loopback HTTP workbench: the MCP server never sends workspace data to another host. */
