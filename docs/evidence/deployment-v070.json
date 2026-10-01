@@ -1,0 +1,90 @@
+{
+  "schema": "pai-aws-industrial-v070",
+  "site": "https://pai.oneai.host",
+  "release": "3fba9d85de4d6b21a9830865183a5a7b339cbdc42e37cd4fb37477a5493adf02",
+  "sourceCommit": "4891c46",
+  "checkedAt": "2026-10-01T18:30:27.963Z",
+  "cases": [
+    {
+      "id": "R1",
+      "title": "相机外参偏移",
+      "passed": true,
+      "actual": "rejected；丢失 seed 9",
+      "seconds": 2
+    },
+    {
+      "id": "B1",
+      "title": "相机视线遮挡（Blender）",
+      "passed": true,
+      "actual": "202→200 rejected；首个命中 Visibility obstruction",
+      "seconds": 22
+    },
+    {
+      "id": "C2",
+      "title": "轻量化 2.5 mm",
+      "passed": true,
+      "actual": "202→200 rejected；min-wall",
+      "seconds": 14
+    },
+    {
+      "id": "C3",
+      "title": "止口孔偏小",
+      "passed": true,
+      "actual": "rejected；nema17-interface,motor-interference",
+      "seconds": 12
+    },
+    {
+      "id": "F1",
+      "title": "工厂孪生默认标准",
+      "passed": true,
+      "actual": "rejected；产出 3,11；EV 10",
+      "seconds": 0
+    },
+    {
+      "id": "G1",
+      "title": "生成代码 2.5 mm（沙箱）",
+      "passed": true,
+      "actual": "202→200 rejected；min-wall；沙箱 ok",
+      "seconds": 16
+    },
+    {
+      "id": "G3",
+      "title": "越权代码",
+      "passed": true,
+      "actual": "422 CAD_CODE_POLICY",
+      "seconds": 0
+    },
+    {
+      "id": "S1",
+      "title": "设计空间扫描 8 点",
+      "passed": true,
+      "actual": "202→200 可行 3/8；最轻 t=3 37.356 g",
+      "seconds": 18
+    },
+    {
+      "id": "S2",
+      "title": "扫描点转为正式候选",
+      "passed": true,
+      "actual": "accepted-cad-part；37.356 g",
+      "seconds": 12
+    }
+  ],
+  "capabilities": {
+    "engines": [
+      "kiro-primary",
+      "kiro-backup",
+      "kiro-backup2"
+    ],
+    "transport": "local",
+    "blender": true,
+    "generatedCode": true,
+    "sweep": true
+  },
+  "overflow390": false,
+  "consoleErrors": 0,
+  "totals": {
+    "cases": 9,
+    "passed": 9
+  },
+  "result": "passed"
+}

@@ -8,6 +8,7 @@
 |---|---|
 | `npm run test:suite` | **25/25 通过**（开启 A3、X1）。覆盖：机器人感知 R1–R2，Blender 布局 B1–B3，CAD 零件 C1–C5，工厂孪生 F1–F3，AI 助手 A1–A3（A3 为真实 Kiro 调用），生成代码沙箱 G1–G4，设计空间 S1–S2，从失败到发布、需求修订的完整闭环 L1，MCP 外部 Agent M1，AgentCore arm64 云端沙箱 X1。见[回执](evidence/industrial-suite.json)和[用例说明](INDUSTRIAL_TEST_CASES.md) |
 | 其余端到端 | `test:native`、`test:blender`、`test:cad`、`test:cad-code`、`test:cad-sweep` 全部通过；浏览器 11 组通过；单元测试 58 组通过；AgentCore 入口契约测试通过 |
+| pai.oneai.host（release `3fba9d85…df02`） | 通过 Cognito 登录后经 HTTPS API 跑 9 个典型用例，全部通过：R1 相机外参、B1 Blender 遮挡、C2 轻量化、C3 止口孔、F1 工厂孪生、G1 沙箱生成代码、G3 越权代码、S1 8 点扫描（最轻 t=3、37.356 g）、S2 扫描点转为候选。长任务首个响应为 202，浏览器轮询状态地址；390 px 无溢出，控制台无错误；WordPress 返回 200，ALB 原有规则未改。见[回执](evidence/deployment-v070.json)和[基础设施](evidence/deployment-infra-v070.json) |
 | 新增功能 | MCP 新增工具 `pai_check_cad_code`（只做静态策略检查，不执行），对应 [AI_CAD_LANDSCAPE.md](AI_CAD_LANDSCAPE.md) 中列出的差距；5 项差距已全部补齐 |
 
 ## Amazon Bedrock AgentCore（arm64 自带容器，2026-10-02）

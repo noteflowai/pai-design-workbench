@@ -1,0 +1,39 @@
+{
+  "schema": "pai-aws-infrastructure-verification-1",
+  "checkedAt": "2026-10-01T18:32:26.321778+00:00",
+  "result": "passed",
+  "region": "ap-northeast-1",
+  "stackStatus": "UPDATE_COMPLETE",
+  "site": "https://pai.oneai.host",
+  "instanceId": "i-064e7aea50176ad07",
+  "instanceType": "t3.medium",
+  "vpcId": "vpc-fb40619c",
+  "wordPressTaskVpcId": "vpc-fb40619c",
+  "sameVpc": true,
+  "sharedAlb": "ai-srv-alb",
+  "newAlb": false,
+  "newRulePriority": 120,
+  "existingRulesUnchanged": [
+    "100",
+    "110",
+    "default"
+  ],
+  "wordPressPublicStatus": 200,
+  "targetHealth": "healthy",
+  "dataVolume": {
+    "id": "vol-0f795222a2404ea0a",
+    "encrypted": true,
+    "sizeGiB": 40,
+    "type": "gp3"
+  },
+  "ingressOnlyFromAlb": true,
+  "backup": {
+    "schedule": "cron(0 18 * * ? *)",
+    "retentionDays": 14,
+    "snapshotRestoreTested": false
+  },
+  "releaseSha256": "3fba9d85de4d6b21a9830865183a5a7b339cbdc42e37cd4fb37477a5493adf02",
+  "runtimeSourceCommit": "4891c469b83de16a4ccea19516eedab54ddd6740",
+  "aiSecret": "pai-workbench/kiro-keys-3ZRtph",
+  "executorAsset": "1a32b50516d49d698c783a3eb2401bb59328d9bc065fb2acfbe0ca42f5adb0b2.tar"
+}
