@@ -245,7 +245,9 @@ test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and 
   await expect(page.locator(".outliner").getByText("NEMA 17 motor")).toBeVisible();
   await expect(page.locator(".check-item.fail")).toHaveCount(1);
   await expect(page.locator(".check-item.fail")).toContainText("最小壁厚");
-  await expect.poll(() => page.locator(".drawings img").evaluateAll(images => images.length === 2 && images.every(i => (i as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  // ~85 kB SVG drawings decode after the native run; allow for a loaded CI runner.
+  await expect.poll(() => page.locator(".drawings img").evaluateAll(images => images.length === 2 && images.every(i => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0)),
+    { timeout: 30_000 }).toBe(true);
   await page.getByRole("button", { name: "查看证据与回放 →" }).click();
   const step = await page.request.get(await page.getByRole("link", { name: "下载可编辑 STEP" }).getAttribute("href") as string);
   expect(step.status()).toBe(200); expect((await step.text()).startsWith("ISO-10303-21")).toBe(true);
