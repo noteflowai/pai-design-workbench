@@ -1,0 +1,20 @@
+{
+  "schema": "pai-existing-documents-reconciliation-1",
+  "documents": 48,
+  "integrity": "ok",
+  "running": 0,
+  "rowsSha256": "6900613e59ac81cf5c1c2be9a33e97b39cd95656f1dbf465449f0c50007ef795",
+  "original47Preserved": true,
+  "additions": [
+    {
+      "kind": "project",
+      "id": "cf2c50a7-6991-4e81-899b-564b96535643",
+      "revision": 1,
+      "createdAt": "2026-10-01T03:03:31.399Z",
+      "originalRecordsSha256": "93da681877a70ad4545bc467490af8e2d44a1f3edfaaf82e83705ad5480d7121"
+    }
+  ],
+  "result": "passed",
+  "version": "0.2.1",
+  "comparison": "exact original47 logical document rows preserved; one independently added record during concurrent activity"
+}

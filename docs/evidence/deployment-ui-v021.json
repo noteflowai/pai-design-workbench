@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-10-01T03:06:21.463Z",
+  "result": "passed",
+  "version": "0.2.1",
+  "site": "https://pai.oneai.host",
+  "widthChecks": [
+    {
+      "width": 1024,
+      "workAreaWidth": 616,
+      "assistantBesideWorkArea": true,
+      "noOverflow": true
+    },
+    {
+      "width": 1280,
+      "workAreaWidth": 712,
+      "assistantBesideWorkArea": true,
+      "noOverflow": true
+    },
+    {
+      "width": 1440,
+      "workAreaWidth": 812,
+      "assistantBesideWorkArea": true,
+      "noOverflow": true
+    }
+  ],
+  "phoneWidth": 390,
+  "noHorizontalOverflow": true,
+  "escapeClosesAssistant": true,
+  "backdropClosesAssistantAt820": true,
+  "phoneCloseButton": true,
+  "activePhoneStageVisible": true,
+  "consoleErrors": 0,
+  "crossOriginWrite": 403,
+  "anonymousCadFile": 302,
+  "logoutReturnedToLogin": true,
+  "independentParticipants": 0
+}

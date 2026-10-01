@@ -18,6 +18,18 @@
 
 截图：[总览](evidence/overview-desktop.png)、[CAD](evidence/cad-desktop.png)、[CAD 手机](evidence/cad-mobile.png)。演示视频由 `scripts/record-demo.mjs` 在本地实际录制，原生计算全程真实执行；`tools/render_demo.py` 用 ffmpeg freezedetect 找出画面静止的等待片段并按 6 倍速播放，不剪切、不调换顺序。
 
+## 0.2.1 发布与云端复核（2026-10-01）
+
+[发布 v0.2.1](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.1)，运行源码 `f610fa1`，发布包 `571b6bd1…e6ba0a`。[该版本 CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36807659122) 三个作业全部通过，包括 39 组检查、14 个工业用例和六条浏览器流程。此版调整界面与运维超时，原生验收规则不变。
+
+线上重新实际登录 Cognito，验证 1024/1280/1440px 下工作区宽度分别为 616/712/812px，助手位于工作区旁侧；820px 遮罩关闭、390px Esc 与关闭按钮、当前手机阶段自动滚动、无横向溢出、退出返回登录页均通过，页面错误为 0。跨源写入 403，未登录 STEP 下载 302。
+
+部署期间发现外部维护者同时切换了相同源码的另一打包版本 `68ca9bb4…237e`，并新增一个任务。已保留该旧目录及观测记录，未重放任何原生任务。复核时 48 条文档中去除唯一新增任务后，原有 47 条逐行汇总 SHA-256 仍为 `93da681877a70ad4545bc467490af8e2d44a1f3edfaaf82e83705ad5480d7121`；SQLite integrity 为 ok，运行中任务为 0。此处验证的是 documents 表的逻辑记录，未宣称数据库物理字节或其他表不变。四份原 STEP 下载摘要与关闭反馈均保留。
+
+基础设施 UPDATE_COMPLETE，目标健康，同 WordPress VPC 和 ALB，100/110/120/default 四条路由摘要全部不变，WordPress 公网 200，40GiB 持久卷加密，备份保留 14 天；恢复演练仍未完成。独立参与者仍为 0，模型提案未配置。
+
+回执：[CAD 与反馈](evidence/deployment-cad-v021.json)、[逐记录持久化](evidence/deployment-persistence-v021.json)、[响应式布局与认证](evidence/deployment-ui-v021.json)、[共享基础设施](evidence/deployment-infra-v021.json)。截图：[线上桌面](evidence/cloud-v021-desktop.png)、[线上手机](evidence/cloud-v021-mobile.png)。
+
 ## 0.2.0 发布与云端复核（2026-10-01）
 
 [发布 v0.2.0](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.0)，提交 `5d37dab`，发布包 `a217550d…b1daf`。[最终发布 PR CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36806224444) 的 LTS、Current 与基础设施三个作业全部通过；隔离副本也用 Node 24.21.0 完成 39 组检查、真实 Blender/CAD、14 个工业用例和六条浏览器流程。
