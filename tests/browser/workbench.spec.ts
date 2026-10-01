@@ -354,6 +354,14 @@ test("AI engine: Kiro fallback receipt, cited answer, validated plan, reconcilia
   await expect(fallback).toContainText("Kiro 备用账号 ✓");
   await expect(assistant.getByText("Kiro 备用账号 · claude-opus-5.5").last()).toBeVisible();
   await expect(assistant.getByText(/已拒绝 AI 计划 p2（approve-release）/)).toBeVisible();
+  // Answer bubbles, citations and plan cards stack in normal flow; none overlaps another.
+  const overlaps = await assistant.locator(".chat-timeline").evaluate(el => {
+    el.scrollTop = el.scrollHeight;
+    if ([...el.querySelectorAll("*")].some(n => ["sticky", "fixed"].includes(getComputedStyle(n).position))) return true;
+    const boxes = [...el.querySelectorAll(".turn > *")].map(n => n.getBoundingClientRect()).filter(r => r.height > 0);
+    return boxes.some((a, i) => boxes.slice(i + 1).some(b => a.bottom - 1 > b.top && b.bottom - 1 > a.top));
+  });
+  expect(overlaps).toBe(false);
   const cite = assistant.getByRole("group", { name: "引用的记录" }).last().getByRole("button", { name: /CAD 零件 · lightweight/ });
   await cite.click();
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible();

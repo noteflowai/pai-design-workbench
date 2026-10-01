@@ -307,7 +307,7 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
 .bubble { border-radius: 10px; padding: 10px 12px; font-size: 13px; overflow-wrap: anywhere; }
 .bubble p { color: inherit; margin: 3px 0; font-size: 12.5px; }
 .bubble.user { justify-self: end; max-width: 92%; background: var(--brand); color: #fff; border-bottom-right-radius: 3px; }
-.bubble.assistant, .bubble.tool { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+.bubble.reply, .bubble.tool { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
 .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .plan-card { margin-top: 8px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 10px; background: var(--surface); }
 .plan-card.done { border-color: #c7e5d6; background: #f7fcf9; }
@@ -518,7 +518,8 @@ main { padding-bottom: calc(48px + var(--status)); }
 .compare .sel { box-shadow: inset 0 0 0 2px var(--brand); }
 
 /* AI engine receipts, cited answers and reconciliation */
-.assistant-head { flex-wrap: wrap; }
+.assistant-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+.assistant-head small { display: block; }
 .segmented.mode button { min-height: 30px; padding: 4px 10px; font-size: 12px; }
 .fallback { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; padding: 0; width: 100%; font-size: 11px; }
 .fallback li { padding: 2px 6px; border-radius: 4px; background: var(--sunken); color: var(--ink-2); }

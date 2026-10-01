@@ -193,7 +193,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
         <div className="suggestions">{SUGGESTIONS.map(s => <button key={s} type="button" className="suggestion" onClick={() => void send(undefined, s)}>{s}</button>)}</div></div>}
       {plans.map(plan => <div key={plan.id} className="turn">
         <div className="bubble user">{plan.message}</div>
-        <div className="bubble assistant">
+        <div className="bubble reply">
           <EngineMeta plan={plan} />
           {plan.interpretation.map((line, i) => <p key={i} className={line.startsWith("已拒绝") ? "rejected-line" : ""}>{line}</p>)}
           {plan.answer && <div className="ai-answer"><p>{plan.answer.text}</p>
@@ -235,7 +235,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       </div>)}
       {session && (session.running || session.steps.length > 0) && <div className="bubble tool"><LiveSteps session={session} />
         {(session.kind === "blender-scene" || session.kind === "cad-part") && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: session.kind, ...(session.recordId ? { id: session.recordId } : {}) })}>在三维视口查看 →</button>}</div>}
-      {thinking && <div className="bubble assistant typing" aria-label="解析中"><i /><i /><i /></div>}
+      {thinking && <div className="bubble reply typing" aria-label="解析中"><i /><i /><i /></div>}
     </div>
     <form className="composer" onSubmit={e => void send(e)}>
       <label className="visually-hidden" htmlFor="studio-input">设计意图</label>
