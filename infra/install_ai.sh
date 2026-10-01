@@ -18,7 +18,8 @@ ROOT=$(python3 -c "import json,sys; print(json.loads(sys.argv[1].strip().splitli
 runuser -u pai -- install -d -m 0700 /var/lib/pai/.config /var/lib/pai/.config/agent-cli /var/lib/pai/.config/kiro-failover
 python3 - <<'PY'
 import boto3, json, os, re
-keys = json.loads(boto3.client("secretsmanager").get_secret_value(SecretId=os.environ["PAI_AI_KEYS_ARN"])["SecretString"])
+arn = os.environ["PAI_AI_KEYS_ARN"]
+keys = json.loads(boto3.client("secretsmanager", region_name=arn.split(":")[3]).get_secret_value(SecretId=arn)["SecretString"])
 assert set(keys) == {"primary", "backup", "backup2"} and all(re.fullmatch(r"ksk_[A-Za-z0-9_-]{20,}", v) for v in keys.values())
 import pwd
 pai = pwd.getpwnam("pai")
