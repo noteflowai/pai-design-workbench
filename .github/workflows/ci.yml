@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   infrastructure:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -23,11 +23,9 @@ jobs:
           cache-dependency-path: infra/package-lock.json
       - run: npm ci
         working-directory: infra
-      - run: npm run check
-        working-directory: infra
-      - run: bash -n infra/bootstrap.sh infra/update_release.sh
+      - run: bash scripts/check_cpu.sh infra
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       matrix:
@@ -44,7 +42,7 @@ jobs:
         with:
           python-version: "3.14"
       - run: npm ci
-      - run: npm run check
+      - run: bash scripts/check_cpu.sh core
       - name: Fetch pinned native tools and original recording
         run: npm run setup:demo
       - name: Native recording, feedback and independent handoff
