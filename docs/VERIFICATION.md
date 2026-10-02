@@ -14,6 +14,9 @@
 | 桌面端（`npm run test:desktop`） | linux-unpacked 和 AppImage 各跑一次：Electron 44.5.1 / Node 24.21.0；安全设置全部生效；5 个原生菜单齐全；典型用例 C2 通过界面得到最小壁厚不合格；关闭应用后服务端口不再响应；首次安装路径检查通过（没有工具时提供安装按钮）。安装包：AppImage 211 MB，deb 166 MB（依赖 python3、bubblewrap）。见[回执](evidence/desktop-e2e.json)和[截图](evidence/desktop-c2.png) |
 | 修复的问题 | 表格里的 `.visually-hidden` 是绝对定位，跳出了滚动容器，把手机页面撑宽到 637 px；网格子元素不能缩小到内容宽度以下；浅色主题的三级文字对比度只有 3.6:1；深色主题主按钮和用户气泡的对比度不足。以上均已修复，并由测试覆盖 |
 
+| CI 桌面打包（`Desktop packages`，run 36953877489） | Linux（AppImage + deb）、Windows（nsis）、macOS（dmg，arm64）三个平台都打包成功；Linux 上对打包后的应用做了冒烟测试，结果 passed，关闭后服务端口不再响应 |
+| pai.oneai.host（release `4f9d694d…11fe`） | 登录后，axe 扫描 30 个页面（10 个视图 × 浅色/深色 1440 px、深色 390 px）：严重和关键问题 0，无溢出；CAD 实测表格中只有“最小壁厚”一行未通过（2.5 mm，要求 ≥ 3，余量 -17%）；点“问 AI”后输入框带上问题并获得焦点；Ctrl+K 可跳转到 CAD 通道；控制台无错误；WordPress 返回 200，ALB 规则未改。见[回执](evidence/deployment-v080.json)和[截图](evidence/cloud-ui-dark.png) |
+
 表中的原生桌面回执来自 Linux。跨平台 CI 的当前验收规则见 [DESKTOP.md](DESKTOP.md)：PR/main 运行三平台路径、提交和失败保留检查；手动/tag 构建还分别启动三平台打包程序，验证隔离、平台能力与退出，并保存结果或失败证据。Windows/macOS 启动 smoke 不等于已经通过原生 C2，自动安装目前仅支持 Linux x64。
 
 截图：[深色验证工作区](evidence/ui-dark-validate.png)、[浅色 + AI 助手](evidence/ui-light-validate-assistant.png)、[深色手机](evidence/ui-dark-mobile.png)。

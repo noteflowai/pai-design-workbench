@@ -1,0 +1,30 @@
+{
+  "schema": "pai-aws-ui-v080",
+  "site": "https://pai.oneai.host",
+  "release": "4f9d694d43e92b68c6278282794e0448af78c41168079b5c03f624ea97ec11fe",
+  "sourceCommit": "e3e1878",
+  "checkedAt": "2026-10-02T02:12:16.585Z",
+  "accessibility": {
+    "pagesScanned": 30,
+    "seriousOrCritical": 0,
+    "found": [],
+    "overflowPages": 0
+  },
+  "measuredTable": {
+    "failedRows": 1,
+    "text": "×最小壁厚 未通过 板厚与孔间韧带 2.5mm ≥ 3mm -17% ✦ 问 AI"
+  },
+  "viewport": {
+    "top": 275,
+    "height": 522
+  },
+  "askFromRow": {
+    "prefilled": true,
+    "focused": true
+  },
+  "palette": {
+    "jumpedToCad": true
+  },
+  "consoleErrors": 0,
+  "result": "passed"
+}
