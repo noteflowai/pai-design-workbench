@@ -6,9 +6,17 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
-![交互演示：AI 计划驱动 CadQuery 实时建模、Blender 视线检查、工厂孪生评审与反馈复测闭环](docs/media/demo.gif)
+[![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
 
-完整演示视频：[docs/media/demo.mp4](docs/media/demo.mp4)（约 2 分钟）。原生计算在录制时全程真实执行；成片只把画面静止的等待片段按 6 倍速播放，没有剪切或调换顺序。
+**完整演示视频**：[docs/media/demo.mp4](docs/media/demo.mp4)（约 3 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-2026-10-02) 下载。
+
+视频里的全部结果都是录制时实时产生的：
+1. NEMA 17 支架轻量化，板厚 4 → 2.5 mm，被原生检查拒绝。
+2. 在“最小壁厚”这一行点“问 AI”，真实调用 Kiro 主账号（claude-opus-5.5），由它写出 CadQuery 代码。
+3. 代码在三层沙箱中建模，通过全部 7 项检查，39.6 g。
+4. 16 点原生设计空间扫描，找到最轻的可行设计 t = 3 mm，37.4 g，作为正式候选也通过了检查。
+
+成片没有剪切或调换顺序，只把画面静止的等待片段加速播放。回执见 [demo.json](docs/evidence/demo.json)。
 
 实现了四条原生证据通道：**机器人历史记录评审**、**Blender 工作单元布局**、**CadQuery/OCCT 参数化 CAD 零件**、**工厂孪生维护与能源评审**。它们共用同一条生命周期闭环：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 发布交付。需求版本只追加、可逐项比较；发布候选须通过准入检查（检查通过、绑定当前需求、失败案例均已关闭）并经维护者批准，需求修订后自动废止。底部状态栏显示原生任务、需求哈希与工具状态。左侧栏显示每个阶段的状态，总览页给出“下一步”，二者都由已保存的记录推导。
 

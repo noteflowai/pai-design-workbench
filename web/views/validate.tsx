@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { CANDIDATES, KIND_LABEL, useApp, type RunKind } from "../context";
-import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, time, verdictOf, type RunItem } from "../ui";
+import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, revealInScroller, time, verdictOf, type RunItem } from "../ui";
 import { LiveSteps, viewportModel } from "../studio";
 import { FactoryResult } from "../factory";
 import { recordCaseFeedback } from "../actions";
@@ -146,7 +146,7 @@ export function Validate() {
   const selected: RunItem | undefined = runs.find(r => r.id === id) ?? (live && !id ? undefined : runs.find(r => !kind || r.kind === kind));
   const liveKind = live && !selected ? live.kind : undefined;
   // Keep the selected record visible in the list or strip (it may be off-screen after navigation).
-  useEffect(() => { document.querySelector(".run-list .run.selected")?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [selected?.id]);
+  useEffect(() => { revealInScroller(document.querySelector(".run-list .run.selected")); }, [selected?.id]);
   if (!project) return <><ViewHeader step="阶段 3 / 6 · 原生验证" title="原生验证" /><Empty title="先冻结需求" action={<button type="button" onClick={() => c.navigate("requirements", { new: "1" })}>新建评审任务</button>} /></>;
   const detailKind = selected?.kind ?? liveKind;
   return <>

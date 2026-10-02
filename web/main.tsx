@@ -5,7 +5,7 @@ const nextTheme = (t: Theme): Theme => t === "system" ? "light" : t === "light" 
 import { createRoot } from "react-dom/client";
 import { api } from "./api";
 import { AppContext, VIEWS, type Ctx, type Route, type State, type ViewId } from "./context";
-import { Toasts } from "./ui";
+import { revealInScroller, Toasts } from "./ui";
 import { Assistant, useLiveSession } from "./studio";
 import { Palette, type Command } from "./palette";
 import { Overview } from "./views/overview";
@@ -54,7 +54,7 @@ function App() {
   useEffect(() => {
     // On narrow screens the stage bar and tabs scroll sideways; keep the current item in view.
     requestAnimationFrame(() => document.querySelectorAll('.rail a[aria-current="page"], .tabs [aria-selected="true"]')
-      .forEach(e => e.scrollIntoView({ block: "nearest", inline: "center" })));
+      .forEach(e => revealInScroller(e)));
   }, [route.view, route.params.toString()]);
   useEffect(() => {
     // Crossing into phone width turns the docked assistant into a closed sheet instead of covering the work area.

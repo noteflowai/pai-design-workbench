@@ -1,0 +1,96 @@
+{
+  "schema": "pai-demo-1",
+  "recordedAt": "2026-10-02T15:25:16.890050+00:00",
+  "video": {
+    "file": "docs/media/demo.mp4",
+    "seconds": 190.2,
+    "sourceSeconds": 602.7,
+    "editing": "No cuts or reordering. Visually static waiting spans (native builds, the model call) play 6x faster after 2.5 s; a 5 s end-card still is appended because the recorder drops its final frames.",
+    "overlays": "Title/chapter cards, captions, cursor and keystroke badges are drawn only in the recording browser context"
+  },
+  "environment": {
+    "ui": "0.8.0 dark theme, 1440x900",
+    "cad": "CadQuery 2.8.0 / OCCT 7.9.3 (native)",
+    "sandbox": "AST policy + process lockdown + bubblewrap",
+    "ai": "real call through the bounded executor"
+  },
+  "chapters": [
+    {
+      "name": "requirements",
+      "seconds": 8.5
+    },
+    {
+      "name": "native-cad",
+      "seconds": 22.1
+    },
+    {
+      "name": "ai",
+      "seconds": 172.1
+    },
+    {
+      "name": "sweep",
+      "seconds": 376.8
+    },
+    {
+      "name": "finish",
+      "seconds": 585.5
+    }
+  ],
+  "aiRuns": [
+    {
+      "state": "done",
+      "engine": "kiro-primary",
+      "model": "claude-opus-5.5",
+      "engineVersion": "2.24.0",
+      "attempts": [
+        "kiro-primary:succeeded"
+      ],
+      "plans": [
+        "cad-code"
+      ],
+      "citations": [
+        "cad-1",
+        "project",
+        "version-1"
+      ],
+      "confirmed": [
+        "as-proposed"
+      ]
+    }
+  ],
+  "cadReviews": [
+    {
+      "variant": "lightweight",
+      "verdict": "rejected",
+      "massG": 31.85,
+      "failed": [
+        "min-wall"
+      ],
+      "sandbox": null
+    },
+    {
+      "variant": "generated",
+      "verdict": "accepted-cad-part",
+      "massG": 39.559,
+      "failed": [],
+      "sandbox": "ok"
+    },
+    {
+      "variant": "parametric",
+      "verdict": "accepted-cad-part",
+      "massG": 37.356,
+      "failed": [],
+      "sandbox": null
+    }
+  ],
+  "sweep": {
+    "points": 16,
+    "feasible": 3,
+    "pareto": [
+      8,
+      12,
+      16
+    ]
+  },
+  "promptAndAnswerContentRecorded": false
+}

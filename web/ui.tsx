@@ -82,3 +82,16 @@ export function verdictOf(kind: RunKind, verdict: string | undefined, state: str
   return v ? { label: v[0], tone: v[1] } : { label: state, tone: "muted" };
 }
 export { KIND_LABEL };
+
+/** Bring an element into view inside its own scrolling container only (tab strips, run lists); never scrolls the page. */
+export function revealInScroller(el: Element | null) {
+  for (let box = el?.parentElement; el && box && box !== document.body; box = box.parentElement) {
+    const s = getComputedStyle(box);
+    const x = /(auto|scroll)/.test(s.overflowX) && box.scrollWidth > box.clientWidth, y = /(auto|scroll)/.test(s.overflowY) && box.scrollHeight > box.clientHeight;
+    if (!x && !y) continue;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (x) { if (r.left < b.left) box.scrollLeft -= b.left - r.left + 8; else if (r.right > b.right) box.scrollLeft += r.right - b.right + 8; }
+    if (y) { if (r.top < b.top) box.scrollTop -= b.top - r.top + 8; else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8; }
+    return;
+  }
+}
