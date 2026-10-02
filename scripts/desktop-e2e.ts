@@ -41,7 +41,7 @@ try {
   await win.evaluate(() => { location.href = "https://example.com/"; });
   await win.waitForTimeout(1500);
   assert.ok(win.url().startsWith(origin), "foreign navigation stays out of the app window");
-  const st = await (await fetch(`${origin}/api/state`)).json() as { capabilities: { cad: unknown; blender: boolean } };
+  const st = await (await fetch(`${origin}/api/state`, { signal: AbortSignal.timeout(15_000) })).json() as { capabilities: { cad: unknown; blender: boolean } };
   if (!smoke) {
     assert.ok(st.capabilities.cad, "CadQuery configured (PAI_CADQUERY_PYTHON)");
     // C2 through the UI.
@@ -60,10 +60,12 @@ try {
   Object.assign(report, { result: "passed", app: { name: info.name, version: info.version, electron: info.electron, node: info.node, chrome: info.chrome }, menu: info.menu,
     security: { ...info.prefs, nodeInPage, foreignNavigationBlocked: true }, bridge, caseC2: smoke ? "skipped (smoke)" : { verdict: "rejected", failed: ["min-wall"] }, blender: st.capabilities.blender, smoke });
 } finally {
-  await appRun.close();
+  step("closing app");
+  await Promise.race([appRun.close(), new Promise(r => setTimeout(r, 20_000))]);
+  step("app closed");
   await new Promise(r => setTimeout(r, 1500));
   // The utility-process server must exit with the app: its loopback port no longer answers.
-  report.serverStoppedWithApp = origin ? await fetch(`${origin}/healthz`).then(() => false, () => true) : null;
+  report.serverStoppedWithApp = origin ? await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(3000) }).then(() => false, () => true) : null;
   await rm(userData, { recursive: true, force: true });
 }
 // Fresh machine: no native tools configured -> the CAD lane offers the pinned installer instead of a dead end.
@@ -87,8 +89,11 @@ try {
     const tools = await w.evaluate(() => (window as unknown as { paiDesktop: { info(): Promise<{ tools: unknown }> } }).paiDesktop.info().then(i => i.tools));
     step("fresh-install path checked");
     report.freshInstall = { cadInstallOffered: true, blenderInstallOffered: true, tools };
-  } finally { await run.close(); await rm(fresh, { recursive: true, force: true }); }
+  } finally { await Promise.race([run.close(), new Promise(r => setTimeout(r, 20_000))]); await rm(fresh, { recursive: true, force: true }); }
 }
 await mkdir(join(process.cwd(), ".state/evidence"), { recursive: true });
 await writeFile(join(process.cwd(), ".state/evidence/desktop-e2e.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
+step("done");
+// Electron helpers can outlive the test on headless CI; never let them keep this process alive.
+process.exit(0);
