@@ -279,13 +279,13 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(scene, reply, "scenes");
   });
   app.get("/api/scenes/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "checks.json"]) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "inspection.png", "checks.json"]) }).parse(request.params);
     const scene = store.get<SceneReview>("scene-review", p.id), name = `${p.which}/${p.file}`;
-    if (!scene || scene.state !== "completed") throw new DomainError("NOT_FOUND", "Completed scene evidence required", 404);
+    if (!scene || scene.state !== "completed" || !scene.files[name]) throw new DomainError("NOT_FOUND", "Completed scene evidence required", 404);
     const content = await readFile(join(config.state, "scenes", p.id, p.which, p.file));
     if (sha256(content) !== scene.files[name]) throw new DomainError("SCENE_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
-    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "checks.json": "application/json" };
-    if (p.file !== "preview.png") reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
+    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "inspection.png": "image/png", "checks.json": "application/json" };
+    if (!p.file.endsWith(".png")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
     return reply.type(types[p.file]).send(content);
   });
   app.get("/api/runs/:id", async (request, reply) => nativeResponse(workbench.review(paramId(request.params)), reply, "runs"));

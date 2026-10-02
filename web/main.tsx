@@ -123,6 +123,7 @@ function App() {
     { id: "scene", label: "生成并检查 Blender 场景（默认参数）", run: () => { if (ctx?.project && data?.capabilities.blender) void runScene(ctx, "occluded", { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true }); else navigate("design", { lane: "scene" }); } },
     { id: "cad", label: "CAD 零件：NEMA 17 电机支架", run: () => navigate("design", { lane: "cad" }) },
     { id: "factory", label: "工厂维护与能源评审", run: () => navigate("design", { lane: "factory" }) },
+    { id: "plant", label: "产线布局设计（Blender + 射线实测）", run: () => navigate("design", { lane: "plant" }) },
     ...(["persp", "top", "front", "right", "camera"] as const).map(v => ({ id: `view-${v}`, label: `视图：${{ persp: "透视", top: "顶视", front: "前视", right: "右视", camera: "检查相机" }[v]}`,
       hint: { persp: "5", top: "7", front: "1", right: "3", camera: "0" }[v], run: () => dispatchEvent(new CustomEvent("pai-view", { detail: v })) })),
     { id: "wire", label: "切换线框显示", hint: "Z", run: () => dispatchEvent(new CustomEvent("pai-view", { detail: "wire" })) },

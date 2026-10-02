@@ -1,6 +1,6 @@
 {
   "schema": "pai-industrial-suite-1",
-  "checkedAt": "2026-10-01T18:02:50.914Z",
+  "checkedAt": "2026-10-02T17:56:49.155Z",
   "result": "passed",
   "environment": {
     "node": "v22.23.3",
@@ -20,9 +20,9 @@
       "expected": "rejected；丢失 seed 9；Holm p 不支持显著改善",
       "actual": "rejected；camera 7/10 vs 基准 5/10；丢失 seed 9；Holm p=1",
       "passed": true,
-      "durationMs": 784,
+      "durationMs": 1865,
       "evidence": {
-        "reviewId": "56b232bb-e99b-4d2b-81d7-18b58a429aba",
+        "reviewId": "ac74131e-142e-4797-99ec-b22ecdc04b35",
         "blockingChanges": 1,
         "holmP": 1
       }
@@ -36,9 +36,9 @@
       "expected": "rejected；成功率低于 50% 且丢失基准成功",
       "actual": "rejected；dim 4/10；丢失 seed 9",
       "passed": true,
-      "durationMs": 774,
+      "durationMs": 1692,
       "evidence": {
-        "reviewId": "8b098f4e-ea8f-4d49-901d-8ebeb8d6e8d7"
+        "reviewId": "8888d02b-112d-4859-b8db-28b82a556cd4"
       }
     },
     {
@@ -50,9 +50,9 @@
       "expected": "rejected；候选射线首先命中遮挡物；EvalArc 1 项回归",
       "actual": "rejected；候选首个命中 Visibility obstruction；blocking 1",
       "passed": true,
-      "durationMs": 9701,
+      "durationMs": 24732,
       "evidence": {
-        "sceneId": "511c201a-34d0-449f-9d65-a280720ede4a",
+        "sceneId": "b200d9c1-01d3-4ebb-ae71-da1d4d050718",
         "stages": 4
       }
     },
@@ -65,9 +65,9 @@
       "expected": "accepted-static-scene；射线首先命中目标",
       "actual": "accepted-static-scene；首个命中 Target",
       "passed": true,
-      "durationMs": 9115,
+      "durationMs": 19173,
       "evidence": {
-        "sceneId": "1bb0edc0-8273-477e-986f-5bd48ff3d13f"
+        "sceneId": "8c605995-fd98-4c98-87a8-ead780bd39cb"
       }
     },
     {
@@ -79,9 +79,39 @@
       "expected": "rejected；footprint-area 失败；blocking 0",
       "actual": "rejected；失败 footprint-area；blocking 0",
       "passed": true,
-      "durationMs": 9123,
+      "durationMs": 16672,
       "evidence": {
-        "sceneId": "3e3b6d9a-ff97-46d1-9171-8b28c7259ae7"
+        "sceneId": "b527f296-9baf-4d1c-85d1-5b931868ffd5"
+      }
+    },
+    {
+      "id": "P1",
+      "domain": "工厂产线布局（Blender）",
+      "title": "6 工位 CNC 线：围栏加大到 4.2 m",
+      "tool": "Blender 5.2 BVH 射线 + EvalArc",
+      "rationale": "为满足机器人安全间距而加大围栏，会挤占相邻的 AGV 通道；这种耦合在参数表里看不出来，需要在生成的几何上实测最窄处。",
+      "expected": "rejected；仅 aisle-clearance 失败（净宽 < 2.4 m）；围栏间距通过；6/6 相机覆盖；blocking 1",
+      "actual": "rejected；失败 aisle-clearance；通道净宽 2.08 m；围栏间距 0.63 m；相机 6/6；blocking 1",
+      "passed": true,
+      "durationMs": 110839,
+      "evidence": {
+        "sceneId": "890dcfcf-3237-438a-a197-9baaa0b2343e",
+        "stages": 8,
+        "objects": 181
+      }
+    },
+    {
+      "id": "P2",
+      "domain": "工厂产线布局（Blender）",
+      "title": "不放宽要求：设计通道加宽到 2.8 m",
+      "tool": "Blender 5.2 BVH 射线 + EvalArc",
+      "rationale": "修正必须同时守住占地上限：通道每加宽 0.1 m，厂房增加约 3.9 m²；原生实测确认净宽与占地同时满足。",
+      "expected": "accepted-static-scene；净宽 ≥ 2.4 m 且占地 ≤ 650 m²",
+      "actual": "accepted-static-scene；通道净宽 2.48 m；占地 641.6 m²",
+      "passed": true,
+      "durationMs": 118826,
+      "evidence": {
+        "sceneId": "9615b7b3-612c-473c-b29f-3b4a00b14327"
       }
     },
     {
@@ -93,10 +123,10 @@
       "expected": "accepted-cad-part；STEP 重新导入体积一致",
       "actual": "accepted-cad-part；48.368 g；STEP 重导入体积 17914.235 mm³（原 17914.235）",
       "passed": true,
-      "durationMs": 9670,
+      "durationMs": 33036,
       "evidence": {
-        "cadId": "33d280d1-3428-44a3-8d44-2a828540d58f",
-        "stepSha256": "614070eb954f90903be494724f6dfd6efa56fe374e8b4789955a9a36a602299e",
+        "cadId": "c009af5c-3665-409b-90e0-75fc7e2fae98",
+        "stepSha256": "50491a170cf0cf00b0277f88212a3cce025d0fea1913e579133bc45d86139484",
         "reopen": {
           "schema": "pai-cad-reopen-1",
           "cadquery": "2.8.0",
@@ -127,9 +157,9 @@
       "expected": "rejected；仅 min-wall 失败；质量下降",
       "actual": "rejected；失败 min-wall；48.368 → 31.85 g",
       "passed": true,
-      "durationMs": 8038,
+      "durationMs": 18718,
       "evidence": {
-        "cadId": "7f7e9a5e-293f-4a94-8ffb-f85dc950ff4e"
+        "cadId": "b47dcec7-9e88-41f5-907a-c485c9223fb1"
       }
     },
     {
@@ -141,9 +171,9 @@
       "expected": "rejected；nema17-interface 与 motor-interference 失败",
       "actual": "rejected；失败 nema17-interface,motor-interference；干涉体积 34.165 mm³",
       "passed": true,
-      "durationMs": 7888,
+      "durationMs": 25151,
       "evidence": {
-        "cadId": "b512c083-6447-4d5c-9010-9182eb610e6f"
+        "cadId": "e6e57d35-a9fa-4868-ac3e-a3f208b2d7e4"
       }
     },
     {
@@ -155,9 +185,9 @@
       "expected": "rejected；仅 hole-edge-distance 失败",
       "actual": "rejected；最不利孔边距 5 mm < 8.25 mm",
       "passed": true,
-      "durationMs": 8303,
+      "durationMs": 24002,
       "evidence": {
-        "cadId": "680d76fe-8357-4ecb-8823-b108327e9a9d"
+        "cadId": "450509c4-25bf-49c0-b24f-4119c3ec37ae"
       }
     },
     {
@@ -169,9 +199,9 @@
       "expected": "rejected；mass 失败；blocking 0",
       "actual": "rejected；48.368 g > 40 g；blocking 0",
       "passed": true,
-      "durationMs": 8102,
+      "durationMs": 20831,
       "evidence": {
-        "cadId": "b1f3a7b2-9ca8-44ff-9721-fa3b09dc476c"
+        "cadId": "f3f03552-dfc8-4939-8885-ddc5ea12735b"
       }
     },
     {
@@ -183,9 +213,9 @@
       "expected": "rejected；seed 3、11 产出下降；seed 10 EV 74%",
       "actual": "rejected；产出 3,11；EV 10；净 +133",
       "passed": true,
-      "durationMs": 18,
+      "durationMs": 43,
       "evidence": {
-        "reviewId": "2403428d-9433-4cf3-9e01-69299600c5af"
+        "reviewId": "445def00-9411-4822-a835-c40c73385acb"
       }
     },
     {
@@ -197,9 +227,9 @@
       "expected": "accepted-illustrative；新标准摘要不同",
       "actual": "accepted-illustrative；标准 5d993ba1",
       "passed": true,
-      "durationMs": 9,
+      "durationMs": 20,
       "evidence": {
-        "reviewId": "f56ed88f-a627-4ade-aeee-b286e488620c"
+        "reviewId": "69bb8796-5622-4e42-8cfd-c5af722fdc53"
       }
     },
     {
@@ -211,7 +241,7 @@
       "expected": "422 FACTORY_SUMMARY_INCONSISTENT",
       "actual": "422 FACTORY_SUMMARY_INCONSISTENT",
       "passed": true,
-      "durationMs": 8,
+      "durationMs": 20,
       "evidence": {}
     },
     {
@@ -223,9 +253,9 @@
       "expected": "cad-review 计划；minWallMm 标记为放宽；authority none；未执行",
       "actual": "cad-review；minWallMm relaxed；authority none；确认 0",
       "passed": true,
-      "durationMs": 8,
+      "durationMs": 15,
       "evidence": {
-        "planId": "4aa7b14a-2c0a-40a3-b8a5-74ff6a552fdc",
+        "planId": "b821f448-ef75-4981-8857-f5fcc21aa2b3",
         "warnings": [
           "放宽了已冻结的约束：只会生成新的冻结版本，既有结论和失败案例保持不变。"
         ]
@@ -240,9 +270,9 @@
       "expected": "rejected；仅 min-wall 失败（实测 2.5）；沙箱结果 ok；回执含 cadquery-sandbox",
       "actual": "rejected；失败 min-wall；min-wall 2.5 mm；沙箱 ok",
       "passed": true,
-      "durationMs": 10110,
+      "durationMs": 29280,
       "evidence": {
-        "cadId": "31fe5cc8-d254-4c97-a65f-295278ee72ff",
+        "cadId": "da3881bc-46a7-42e8-8a55-86df485e9fe2",
         "codeSha256": "5c8ca21c805b562e061c8721a44d35d75d2a722f90cc5760a85e5046c129a505"
       }
     },
@@ -255,9 +285,9 @@
       "expected": "accepted-cad-part；7 项检查与预设 reference 逐项相同；48.368 g",
       "actual": "accepted-cad-part；逐项相同 true；48.368 g",
       "passed": true,
-      "durationMs": 10017,
+      "durationMs": 26806,
       "evidence": {
-        "cadId": "658fc9cd-4491-4ccb-8961-473b8436ced1"
+        "cadId": "b0fa9863-2ce9-47b6-8d24-f7fd303a69bc"
       }
     },
     {
@@ -269,7 +299,7 @@
       "expected": "3 次都返回 422 CAD_CODE_POLICY；CAD 记录数不变",
       "actual": "422 CAD_CODE_POLICY；422 CAD_CODE_POLICY；422 CAD_CODE_POLICY；记录 7 → 7",
       "passed": true,
-      "durationMs": 126,
+      "durationMs": 292,
       "evidence": {}
     },
     {
@@ -281,9 +311,9 @@
       "expected": "failed；沙箱结果 limit；没有候选检查",
       "actual": "failed；沙箱 limit；CAD_CODE_LIMIT",
       "passed": true,
-      "durationMs": 6053,
+      "durationMs": 12991,
       "evidence": {
-        "cadId": "26cdc02d-4bbe-44a0-afbd-8a3b789a8517"
+        "cadId": "b83c987a-09e5-4504-b0dc-37fe30ab33ef"
       }
     },
     {
@@ -295,9 +325,9 @@
       "expected": "24 点；3 个可行；最轻可行点 t=3、W=60、H=46（37.356 g）；与预设同参数的点逐项一致",
       "actual": "24 点；可行 3；最轻 t=3 W=60 H=46 37.356 g；前沿 12,18,24",
       "passed": true,
-      "durationMs": 33892,
+      "durationMs": 79063,
       "evidence": {
-        "sweepId": "53ad6b5f-a302-42d5-939e-5984e51f29ac",
+        "sweepId": "1e2df55c-1eb7-4b4c-8b25-a1dab164a540",
         "pareto": [
           12,
           18,
@@ -314,9 +344,9 @@
       "expected": "accepted-cad-part；质量与扫描点相同；EvalArc 0 阻断；伪造参数返回 422 INVALID_SWEEP_POINT",
       "actual": "accepted-cad-part；37.356 g；blocking 0；伪造 422 INVALID_SWEEP_POINT",
       "passed": true,
-      "durationMs": 7997,
+      "durationMs": 23432,
       "evidence": {
-        "cadId": "4039a3bd-9bd7-4c3d-9cd5-050e5d7dff14"
+        "cadId": "21fdf5d5-1834-4777-b340-b483eb104f80"
       }
     },
     {
@@ -328,10 +358,10 @@
       "expected": "未关闭失败时准入不通过；关闭后通过；R1 批准为 released；需求 v2 后 superseded",
       "actual": "关闭前未通过 failures-dispositioned；关闭后未通过 0 项；R1 released → 需求 v2 后 superseded",
       "passed": true,
-      "durationMs": 27189,
+      "durationMs": 66150,
       "evidence": {
-        "projectId": "a4d24d98-66e9-49da-9206-0e00cb09fe2d",
-        "releaseId": "3df83ce6-b534-4f81-a37b-1aff342e870e"
+        "projectId": "30a94c54-00ab-4074-be96-84bf9849e648",
+        "releaseId": "fc310c7c-aec3-4d98-bdbb-5d738f636088"
       }
     },
     {
@@ -343,10 +373,10 @@
       "expected": "1 个 cad-code 计划；approve-release 被拒绝；确认前无记录；确认后 accepted（min-wall 3.5）",
       "actual": "done；计划 cad-code；越权被拒 true；确认前记录 0；accepted-cad-part min-wall 3.5",
       "passed": true,
-      "durationMs": 10178,
+      "durationMs": 23147,
       "evidence": {
-        "planId": "ed38e59c-2720-41b7-a6ec-1bbb8dc00e19",
-        "cadId": "14005bdd-ba2d-4792-a682-5a2f7d9b4896"
+        "planId": "2d6f55e4-9823-4dda-aa48-042037363397",
+        "cadId": "6d9a4075-443b-4e29-b04f-7977ce85bc2f"
       }
     },
     {
@@ -358,9 +388,9 @@
       "expected": "8 个工具，无执行/发布类；代码自查发现 import os；提议后未执行；确认后可读到确认状态",
       "actual": "8 个工具；禁用类 0；自查违规 1；确认前 null；确认后 as-proposed；rejected",
       "passed": true,
-      "durationMs": 8289,
+      "durationMs": 19648,
       "evidence": {
-        "planId": "8834a970-34f0-4d55-b106-1e145665cbb3"
+        "planId": "a8d92fe9-93bf-440f-8fd4-a2623290645f"
       }
     },
     {
@@ -370,12 +400,12 @@
       "tool": "受控执行器（Kiro 主→备→二备）→ 契约校验 → 沙箱",
       "rationale": "端到端检验真实模型：答案引用已存记录，计划经确认后由原生检查决定结论。",
       "expected": "done；引用存在的记录；至少 1 个 cad-code 计划；确认执行后 min-wall 通过",
-      "actual": "done；kiro-primary claude-opus-5.5；引用 cad-6,cad-1,cad-7,cad-8,cad-9；accepted-cad-part；min-wall 3.5",
+      "actual": "done；kiro-primary claude-opus-5.5；引用 cad-6,cad-1,cad-7,cad-8,cad-9,version-1,project；accepted-cad-part；min-wall 3.5",
       "passed": true,
-      "durationMs": 51244,
+      "durationMs": 63580,
       "evidence": {
-        "planId": "82006777-37dc-45de-b21b-fedd07adb880",
-        "cadId": "51b528dc-886e-4015-b904-05853d508bcb",
+        "planId": "fa23b699-edec-4b56-9352-2892543268ef",
+        "cadId": "6d4e597a-86f5-44d7-8647-dfb648f42850",
         "attempts": [
           "kiro-primary:succeeded"
         ]
@@ -390,20 +420,31 @@
       "expected": "rejected；仅 min-wall（2.5）；transport agentcore；microVM 与 bubblewrap 均启用",
       "actual": "rejected；失败 min-wall；min-wall 2.5；agentcore aarch64；层 astPolicy+processLockdown+bubblewrap+microvm",
       "passed": true,
-      "durationMs": 16324,
+      "durationMs": 20506,
       "evidence": {
-        "cadId": "c7fc2347-aa35-45f8-968b-f15c5a4802e5",
+        "cadId": "2e99ce3f-9ae1-4481-829a-1156adb9d7fd",
         "adapters": [
           "cadquery-native",
           "agentcore-cad-sandbox",
           "evalarc-native"
         ]
+      },
+      "firstAttempt": {
+        "actual": "ERROR {\"error\":\"CAD_SANDBOX_UNAVAILABLE\",\"message\":\"生成代码需要 OS 沙箱：AgentCore 沙箱不可用：AgentCore 调用未完成（AccessDeniedException 403）；结果未知，不会自动重试\"}\n\n503 !== 200\n",
+        "passed": false,
+        "cause": "instance role lacks bedrock-agentcore:InvokeAgentRuntime (403); environment, not product code"
+      },
+      "rerun": {
+        "at": "2026-10-02T17:59:44.061Z",
+        "credentials": "scoped PAI operator role",
+        "selectedBy": "PAI_SUITE_ONLY=X1"
       }
     }
   ],
   "totals": {
-    "cases": 25,
-    "passed": 25
+    "cases": 27,
+    "passed": 27
   },
-  "scope": "Recorded simulation, synthetic static geometry, nominal parametric CAD and illustrative factory simulation. No physical validation, FEA, tolerance stack-up or site measurement."
+  "scope": "Recorded simulation, synthetic static geometry, nominal parametric CAD and illustrative factory simulation. No physical validation, FEA, tolerance stack-up or site measurement.",
+  "note": "Full run at checkedAt: 26/27 (X1 blocked by instance-role permission). X1 rerun alone with the scoped operator role passed; both outcomes retained."
 }

@@ -13,9 +13,9 @@ AWS deployment uses the exact origin `https://pai.oneai.host` and requires signe
 | `PATCH /api/projects/:id` | Same fields plus `expectedRevision`; compare-and-swap revision update |
 | `POST /api/projects/:id/reviews` | `{requestId,projectRevision,candidate,feedbackId?}` |
 | `POST /api/projects/:id/proposals` | `{requestId,projectRevision,profiles}`; native control only when configured |
-| `POST /api/projects/:id/scenes` | `{requestId,projectRevision,variant,requirements,feedbackId?}`; native Blender |
+| `POST /api/projects/:id/scenes` | `{requestId,projectRevision,variant,requirements,feedbackId?}`; native Blender workcell (`clear`/`occluded`), or a factory production line with `variant:"plant"` and a bounded `layout` (see [PLANT.md](PLANT.md)) |
 | `GET /api/scenes/:id` | Saved native scene checks, receipts and artifact digests |
-| `GET /api/scenes/:id/files/:which/:file` | Closed baseline/candidate artifact list; digest checked before download |
+| `GET /api/scenes/:id/files/:which/:file` | Closed baseline/candidate artifact list (`scene.blend`, `scene.glb`, `preview.png`, `checks.json`; plants also `inspection.png`); digest checked before download |
 | `GET /api/scenes/:id/stages/:which/:index` | Staged native GLB written during the Blender run; digest checked; header `X-PAI-Evidence: presentation-stage` |
 | `GET /api/live/:requestId` | Server-sent events for a request identity: `step`, `record`, `stage`, `ray`, `render`, `done`. Replays buffered events, heartbeats every 15 s, ends after `done`. Presentation only |
 | `POST /api/assistant/plans` | `{requestId,projectId?,message}` → typed tool plans with requirement diff (`new/same/tightened/relaxed/changed`), `authority:"none"` |

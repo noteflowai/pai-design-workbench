@@ -10,7 +10,7 @@ import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import { sha256 } from "../src/domain.js";
 import type { Adapters } from "../src/adapters.js";
-import type { SceneReview } from "../src/scenes.js";
+import type { PlantScene, SceneReview, WorkcellScene } from "../src/scenes.js";
 import type { Project } from "../src/contracts.js";
 
 const task = { title: "Studio", intendedDecision: "Plan native checks from conversation",
@@ -28,13 +28,35 @@ test("messages become schema-valid typed plans without authority or model use", 
 });
 
 test("relaxing a frozen constraint is shown as a relaxation with a warning", () => {
-  const lastScene = { request: { variant: "occluded", requirements: { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true } } } as SceneReview;
+  const lastScene = { request: { variant: "occluded", requirements: { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true } } } as WorkcellScene;
   const plan = planFromMessage("把占地放宽到 20 m2，并且不要求可见，移除遮挡", { project, lastScene, modelConfigured: false });
   const scene = plan.plans.find(p => p.tool === "scene-review")!;
   assert.equal(scene.changes.find(c => c.field === "maxFootprintArea")!.direction, "relaxed");
   assert.equal(scene.changes.find(c => c.field === "requireTargetVisible")!.direction, "relaxed");
   assert.equal(scene.changes.find(c => c.field === "variant")!.direction, "changed");
   assert.ok(scene.warnings.some(w => w.includes("放宽")));
+});
+
+test("production-line intent becomes a validated plant-layout plan and does not trigger the factory twin", () => {
+  const plan = planFromMessage("设计 6 工位 CNC 产线：节距 4.5 m，围栏 4.2 m，通道 2.4 m，相机 2.8 m，3 台 AGV，厂房 ≤ 650 m²", { project, modelConfigured: false });
+  assert.deepEqual(plan.plans.map(p => p.tool), ["plant-layout"]);
+  const step = plan.plans[0];
+  assert.equal(step.route, `/projects/${project.id}/scenes`);
+  assert.deepEqual(step.payload.layout, { stations: 6, stationPitch: 4.5, aisleWidth: 2.4, guardSize: 4.2, rackRows: 2, cameraHeight: 2.8, agvs: 3 });
+  assert.equal((step.payload.requirements as { maxFootprintArea: number }).maxFootprintArea, 650);
+  assert.equal(step.payload.variant, "plant");
+  assert.ok(step.changes.every(c => c.direction === "new"));
+});
+
+test("plant plan records layout edits and flags a relaxed footprint", () => {
+  const lastPlant = { request: { variant: "plant", layout: { stations: 6, stationPitch: 4.5, aisleWidth: 2.4, guardSize: 4.2, rackRows: 2, cameraHeight: 2.8, agvs: 3 },
+    requirements: { maxFootprintArea: 650, minAisleWidth: 2.4, minGuardClearance: 0.5, requireCameraCoverage: true, maxEgressTravel: 25 } } } as PlantScene;
+  const plan = planFromMessage("产线通道改为 2.8 m，厂房放宽到 700 m2", { project, lastPlant, modelConfigured: false });
+  const step = plan.plans.find(p => p.tool === "plant-layout")!;
+  assert.equal(step.changes.find(c => c.field === "layout.aisleWidth")!.direction, "changed");
+  assert.equal(step.changes.find(c => c.field === "layout.stations")!.direction, "same");
+  assert.equal(step.changes.find(c => c.field === "maxFootprintArea")!.direction, "relaxed");
+  assert.ok(step.warnings.some(w => w.includes("放宽")));
 });
 
 test("factory intent freezes criteria first and chains the review on that record", () => {

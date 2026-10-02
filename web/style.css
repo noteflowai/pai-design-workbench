@@ -368,6 +368,17 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
 .bottom-right { bottom: 10px; right: 10px; width: 160px; }
 .ray-badge.ok { border-color: #2f8d6c; color: #9ff0cf; } .ray-badge.blocked { border-color: #b0613b; color: #ffc3a1; }
 .render-progress { display: grid; gap: 5px; }
+.anim { width: auto; display: flex; gap: 8px; align-items: center; padding: 4px 8px 4px 4px; max-width: 46%; }
+.anim button { min-height: 28px; padding: 3px 10px; font-size: 12px; background: var(--vp-accent); border-color: var(--vp-accent); color: #0d2026; }
+.anim button.active { background: transparent; color: var(--vp-ink); border-color: var(--vp-line); }
+.anim small { display: inline; }
+fieldset.field-grid { border: 0; padding: 0; margin: 0 0 12px; }
+fieldset.field-grid legend { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--ink-3); padding: 0; margin-bottom: 6px; }
+.plant-estimate { font-size: 13px; color: var(--ink-2); padding: 8px 10px; border-radius: 8px; background: var(--sunken); }
+.plant-estimate.warn { background: var(--warn-soft); }
+.plant-renders { grid-template-columns: 2fr 1fr; }
+.plant-renders .hero { grid-row: span 2; }
+.plant-renders img { width: 100%; height: 100%; object-fit: cover; }
 .render-progress i { display: block; height: 4px; background: linear-gradient(90deg, #3ad0a0, #9ff0cf); border-radius: 2px; transition: width .2s; }
 .viewport-side { border-left: 1px solid var(--vp-line); background: var(--vp-2); padding: 12px; display: flex; flex-direction: column; gap: 14px; font-size: 11px; min-width: 0; overflow: auto; max-height: 480px; }
 .viewport-side strong { color: #e6f2ef; font-size: 11px; letter-spacing: .3px; }
@@ -434,6 +445,8 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
   .top-left { max-width: calc(100% - 20px); }
   .top-right { top: auto; bottom: 46px; left: 10px; right: 10px; justify-content: flex-start; }
   .bottom-left { right: 10px; }
+  .anim small { display: none; }
+  .plant-renders { grid-template-columns: 1fr; } .plant-renders .hero { grid-row: auto; }
   .bottom-right { width: 140px; left: auto; bottom: auto; top: 58px; }
   .scrubber { grid-template-columns: 1fr; }
   .cases li { flex-direction: column; align-items: stretch; }

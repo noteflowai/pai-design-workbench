@@ -2,11 +2,11 @@
 
 `npm run test:suite` 在同一个工作台里，用原生工具依次执行有代表性的工业设计用例。每个用例的预期在执行前就写在脚本里。“通过”表示原生结果与预期一致，不表示设计被采用，有些用例的预期本来就是拒绝。
 
-默认运行 23 个用例，CI 跑的就是这一组。另有两个用例需要显式开启：
+默认运行 25 个用例，CI 跑的就是这一组。另有两个用例需要显式开启：
 - A3：设置 `PAI_SUITE_LIVE_AI=1`，调用真实模型，消耗 1 次真实尝试。
 - X1：设置 `PAI_AGENTCORE_SANDBOX_ARN`，使用 AgentCore 云端沙箱。
 
-最近一次实际运行开启了这两项：25/25 通过（2026-10-02），回执见 [industrial-suite.json](evidence/industrial-suite.json)。
+最近一次实际运行开启了这两项，共 27 个用例（2026-10-03）。完整运行 26/27 通过：X1 因本机实例角色没有 `InvokeAgentRuntime` 权限返回 403，是环境问题，不是产品代码问题。之后用受限的运维角色单独重跑 X1（`PAI_SUITE_ONLY=X1`），通过。两次结果都保留在 [industrial-suite.json](evidence/industrial-suite.json) 里。可以用 `PAI_SUITE_ONLY=P1,P2` 只运行指定的用例。
 
 运行环境：Blender 5.2.2 LTS；CadQuery 2.8.0 / OCCT 7.9.3（哈希锁定安装）；Robot Reel `6124cee3cba5`；Factory Twin `b3ee5c7d2c55`；EvalArc 独立对照。
 
@@ -17,6 +17,8 @@
 | B1 | 工作单元布局 | 检查相机视线被遮挡 | Blender 5.2 + EvalArc | 围栏或设备遮挡相机是典型的视觉检测失效 | 拒绝；射线先命中遮挡物 | 拒绝；首个命中 Visibility obstruction；1 项回归 |
 | B2 | 工作单元布局 | 无遮挡基准布局 | Blender 5.2 + EvalArc | 正向对照 | 通过；射线先命中目标 | 静态场景通过；首个命中 Target |
 | B3 | 工作单元布局 | 占地预算收紧到 10 m² | Blender 5.2 + EvalArc | 需求收紧后基准也超限，属于需求问题，不是候选回归 | 拒绝；0 项回归 | 拒绝；footprint-area 失败；0 项回归 |
+| P1 | 工厂产线布局 | 6 工位 CNC 线：围栏加大到 4.2 m | Blender 5.2 BVH 射线 + EvalArc | 为了增大机器人安全间距而加大围栏，会挤占相邻的 AGV 通道；这种耦合在参数表上看不出来 | 拒绝；只有通道净宽失败；6/6 相机覆盖 | 拒绝；净宽 2.08 m < 2.4 m；围栏间距 0.63 m；6/6；1 项回归 |
+| P2 | 工厂产线布局 | 不放宽要求：设计通道加宽到 2.8 m | Blender 5.2 BVH 射线 + EvalArc | 修正时还要守住占地上限 | 通过；净宽 ≥ 2.4 m 且占地 ≤ 650 m² | 通过；净宽 2.48 m；641.6 m² |
 | C1 | 机械零件 | NEMA 17 电机支架基准设计 | CadQuery / OCCT + EvalArc | 步进电机支架是自动化设备最常见的定制机加工件 | 通过；STEP 重新导入后一致 | 通过；48.37 g；STEP 重导入体积 17 914.235 mm³，与原值一致 |
 | C2 | 机械零件 | 轻量化：板厚 4 → 2.5 mm | CadQuery / OCCT + EvalArc | 减重是最常见的迭代；减重后仍需守住最小壁厚 | 拒绝；只有壁厚失败 | 拒绝；min-wall 失败；48.37 → 31.85 g |
 | C3 | 机械零件 | 止口孔 Ø22.5 → Ø21.5 | CadQuery / OCCT + EvalArc | 标准件接口尺寸错误是装配返工的主要来源 | 拒绝；接口与干涉失败 | 拒绝；与电机止口的干涉体积 34.165 mm³ |

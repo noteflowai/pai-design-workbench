@@ -4,7 +4,8 @@ import { CreateProject, Id, ReviewRequest, type Project, type CandidateId } from
 import { canonical, DomainError, sha256 } from "./domain.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryCriteriaValues } from "./factory.js";
-import { SceneRequest, type SceneReview } from "./scenes.js";
+import { DEFAULT_PLANT_REQUIREMENTS, isPlant, PLANT_REFERENCE, PlantLayout, PlantRequirements, plantHall, SceneRequest,
+  type PlantLayoutValue, type PlantRequirementsValue, type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
 import type { Store } from "./store.js";
 import { CadRequest, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 
@@ -19,7 +20,7 @@ import { CadRequest, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 export const AssistantInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
 }).strict();
-export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "robot-review" | "cad-review" | "cad-code" | "cad-sweep"
+export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "plant-layout" | "robot-review" | "cad-review" | "cad-code" | "cad-sweep"
   | "factory-criteria" | "factory-review" | "model-proposal";
 export interface PlanChange { field: string; from: unknown; to: unknown; direction: "new" | "same" | "tightened" | "relaxed" | "changed" }
 export interface ToolPlan {
@@ -64,7 +65,28 @@ export function compare(field: string, from: unknown, to: unknown, stricter: "hi
 export const relaxWarning = (changes: PlanChange[]) => changes.some(c => c.direction === "relaxed")
   ? ["放宽了已冻结的约束：只会生成新的冻结版本，既有结论和失败案例保持不变。"] : [];
 
-export interface PlannerContext { project?: Project; lastScene?: SceneReview; lastCriteria?: FactoryCriteria; lastCad?: CadReview; modelConfigured: boolean }
+export interface PlannerContext { project?: Project; lastScene?: WorkcellScene; lastPlant?: PlantScene; lastCriteria?: FactoryCriteria; lastCad?: CadReview; modelConfigured: boolean }
+
+const PLANT_FIELDS: [keyof PlantLayoutValue, string][] = [["stations", "工位数"], ["stationPitch", "工位节距 m"], ["aisleWidth", "通道设计宽度 m"],
+  ["guardSize", "围栏边长 m"], ["rackRows", "货架排数"], ["cameraHeight", "相机龙门高度 m"], ["agvs", "AGV 台数"]];
+/** One validated plant-layout plan step; shared by the rule planner and the AI planner so both produce the same contract. */
+export function plantPlan(layout: PlantLayoutValue, requirements: PlantRequirementsValue, prev: PlantScene["request"] | undefined, revision: number, route: string, title?: string) {
+  const payload = { projectRevision: revision, variant: "plant" as const, layout, requirements };
+  SceneRequest.parse({ ...payload, requestId: "00000000-0000-4000-8000-000000000000" });
+  const r0 = prev?.requirements;
+  const changes: PlanChange[] = [
+    ...PLANT_FIELDS.map(([k]) => ({ field: `layout.${k}`, from: prev?.layout[k] ?? null, to: layout[k],
+      direction: prev ? (prev.layout[k] === layout[k] ? "same" : "changed") : "new" } as PlanChange)),
+    compare("maxFootprintArea", r0?.maxFootprintArea, requirements.maxFootprintArea, "lower"),
+    compare("minAisleWidth", r0?.minAisleWidth, requirements.minAisleWidth, "higher"),
+    compare("minGuardClearance", r0?.minGuardClearance, requirements.minGuardClearance, "higher"),
+    compare("requireCameraCoverage", r0?.requireCameraCoverage, requirements.requireCameraCoverage, "true"),
+    compare("maxEgressTravel", r0?.maxEgressTravel, requirements.maxEgressTravel, "lower")];
+  const hall = plantHall(layout);
+  return { tool: "plant-layout" as const, title: title ?? `Blender 工厂产线：${layout.stations} 工位 · 通道 ${layout.aisleWidth} m`, route, method: "POST" as const, payload, changes,
+    warnings: [...relaxWarning(changes), ...(hall.x * hall.y > requirements.maxFootprintArea ? [`按配方估算厂房 ${(hall.x * hall.y).toFixed(0)} m² 超过上限；原生检查会给出结论。`] : [])],
+    evidence: "原生 .blend/GLB（含动画）/Cycles 渲染、BVH 射线实测通道/围栏/相机覆盖/疏散、EvalArc 对照；逐阶段实时几何" };
+}
 
 export function planFromMessage(message: string, context: PlannerContext): Omit<AssistantPlan, "id" | "requestId" | "createdAt" | "confirmations"> {
   const text = message.toLowerCase();
@@ -77,9 +99,10 @@ export function planFromMessage(message: string, context: PlannerContext): Omit<
   const revision = project?.revision ?? 1;
 
   const wantsCad = /\bcad\b|cadquery|step\b|支架|bracket|nema|电机座|壁厚|零件|孔边距|止口/.test(text);
-  const wantsScene = !wantsCad && /blender|场景|工作单元|workcell|遮挡|occlu|占地|footprint|包络|envelope|可见性|visib/.test(text);
+  const wantsPlant = !wantsCad && /产线|生产线|production line|plant layout|工厂布局|车间布局|工位|\bagv\b|节距|围栏|通道净宽|aisle/.test(text);
+  const wantsScene = !wantsCad && !wantsPlant && /blender|场景|工作单元|workcell|遮挡|occlu|占地|footprint|包络|envelope|可见性|visib/.test(text);
   const wantsRobot = /相机偏移|camera offset|弱光|\bdim\b|smolvla|策略|policy|配对|seed|回放|记录评审|recorded/.test(text);
-  const wantsFactory = /工厂|factory|能源|energy|维护|maintenance|需量|demand|充电|\bev\b|舒适|comfort|车间|hall|产出|产量|output/.test(text);
+  const wantsFactory = !wantsPlant && /工厂|factory|能源|energy|维护|maintenance|需量|demand|充电|\bev\b|舒适|comfort|车间|hall|产出|产量|output/.test(text);
   const wantsNew = /新任务|新建任务|new (project|task)|创建任务/.test(text) || !project;
   const wantsModel = /模型提案|model proposal|llm|让模型/.test(text);
   const rate = num(text, /成功率[^\d]{0,8}(\d{1,3})\s*%/);
@@ -126,6 +149,29 @@ export function planFromMessage(message: string, context: PlannerContext): Omit<
       method: "POST", payload, dependsOn: projectPlan, changes, warnings: [...relaxWarning(changes), ...(visible ? [] : ["关闭可见性要求会让遮挡不再构成失败。"])],
       requiresConfirmation: true, evidence: "原生 .blend/GLB/PNG、射线与投影检查、EvalArc 对照；逐阶段实时几何" });
     interpretation.push(`Blender 场景：占地 ≤ ${area} m²，包络半径 ${radius} m，${visible ? "要求" : "不要求"}相机可见，变体 ${variant}。`);
+  }
+  if (wantsPlant) {
+    const prev = context.lastPlant?.request;
+    const base: PlantLayoutValue = prev?.layout ?? PLANT_REFERENCE;
+    const layout = PlantLayout.parse({
+      stations: num(text, /(\d+)\s*(?:个)?工位/) ?? num(text, /(\d+)[- ]?station/) ?? base.stations,
+      stationPitch: num(text, /(?:节距|间距|pitch)[^\d]{0,6}(\d+(?:\.\d+)?)/) ?? base.stationPitch,
+      aisleWidth: num(text, /(?:通道|aisle)[^\d]{0,6}(\d+(?:\.\d+)?)/) ?? base.aisleWidth,
+      guardSize: num(text, /(?:围栏|guard)[^\d]{0,8}(\d+(?:\.\d+)?)/) ?? base.guardSize,
+      rackRows: num(text, /(\d+)\s*排(?:货架)?/) ?? base.rackRows,
+      cameraHeight: num(text, /(?:相机|camera)[^\d]{0,8}(\d+(?:\.\d+)?)/) ?? base.cameraHeight,
+      agvs: num(text, /(\d+)\s*(?:台|辆)?\s*agv/) ?? base.agvs,
+    });
+    const r0: PlantRequirementsValue = prev?.requirements ?? DEFAULT_PLANT_REQUIREMENTS;
+    const requirements = PlantRequirements.parse({ ...r0,
+      maxFootprintArea: num(text, /(\d+(?:\.\d+)?)\s*(?:m²|m2|㎡|平方米|平米|sqm)/) ?? r0.maxFootprintArea,
+      minAisleWidth: num(text, /(?:通道净宽|净宽)[^\d]{0,6}(?:≥|>=|不小于|至少)?\s*(\d+(?:\.\d+)?)/) ?? r0.minAisleWidth,
+      minGuardClearance: num(text, /(?:安全间距|clearance)[^\d]{0,6}(?:≥|>=|不小于|至少)?\s*(\d+(?:\.\d+)?)/) ?? r0.minGuardClearance,
+      maxEgressTravel: num(text, /(?:疏散|egress)[^\d]{0,8}(\d+(?:\.\d+)?)/) ?? r0.maxEgressTravel });
+    const plan = plantPlan(layout, requirements, prev, nextRevision, projectRoute("scenes"));
+    plans.push({ id: id(), ...plan, dependsOn: projectPlan, requiresConfirmation: true });
+    const hall = plantHall(layout);
+    interpretation.push(`工厂产线：${layout.stations} 工位、节距 ${layout.stationPitch} m、通道 ${layout.aisleWidth} m、围栏 ${layout.guardSize} m、相机 ${layout.cameraHeight} m、${layout.agvs} 台 AGV；厂房约 ${hall.x.toFixed(1)} × ${hall.y.toFixed(2)} m。`);
   }
   if (wantsCad) {
     const previous = context.lastCad?.request.requirements;
@@ -213,10 +259,11 @@ export function createPlan(store: Store, input: unknown, modelConfigured: boolea
   const request = AssistantInput.parse(input);
   const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
   if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
-  const lastScene = project ? store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id).at(-1) : undefined;
+  const scenes = project ? store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id) : [];
+  const lastScene = scenes.filter((s): s is WorkcellScene => !isPlant(s)).at(-1), lastPlant = scenes.filter(isPlant).at(-1);
   const lastCriteria = project ? store.list<FactoryCriteria>("factory-criteria").filter(c => c.projectId === project.id).at(-1) : undefined;
   const lastCad = project ? store.list<CadReview>("cad-review").filter(c => c.projectId === project.id).at(-1) : undefined;
-  const plan = planFromMessage(request.message, { project, lastScene, lastCriteria, lastCad, modelConfigured });
+  const plan = planFromMessage(request.message, { project, lastScene, lastPlant, lastCriteria, lastCad, modelConfigured });
   const record: AssistantPlan = { ...plan, id: randomUUID(), requestId: request.requestId, createdAt: new Date().toISOString(), confirmations: [] };
   const claimed = store.claim(request.requestId, sha256(canonical({ kind: "assistant-plan", request })), record, "assistant-plan");
   return claimed === record.id ? record : store.get<AssistantPlan>("assistant-plan", claimed)!;
@@ -242,7 +289,7 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
   if (!step) throw new DomainError("NOT_FOUND", "Plan step not found", 404);
   // Plans from a model run are usable only when its effects are verified or a human has reconciled them.
   preflightPlan(store, planId, change.planId);
-  const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
+  const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-review": "review",
     "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review", "cad-sweep": "cad-sweep" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);
   const record = store.get<Record<string, unknown>>(change.recordKind, change.recordId);

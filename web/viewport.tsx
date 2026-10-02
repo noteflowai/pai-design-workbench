@@ -7,6 +7,8 @@ export type Ray = { origin: number[]; target: number[]; hit: number[] | null; fi
 export type Stage = { index: number; label: string; url: string; objects: string[] };
 export interface ViewportModel {
   key: string; which: "baseline" | "candidate"; stages: Stage[]; finalUrl?: string; ray?: Ray;
+  /** Additional native rays (e.g. one per inspection camera); drawn like `ray`. */
+  rays?: Ray[];
   render?: { sample: number; samples: number }; running: boolean; title: string;
   /** Blender scenes are authored in metres; CAD parts in millimetres (shown at 1:20 in the viewport). */
   units?: "m" | "mm";
@@ -29,6 +31,9 @@ interface Runtime {
   animations: { start: number; duration: number; apply: (t: number) => void }[]; loader: GLTFLoader; known: Set<string>;
   /** Render on demand: only when the camera moves, an animation runs or the scene changed. */
   dirty: boolean;
+  /** Framing of the current model: large native scenes (factory halls) are framed instead of the 12 m workcell default. */
+  fit: { center: THREE.Vector3; scale: number; key?: string };
+  mixer?: THREE.AnimationMixer; playing: boolean; last: number;
 }
 
 /** Professional viewport over native Blender GLB snapshots. Presentation only; evidence stays in digests. */
@@ -45,6 +50,8 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
   const [showGrid, setShowGrid] = useState(true);
   const [showRay, setShowRay] = useState(true);
   const [loaded, setLoaded] = useState("");
+  const [clips, setClips] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const element = host.current;
@@ -79,7 +86,8 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     const axes = new THREE.AxesHelper(0.6); axes.position.set(-2.4, 0.01, 1.9); scene.add(axes);
     const root = new THREE.Group(), overlay = new THREE.Group();
     scene.add(root, overlay);
-    const r: Runtime = { renderer, scene, camera, controls, root, overlay, grid, axes, frame: 0, animations: [], loader: new GLTFLoader(), known: new Set(), dirty: true };
+    const r: Runtime = { renderer, scene, camera, controls, root, overlay, grid, axes, frame: 0, animations: [], loader: new GLTFLoader(), known: new Set(), dirty: true,
+      fit: { center: new THREE.Vector3(0, 0.6, 0), scale: 1 }, playing: false, last: 0 };
     runtime.current = r;
     const resize = () => {
       const w = element.clientWidth, h = element.clientHeight;
@@ -91,6 +99,8 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
       const animating = r.animations.length > 0;
       r.animations = r.animations.filter(a => { const t = Math.min(1, (now - a.start) / a.duration); a.apply(t); return t < 1; });
       const moved = controls.update();
+      const dt = r.last ? Math.min(0.1, (now - r.last) / 1000) : 0; r.last = now;
+      if (r.mixer && r.playing) { r.mixer.update(dt); r.dirty = true; }
       if (animating || moved || r.dirty) { renderer.render(scene, camera); r.dirty = false; }
     };
     r.frame = requestAnimationFrame(tick);
@@ -115,6 +125,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     r.loader.load(url, gltf => {
       if (cancelled) return;
       r.root.clear();
+      r.mixer?.stopAllAction(); r.mixer = undefined;
       gltf.scene.scale.setScalar(scale);
       gltf.scene.updateMatrixWorld(true);
       const meshes: THREE.Mesh[] = [];
@@ -141,12 +152,41 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
         }
       });
       fresh.forEach(n => r.known.add(n));
+      // Native animation (AGVs, robots, crane): presentation of the recipe's illustrative keyframes.
+      if (gltf.animations.length) {
+        r.mixer = new THREE.AnimationMixer(gltf.scene);
+        for (const clip of gltf.animations) r.mixer.clipAction(clip).play();
+        r.mixer.update(0);
+      }
+      setClips(gltf.animations.length);
+      // Frame large scenes once per model: camera distance, fog and grid follow the native extent.
+      // Union of the per-object boxes measured before the grow-in animation shrinks fresh meshes.
+      const all = [...boxes.values()].reduce((u, b) => u.union(b), new THREE.Box3()), size = all.getSize(new THREE.Vector3());
+      const fitKey = `${model?.key}:${model?.which}`;
+      if (Math.max(size.x, size.z) <= 12 && r.fit.scale !== 1) {
+        r.fit = { center: new THREE.Vector3(0, 0.6, 0), scale: 1 }; r.controls.maxPolarAngle = Math.PI; r.controls.maxDistance = Infinity;
+        r.scene.fog = new THREE.Fog(0x0d1a20, 14, 32); r.grid.scale.setScalar(1); r.grid.position.set(0, 0, 0);
+      }
+      if (Math.max(size.x, size.z) > 12 && r.fit.key !== fitKey) {
+        const scaleFit = Math.max(size.x, size.z) / 11, center = all.getCenter(new THREE.Vector3()).setY(0.6 * scaleFit);
+        r.fit = { center, scale: scaleFit, key: fitKey };
+        r.camera.position.copy(center).add(new THREE.Vector3(6.5, 5.2, 7.5).multiplyScalar(scaleFit * 0.62));
+        r.controls.target.copy(center); r.camera.far = 200 * scaleFit; r.camera.updateProjectionMatrix();
+        r.scene.fog = new THREE.Fog(0x0d1a20, 14 * scaleFit, 40 * scaleFit);
+        r.grid.scale.setScalar(scaleFit * 1.2); r.grid.position.set(center.x, 0, center.z);
+        const key = r.scene.children.find(o => (o as THREE.DirectionalLight).isDirectionalLight && (o as THREE.DirectionalLight).castShadow) as THREE.DirectionalLight | undefined;
+        // Keep the orbit above the floor and outside the hall: halls are viewed like a site model.
+        r.controls.maxPolarAngle = Math.PI * 0.46; r.controls.maxDistance = 30 * scaleFit;
+        if (key) { Object.assign(key.shadow.camera, { left: -6 * scaleFit, right: 6 * scaleFit, top: 6 * scaleFit, bottom: -6 * scaleFit }); key.position.set(4 * scaleFit, 8 * scaleFit, 5 * scaleFit); key.shadow.camera.far = 40 * scaleFit; key.shadow.camera.updateProjectionMatrix(); }
+      }
       const list = [...boxes].map(([name, box]) => { const size = box.getSize(new THREE.Vector3()).divideScalar(scale);
         return { name, visible: true, size: [size.x, size.y, size.z] as [number, number, number] }; });
       r.dirty = true; setObjects(list); setLoaded(url);
     }, undefined, () => { if (!cancelled) setLoaded(`error:${url}`); });
     return () => { cancelled = true; };
   }, [url, scale]);
+  useEffect(() => { if (runtime.current) runtime.current.playing = playing; }, [playing]);
+  useEffect(() => { if (!clips) setPlaying(false); }, [clips]);
 
   useEffect(() => {
     const r = runtime.current;
@@ -173,8 +213,9 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
     const r = runtime.current;
     if (!r) return;
     r.overlay.clear(); r.dirty = true;
-    const ray = model?.ray;
-    if (!ray || !showRay) return;
+    const list = model?.rays?.length ? model.rays : model?.ray ? [model.ray] : [];
+    if (!showRay) return;
+    list.forEach((ray, i) => {
     const origin = vec(ray.origin), end = ray.hit ? vec(ray.hit) : vec(ray.target);
     const color = ray.visible ? 0x5ce0a8 : 0xff7a45;
     const geometry = new THREE.BufferGeometry().setFromPoints([origin, origin.clone()]);
@@ -189,19 +230,23 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
         new THREE.LineDashedMaterial({ color: 0xffc27a, dashSize: 0.12, gapSize: 0.08 }));
       intended.computeLineDistances(); r.overlay.add(intended);
     }
-    r.animations.push({ start: performance.now(), duration: 700, apply: t => {
+    const start = performance.now() + i * 160;
+    r.animations.push({ start, duration: 700 + i * 160, apply: () => {
+      const t = Math.max(0, Math.min(1, (performance.now() - start) / 700));
       const p = origin.clone().lerp(end, 1 - Math.pow(1 - t, 2));
       geometry.setFromPoints([origin, p]); dot.scale.setScalar(Math.max(0.001, t));
     } });
-  }, [model?.ray, showRay, model?.key]);
+    });
+  }, [model?.ray, model?.rays, showRay, model?.key]);
 
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
-    const target = new THREE.Vector3(0, 0.6, 0), from = r.camera.position.clone(), fromTarget = r.controls.target.clone();
+    const { center, scale: k } = r.fit, target = center.clone(), from = r.camera.position.clone(), fromTarget = r.controls.target.clone();
+    const at = (x: number, y: number, z: number) => center.clone().add(new THREE.Vector3(x, y - 0.6, z).multiplyScalar(k));
     const positions: Record<View, THREE.Vector3> = {
-      persp: new THREE.Vector3(6.5, 5.2, 7.5), top: new THREE.Vector3(0, 11, 0.001), front: new THREE.Vector3(0, 1.2, 8.5),
-      right: new THREE.Vector3(8.5, 1.2, 0), camera: model?.ray ? vec(model.ray.origin) : new THREE.Vector3(3.6, 3.4, 4.8),
+      persp: at(6.5 * (k > 1 ? 0.62 : 1), 5.2 * (k > 1 ? 0.62 : 1) + 0.6, 7.5 * (k > 1 ? 0.62 : 1)), top: at(0, 11, 0.001), front: at(0, 1.2, 8.5),
+      right: at(8.5, 1.2, 0), camera: model?.ray ? vec(model.ray.origin) : new THREE.Vector3(3.6, 3.4, 4.8),
     };
     const to = positions[view], toTarget = view === "camera" && model?.ray ? vec(model.ray.target) : target;
     r.animations.push({ start: performance.now(), duration: 520, apply: t => {
@@ -233,7 +278,7 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
   const inspected = objects.find(o => o.name === selected);
   const ray = model?.ray;
   return <div className="viewport" onKeyDown={onKey} data-webgl={webgl} data-objects={objects.length}
-    data-stage={activeIndex !== undefined ? stages[activeIndex].index : stages.length} data-ray={ray ? (ray.visible ? "target" : "blocked") : "none"}>
+    data-stage={activeIndex !== undefined ? stages[activeIndex].index : stages.length} data-ray={ray ? (ray.visible ? "target" : "blocked") : "none"} data-animations={clips} data-playing={playing}>
     <div className="viewport-canvas" ref={host}>
       {webgl === "unavailable" && <div className="viewport-fallback">此浏览器未启用 WebGL；原生渲染图与下载文件不受影响。</div>}
       {webgl === "ok" && !url && <div className="viewport-empty"><strong>实时原生视口</strong><span>提交候选或在 AI 助手中确认计划后，原生工具每完成一个构建阶段，这里即时出现对应的几何。</span></div>}
@@ -244,8 +289,11 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
       <div className="viewport-hud top-right" role="toolbar" aria-label="视图预设">
         {VIEWS.map(v => <button key={v.id} type="button" className={view === v.id ? "active" : ""} aria-pressed={view === v.id} title={`快捷键 ${v.key}`} onClick={() => setView(v.id)}>{v.label}</button>)}
       </div>
-      {ray && <div className={`viewport-hud bottom-left ray-badge ${ray.visible ? "ok" : "blocked"}`}>原生射线首个命中：{ray.firstHit === "Target" ? "目标" : ray.firstHit ?? "无"}{ray.visible ? " · 可见" : " · 被遮挡"}</div>}
-      {model?.render && <div className="viewport-hud bottom-right render-progress" role="progressbar" aria-label="Cycles 渲染采样" aria-valuemin={0} aria-valuemax={model.render.samples} aria-valuenow={model.render.sample}>
+      {ray && !model?.rays?.length && <div className={`viewport-hud bottom-left ray-badge ${ray.visible ? "ok" : "blocked"}`}>原生射线首个命中：{ray.firstHit === "Target" ? "目标" : ray.firstHit ?? "无"}{ray.visible ? " · 可见" : " · 被遮挡"}</div>}
+      {model?.rays?.length ? <div className={`viewport-hud bottom-left ray-badge ${model.rays.every(x => x.visible) ? "ok" : "blocked"}`}>检测相机射线：{model.rays.filter(x => x.visible).length}/{model.rays.length} 个工位首个命中为工件</div> : null}
+      {clips > 0 && !model?.running && <div className="viewport-hud bottom-right anim"><button type="button" className={playing ? "active" : ""} aria-pressed={playing} onClick={() => setPlaying(p => !p)}>
+        {playing ? "❚❚ 暂停动画" : "▶ 播放产线动画"}</button><small>原生关键帧 · {clips} 段 · 演示用运动，非动力学</small></div>}
+      {model?.render && !(clips > 0 && !model.running) && <div className="viewport-hud bottom-right render-progress" role="progressbar" aria-label="Cycles 渲染采样" aria-valuemin={0} aria-valuemax={model.render.samples} aria-valuenow={model.render.sample}>
         <span>Cycles {model.render.sample}/{model.render.samples}</span><i style={{ width: `${(model.render.sample / model.render.samples) * 100}%` }} /></div>}
     </div>
     <div className="viewport-side">

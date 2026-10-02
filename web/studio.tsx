@@ -77,12 +77,12 @@ export function LiveSteps({ session }: { session: LiveSession }) {
   </div>;
 }
 
-const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "robot-review": "Robot Reel",
+const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "plant-layout": "Blender 产线", "robot-review": "Robot Reel",
   "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型", "cad-code": "CadQuery 代码", "cad-sweep": "参数扫描" };
 const directionLabel: Record<string, string> = { new: "新", same: "不变", tightened: "收紧", relaxed: "放宽", changed: "变更" };
-const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "robot-review": "review",
+const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-review": "review",
   "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review", "cad-sweep": "cad-sweep" };
-const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part" };
+const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "plant-layout": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part" };
 const SUGGESTIONS = [
   "生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m",
   "评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C",
@@ -234,6 +234,10 @@ export function Assistant({ onClose }: { onClose: () => void }) {
                 {!done && step.tool === "scene-review" && <button type="button" className="secondary" onClick={() => {
                   const r = step.payload.requirements as { maxFootprintArea: number; targetEnvelopeRadius: number; requireTargetVisible: boolean };
                   c.navigate("design", { lane: "scene", variant: String(step.payload.variant), area: String(r.maxFootprintArea), radius: String(r.targetEnvelopeRadius), visible: String(r.requireTargetVisible) });
+                }}>在专业面板调整</button>}
+                {!done && step.tool === "plant-layout" && <button type="button" className="secondary" onClick={() => {
+                  const values = { ...(step.payload.layout as Record<string, unknown>), ...(step.payload.requirements as Record<string, unknown>) };
+                  c.navigate("design", { lane: "plant", ...Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v)])) });
                 }}>在专业面板调整</button>}
                 {!done && step.tool === "cad-review" && <button type="button" className="secondary" onClick={() => {
                   const r = step.payload.requirements as CadRequirementsLike;

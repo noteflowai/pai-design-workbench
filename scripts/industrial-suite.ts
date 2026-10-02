@@ -51,6 +51,9 @@ const failed = (c?: { checks: { id: string; passed: boolean }[] }) => c?.checks.
 const robot = async (candidate: string) => ok<Review>("POST", `${P}/reviews`, { requestId: randomUUID(), projectRevision: 1, candidate });
 const scene = (variant: string, maxFootprintArea = 12) => ok<SceneReview>("POST", `${P}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant,
   requirements: { maxFootprintArea, targetEnvelopeRadius: 1.4, requireTargetVisible: true } });
+const COMPACT_LINE = { stations: 6, stationPitch: 4.5, aisleWidth: 2.4, guardSize: 4.2, rackRows: 2, cameraHeight: 2.8, agvs: 3 };
+const plant = (layout: typeof COMPACT_LINE) => ok<SceneReview>("POST", `${P}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant: "plant", layout,
+  requirements: { maxFootprintArea: 650, minAisleWidth: 2.4, minGuardClearance: 0.5, requireCameraCoverage: true, maxEgressTravel: 25 } });
 const cad = (variant: string, requirements = DEFAULT_CAD_REQUIREMENTS) => ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant, requirements });
 const template = await readFile(join(config.repository, "native/cad_template.py"), "utf8");
 const generated = (code: string) => ({ requestId: randomUUID(), projectRevision: 1, variant: "generated", requirements: DEFAULT_CAD_REQUIREMENTS, source: { language: "cadquery-2.8", code } });
@@ -85,6 +88,23 @@ const cases: Case[] = [
       const s = await scene("clear", 10);
       return { matched: s.verdict === "rejected" && JSON.stringify(failed(s.candidate)) === '["footprint-area"]' && s.diff?.blocking_changes === 0,
         actual: `${s.verdict}；失败 ${failed(s.candidate).join(",")}；blocking ${s.diff?.blocking_changes}`, evidence: { sceneId: s.id } };
+    } },
+  { id: "P1", domain: "工厂产线布局（Blender）", title: "6 工位 CNC 线：围栏加大到 4.2 m", tool: "Blender 5.2 BVH 射线 + EvalArc",
+    rationale: "为满足机器人安全间距而加大围栏，会挤占相邻的 AGV 通道；这种耦合在参数表里看不出来，需要在生成的几何上实测最窄处。",
+    expected: "rejected；仅 aisle-clearance 失败（净宽 < 2.4 m）；围栏间距通过；6/6 相机覆盖；blocking 1", run: async () => {
+      const s = await plant({ ...COMPACT_LINE });
+      const m = (id: string) => (s.candidate?.checks.find(c => c.id === id) as { observed?: number } | undefined)?.observed;
+      return { matched: s.verdict === "rejected" && JSON.stringify(failed(s.candidate)) === '["aisle-clearance"]' && (m("aisle-clearance") ?? 9) < 2.4 && m("camera-coverage") === 6 && s.diff?.blocking_changes === 1,
+        actual: `${s.verdict}；失败 ${failed(s.candidate).join(",")}；通道净宽 ${m("aisle-clearance")} m；围栏间距 ${m("guard-clearance")} m；相机 ${m("camera-coverage")}/6；blocking ${s.diff?.blocking_changes}`,
+        evidence: { sceneId: s.id, stages: s.stages?.candidate?.length, objects: (s.candidate as { derived?: { objects: number } }).derived?.objects } };
+    } },
+  { id: "P2", domain: "工厂产线布局（Blender）", title: "不放宽要求：设计通道加宽到 2.8 m", tool: "Blender 5.2 BVH 射线 + EvalArc",
+    rationale: "修正必须同时守住占地上限：通道每加宽 0.1 m，厂房增加约 3.9 m²；原生实测确认净宽与占地同时满足。",
+    expected: "accepted-static-scene；净宽 ≥ 2.4 m 且占地 ≤ 650 m²", run: async () => {
+      const s = await plant({ ...COMPACT_LINE, aisleWidth: 2.8 });
+      const m = (id: string) => (s.candidate?.checks.find(c => c.id === id) as { observed?: number } | undefined)?.observed;
+      return { matched: s.verdict === "accepted-static-scene" && (m("aisle-clearance") ?? 0) >= 2.4 && (m("footprint-area") ?? 999) <= 650,
+        actual: `${s.verdict}；通道净宽 ${m("aisle-clearance")} m；占地 ${m("footprint-area")} m²`, evidence: { sceneId: s.id } };
     } },
   { id: "C1", domain: "机械零件（CAD）", title: "NEMA 17 电机支架基准设计", tool: "CadQuery 2.8 / OCCT 7.9 + EvalArc", rationale: "步进电机安装支架是自动化设备最常见的定制机加工件；接口、壁厚、孔边距、质量与装配干涉都在 B-Rep 上实测。",
     expected: "accepted-cad-part；STEP 重新导入体积一致", run: async () => {
@@ -331,7 +351,9 @@ const cases: Case[] = [
 
 const results = [];
 try {
-  for (const c of cases) {
+  // PAI_SUITE_ONLY=X1,P1 reruns selected cases (e.g. after fixing an environment problem); the report lists exactly what ran.
+  const only = process.env.PAI_SUITE_ONLY?.split(",").map(x => x.trim()).filter(Boolean);
+  for (const c of only ? cases.filter(x => only.includes(x.id)) : cases) {
     const started = Date.now();
     process.stderr.write(`${c.id} ${c.title} … `);
     try {

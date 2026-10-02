@@ -7,8 +7,9 @@ import { canonical, DomainError, outcomes, sha256 } from "./domain.js";
 import type { Config } from "./config.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
-import { compare, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
-import { SceneRequest, SceneRequirements, type SceneReview } from "./scenes.js";
+import { compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
+import { DEFAULT_PLANT_REQUIREMENTS, isPlant, PlantLayout, PlantRequirements, SceneRequest, SceneRequirements,
+  type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
 import { CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
@@ -30,7 +31,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "cad-review", "cad-code", "cad-sweep", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "cad-review", "cad-code", "cad-sweep", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -41,6 +42,7 @@ const ModelPayload = {
   "update-requirements": z.object({ requirements: Requirements.partial(), intendedDecision: z.string().trim().min(5).max(2000).optional() }).strict(),
   "robot-review": z.object({ candidate: Candidate }).strict(),
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
+  "plant-layout": z.object({ layout: PlantLayout, requirements: PlantRequirements.partial().default({}) }).strict(),
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
@@ -52,6 +54,9 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "update-requirements": "修订当前任务的需求（生成新版本；放宽要说明理由）",
   "robot-review": "Robot Reel 历史记录评审：candidate 为 reference/camera/dim",
   "scene-review": "Blender 工作单元：variant clear/occluded；requirements 可只写要改的字段",
+  "plant-layout": "Blender 工厂产线布局（原生生成并用射线实测）。layout 全部 7 个字段必填：stations 3–8 整数、stationPitch 3.5–7、aisleWidth 1.2–4.5、guardSize 2.6–5、rackRows 1–4 整数、cameraHeight 2.4–6.5、agvs 0–4 整数（米）。"
+    + "配方几何：厂房 X = stations×stationPitch+12，Y = 10.95+aisleWidth+1.35×rackRows，占地 = X×Y；货架面按参考围栏 3.6 m 排布，所以实测通道净宽 ≈ aisleWidth − (guardSize−3.6)/2 − 0.035；"
+    + "围栏安全间距 ≈ guardSize/2 − 0.02 − 1.45（声明的机器人包络）；guardSize 不宜超过 stationPitch。requirements 可只写要改的字段；结论只来自原生检查",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
   "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
   "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
@@ -71,7 +76,7 @@ const ModelOutput = z.object({
 }).passthrough();
 
 type Handle = { kind: string; id: string; label: string };
-export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: SceneReview; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
+export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
   cadCode?: { template: string } }
 export interface ContextOptions { cadCode?: { template: string } }
@@ -97,7 +102,11 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
   const scenes = mine<SceneReview>("scene-review").map((s, i) => {
     const h = add("scene", i + 1, "scene-review", s.id, `Blender 场景 · ${s.request.variant}`); handleOf.set(s.id, h);
     return { handle: h, at: s.createdAt, state: s.state, verdict: s.verdict, variant: s.request.variant, requirements: s.request.requirements, revision: s.projectRevision,
-      failed: s.candidate?.checks.filter(c => !c.passed).map(c => c.id), firstHit: s.rays?.candidate?.firstHit ?? null, recheck: Boolean(s.feedbackId) };
+      failed: s.candidate?.checks.filter(c => !c.passed).map(c => c.id), firstHit: s.rays?.candidate?.firstHit ?? null, recheck: Boolean(s.feedbackId),
+      // Plant layouts: the layout and every measured value, so the planner reasons on native numbers rather than guesses.
+      ...(s.request.variant === "plant" ? { layout: s.request.layout,
+        measured: s.candidate?.checks.map(c => ({ id: c.id, passed: c.passed, observed: (c as { observed?: unknown }).observed, required: (c as { required?: unknown }).required })),
+        derived: (s.candidate as { derived?: unknown } | undefined)?.derived } : {}) };
   });
   const cads = mine<CadReview>("cad-review").map((c, i) => {
     const h = add("cad", i + 1, "cad-review", c.id, `CAD 零件 · ${c.request.variant}`); handleOf.set(c.id, h);
@@ -129,7 +138,8 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     scope: "记录仿真、合成静态几何、名义参数化几何与演示工厂仿真；没有物理验证、FEA 或现场测量",
   };
   return { project, handles, workspace, cadCode: options.cadCode,
-    lastScene: store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id).at(-1),
+    lastScene: store.list<SceneReview>("scene-review").filter((s): s is WorkcellScene => s.projectId === project.id && !isPlant(s)).at(-1),
+    lastPlant: store.list<SceneReview>("scene-review").filter((s): s is PlantScene => s.projectId === project.id && isPlant(s)).at(-1),
     lastCad: store.list<CadReview>("cad-review").filter(s => s.projectId === project.id).at(-1),
     lastCriteria: store.list<FactoryCriteria>("factory-criteria").filter(s => s.projectId === project.id).at(-1) };
 }
@@ -220,6 +230,13 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       { field: "variant", from: context.lastScene?.request.variant ?? null, to: p.variant, direction: context.lastScene ? (context.lastScene.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `Blender 原生场景：${p.variant === "occluded" ? "带遮挡候选" : "无遮挡布局"}`, route: route("scenes"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "原生 .blend/GLB/PNG、射线与投影检查、EvalArc 对照；逐阶段实时几何" };
+  }
+  if (t === "plant-layout") {
+    const p = parsed as { layout: z.infer<typeof PlantLayout>; requirements: Partial<z.infer<typeof PlantRequirements>> };
+    const prev = context.lastPlant?.request;
+    const requirements = PlantRequirements.parse({ ...(prev?.requirements ?? DEFAULT_PLANT_REQUIREMENTS), ...p.requirements });
+    const step = plantPlan(p.layout, requirements, prev, opts.revision, route("scenes"), opts.title);
+    return { ...base, ...step, warnings: [...step.warnings, ...note] };
   }
   if (t === "cad-review") {
     const p = parsed as { variant: typeof CAD_PRESETS[number]; requirements: Partial<CadRequirements> };

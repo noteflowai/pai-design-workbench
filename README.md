@@ -6,9 +6,24 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
+[![AI + Blender 设计工厂产线：原生生成、射线实测、AI 修正、复测通过](docs/media/factory-demo.gif)](docs/media/factory-demo.mp4)
+
+**演示一 · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-factory-2026-10-03) 下载。
+
+1. 用一句话描述 6 工位 CNC 机加工产线（围栏加大到 4.2 m、AGV 通道 2.4 m、厂房 ≤ 650 m²），解析成类型化计划。
+2. Blender 5.2 按 8 个阶段生成整座车间，实时推送到三维视口：柱网桁架、输送线、CNC 加工中心、六轴机器人、安全围栏、货架、AGV、桥式起重机和检测相机，共 181 个对象，带 Cycles 渲染和动画。
+3. BVH 射线实测发现耦合问题：加大的围栏挤占了通道，净宽只有 2.08 m（要求 ≥ 2.4 m），结论为拒绝。
+4. 在失败的检查上点“问 AI”，真实调用 Kiro 主账号（claude-opus-5.5）。它在不放宽任何要求的前提下把通道加宽到 2.8 m。确认后重新生成：净宽 2.48 m，厂房 641.6 m²，5 项检查全部通过。
+
+回执见 [factory-demo.json](docs/evidence/factory-demo.json)，通道说明见 [PLANT.md](docs/PLANT.md)。
+
+![Blender Cycles 渲染：AI 修正后的 6 工位 CNC 产线](docs/media/factory-render.png)
+
+**演示二 · 生成式 CAD**：
+
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
 
-**完整演示视频**：[docs/media/demo.mp4](docs/media/demo.mp4)（约 3 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-2026-10-02) 下载。
+完整视频：[docs/media/demo.mp4](docs/media/demo.mp4)（约 3 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-2026-10-02) 下载。
 
 视频里的全部结果都是录制时实时产生的：
 1. NEMA 17 支架轻量化，板厚 4 → 2.5 mm，被原生检查拒绝。
@@ -16,11 +31,11 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 3. 代码在三层沙箱中建模，通过全部 7 项检查，39.6 g。
 4. 16 点原生设计空间扫描，找到最轻的可行设计 t = 3 mm，37.4 g，作为正式候选也通过了检查。
 
-成片没有剪切或调换顺序，只把画面静止的等待片段加速播放。回执见 [demo.json](docs/evidence/demo.json)。
+两段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
 
-实现了四条原生证据通道：**机器人历史记录评审**、**Blender 工作单元布局**、**CadQuery/OCCT 参数化 CAD 零件**、**工厂孪生维护与能源评审**。它们共用同一条生命周期闭环：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 发布交付。需求版本只追加、可逐项比较；发布候选须通过准入检查（检查通过、绑定当前需求、失败案例均已关闭）并经维护者批准，需求修订后自动废止。底部状态栏显示原生任务、需求哈希与工具状态。左侧栏显示每个阶段的状态，总览页给出“下一步”，二者都由已保存的记录推导。
+实现了五条原生证据通道：**机器人历史记录评审**、**Blender 工作单元布局**、**Blender 工厂产线布局**、**CadQuery/OCCT 参数化 CAD 零件**、**工厂孪生维护与能源评审**。它们共用同一条生命周期闭环：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 发布交付。需求版本只追加、可逐项比较；发布候选须通过准入检查（检查通过、绑定当前需求、失败案例均已关闭）并经维护者批准，需求修订后自动废止。底部状态栏显示原生任务、需求哈希与工具状态。左侧栏显示每个阶段的状态，总览页给出“下一步”，二者都由已保存的记录推导。
 
-**AI 助手**停靠在右侧，把对话解析成类型化的工具计划，并标出每项约束是收紧还是放宽。计划没有验收权，只有你确认后才调用原生工具。Blender 和 CadQuery 每完成一个构建阶段，几何就通过 SSE 推送到 three.js 专业视口；视口支持轨道操作、视图预设、大纲、检查器、线框/X 光和阶段时间轴，另有 Ctrl+K 命令面板。界面为响应式 Web/PWA。[14 个典型工业设计测试用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
+**AI 助手**停靠在右侧，把对话解析成类型化的工具计划，并标出每项约束是收紧还是放宽。计划没有验收权，只有你确认后才调用原生工具。Blender 和 CadQuery 每完成一个构建阶段，几何就通过 SSE 推送到 three.js 专业视口；视口支持轨道操作、视图预设、大纲、检查器、线框/X 光和阶段时间轴，另有 Ctrl+K 命令面板。界面为响应式 Web/PWA。[27 个典型工业设计测试用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
 **AI 引擎**通过受控执行器调用 Kiro（主账号 → 备用账号 → 二备账号），本机还可以使用 Codex 和 Claude。模型回复按同一套契约重新校验后成为计划或附引用的回答，引用必须指向已存记录。影响未核实的运行要先经人工核对，不会自动重试。pai.oneai.host 已启用 Kiro 三个账号。全部组件可装进一个固定版本的镜像，见 [CONTAINER.md](docs/CONTAINER.md)。外部 Agent 可通过本机 [MCP 服务器](docs/MCP.md) 读取记录并提议计划，同样需要人工确认。预设变体不够用时，AI 或维护者可以直接写 CadQuery 代码：代码在三层沙箱（AST 策略、进程锁定、无网络的 bubblewrap）中只产生实体，结论来自与预设相同的原生检查，见 [生成代码通道](docs/CAD_CODE.md)。沙箱和执行 Agent 也可以作为 arm64 自带容器运行在 Amazon Bedrock AgentCore 上：每个代码任务使用独立 microVM、没有网络路由，账本放在保留的 EFS 上，见 [AGENTCORE.md](docs/AGENTCORE.md)。CAD 通道还提供原生设计空间扫描：逐点建模实测、散点图和帕累托前沿，选中的点作为正式候选进入同一套检查与发布流程。
 
@@ -41,7 +56,8 @@ npm run check
 npm run test:native
 npm run test:blender
 npm run test:cad
-npm run test:suite   # 14 个典型工业设计用例
+npm run test:plant   # 工厂产线：拒绝 → 反馈 → 修正复测 → 关闭
+npm run test:suite   # 典型工业设计用例（默认 25 个）
 npm run start        # http://127.0.0.1:4317
 ```
 

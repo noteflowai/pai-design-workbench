@@ -1,0 +1,205 @@
+{
+  "schema": "pai-demo-factory-1",
+  "recordedAt": "2026-10-02T19:41:03+00:00",
+  "scope": "Synthetic explicit factory recipe measured with native Blender ray casts; illustrative animation; no dynamics, throughput, lighting levels, safety certification or measured plant data.",
+  "honesty": "Single continuous take; no cuts or reordering; only still waiting spans accelerated. Overlays exist only in the recording browser. Numbers in captions are read back from saved records. Prompt and answer text are not stored here.",
+  "environment": {
+    "blender": "5.2.2 LTS",
+    "viewport": "Chromium WebGL on host GPU via ANGLE/Vulkan (DEMO_GL=gpu)",
+    "recording": "Playwright 1440x900"
+  },
+  "first": {
+    "recordId": "8479c1c6-f69c-4dd3-b338-46678df0c71f",
+    "verdict": "rejected",
+    "layout": {
+      "stations": 6,
+      "stationPitch": 4.5,
+      "aisleWidth": 2.4,
+      "guardSize": 4.2,
+      "rackRows": 2,
+      "cameraHeight": 2.8,
+      "agvs": 3
+    },
+    "requirements": {
+      "maxFootprintArea": 650,
+      "minAisleWidth": 2.4,
+      "minGuardClearance": 0.5,
+      "requireCameraCoverage": true,
+      "maxEgressTravel": 25
+    },
+    "checks": {
+      "footprint-area": {
+        "passed": true,
+        "observed": 626,
+        "required": 650
+      },
+      "aisle-clearance": {
+        "passed": false,
+        "observed": 2.08,
+        "required": 2.4
+      },
+      "guard-clearance": {
+        "passed": true,
+        "observed": 0.63,
+        "required": 0.5
+      },
+      "camera-coverage": {
+        "passed": true,
+        "observed": 6,
+        "required": 6
+      },
+      "egress-travel": {
+        "passed": true,
+        "observed": 22.83,
+        "required": 25
+      }
+    },
+    "evalarcBlockingChanges": 1,
+    "blenderVersion": "5.2.2 LTS",
+    "requirementDigest": "edfd32f3e353335d3563a16e108fe5c75aa6206bdacd120f24d6eab3d8ac6adc",
+    "artifacts": {
+      "candidate/scene.blend": "ba65f09bac10343a23c0afd5e2dd245a52858a7a772013a00a284e46d043f5bb",
+      "candidate/scene.glb": "a4bbff7ec243c9c936724f91f8ee7591f47c7fb0f594c27ac3e3cdcc21df9ff2",
+      "candidate/preview.png": "08f6bf82ef5e4f08ab1c0c07b196da47b33320dc43aa607d608c6f8f89e6d5bc",
+      "candidate/checks.json": "70587e2293e0a0c6c76e84cf0434cb775a7c99b199d64bf2be9bf2207e08dbb2",
+      "candidate/inspection.png": "71e809a87c6ab4beb7e4e52a43200ded05bb18c26fab0dea0fe07ef7489d96fc"
+    },
+    "stages": 8,
+    "objects": 181,
+    "origin": "rule planner from the engineer message (no model call)"
+  },
+  "ai": {
+    "profile": "kiro-primary",
+    "provider": "kiro",
+    "model": "claude-opus-5.5",
+    "engineVersion": "2.24.0",
+    "state": "done",
+    "authority": "none",
+    "plantLayoutOptions": 2,
+    "confirmedOption": {
+      "changes": [
+        {
+          "field": "layout.aisleWidth",
+          "from": 2.4,
+          "to": 2.8,
+          "direction": "changed"
+        }
+      ]
+    },
+    "confirmation": [
+      {
+        "planId": "p1",
+        "match": "as-proposed",
+        "recordKind": "scene-review"
+      }
+    ]
+  },
+  "second": {
+    "recordId": "10af9280-b26c-4380-9885-f806e1a2a86b",
+    "verdict": "accepted-static-scene",
+    "layout": {
+      "stations": 6,
+      "stationPitch": 4.5,
+      "aisleWidth": 2.8,
+      "guardSize": 4.2,
+      "rackRows": 2,
+      "cameraHeight": 2.8,
+      "agvs": 3
+    },
+    "requirements": {
+      "maxFootprintArea": 650,
+      "minAisleWidth": 2.4,
+      "minGuardClearance": 0.5,
+      "requireCameraCoverage": true,
+      "maxEgressTravel": 25
+    },
+    "checks": {
+      "footprint-area": {
+        "passed": true,
+        "observed": 641.6,
+        "required": 650
+      },
+      "aisle-clearance": {
+        "passed": true,
+        "observed": 2.48,
+        "required": 2.4
+      },
+      "guard-clearance": {
+        "passed": true,
+        "observed": 0.63,
+        "required": 0.5
+      },
+      "camera-coverage": {
+        "passed": true,
+        "observed": 6,
+        "required": 6
+      },
+      "egress-travel": {
+        "passed": true,
+        "observed": 23.03,
+        "required": 25
+      }
+    },
+    "evalarcBlockingChanges": 0,
+    "blenderVersion": "5.2.2 LTS",
+    "requirementDigest": "edfd32f3e353335d3563a16e108fe5c75aa6206bdacd120f24d6eab3d8ac6adc",
+    "artifacts": {
+      "candidate/scene.blend": "54dfef75d88807d1fcc40156cdcb08e4672f5fcba2159a7aaa5099aca0dedd6a",
+      "candidate/scene.glb": "05f96837a3237050664681e5fae279e78002b071443cf4bf97322e525f456635",
+      "candidate/preview.png": "ba0608918c9467d08bb25c91fc26ebd04eddd756b49d93ae44cdcb3c3eadda9e",
+      "candidate/checks.json": "faf7004b71d36a2dd055d1d5ff45622ea158221e35a5b21a4aaa415923b66077",
+      "candidate/inspection.png": "a8fc4662db7950932cecf92e17973ec289812abffb0de0ed9902ca788d5ec195"
+    },
+    "stages": 8,
+    "objects": 181
+  },
+  "timeline": {
+    "marks": [
+      {
+        "name": "requirements",
+        "seconds": 6.9
+      },
+      {
+        "name": "describe",
+        "seconds": 15.3
+      },
+      {
+        "name": "blender",
+        "seconds": 27.4
+      },
+      {
+        "name": "rejected",
+        "seconds": 337.7
+      },
+      {
+        "name": "ai",
+        "seconds": 386.2
+      },
+      {
+        "name": "result",
+        "seconds": 759
+      }
+    ],
+    "sourceSeconds": 806
+  },
+  "media": {
+    "factory-demo.mp4": {
+      "bytes": 27060272,
+      "sha256": "3b758262faa60d50014f53f647d8d019d3d10492fbcf9b5173f0f8de5f235a24",
+      "seconds": 313.2
+    },
+    "factory-demo.gif": {
+      "bytes": 8272392,
+      "sha256": "f5d4038d3de209c7d35d9e1f854fd7f53d3b6fb9a588d3196f7efc2779170489",
+      "seconds": 20.0
+    },
+    "factory-poster.png": {
+      "bytes": 168041,
+      "sha256": "aa9e93d8ae4d016df40d6046191adce6e7f00fa8ab4915c0d3e2dc90226d2c78"
+    },
+    "factory-render.png": {
+      "bytes": 801107,
+      "sha256": "ba0608918c9467d08bb25c91fc26ebd04eddd756b49d93ae44cdcb3c3eadda9e"
+    }
+  }
+}

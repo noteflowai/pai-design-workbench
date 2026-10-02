@@ -1,7 +1,7 @@
 import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import { canonical, outcomes, sha256 } from "./domain.js";
 import type { FactoryCriteria, FactoryReview } from "./factory.js";
-import type { SceneReview } from "./scenes.js";
+import { sceneKey, type SceneReview } from "./scenes.js";
 import type { AssistantPlan } from "./assistant.js";
 import type { Proposal } from "./proposals.js";
 import type { CadReview } from "./cad.js";
@@ -39,7 +39,8 @@ const VERDICT: Record<string, string> = { "accepted-in-recorded-panel": "记录�
   "accepted-static-scene": "静态场景通过", "accepted-illustrative": "演示范围内通过", "accepted-cad-part": "零件检查通过" };
 const FACTORY_CHECK: Record<string, string> = { "output-per-seed": "单种子产出", "demand-intervals": "需量超限", "hall-comfort": "车间舒适度",
   "ev-service": "EV 充电服务", "closed-failures": "闭环故障" };
-const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性" };
+const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性",
+  "aisle-clearance": "AGV 通道净宽", "guard-clearance": "围栏安全间距", "camera-coverage": "检测相机覆盖", "egress-travel": "疏散距离" };
 const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络" };
 export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", parametric: "参数化", generated: "生成代码" };
@@ -65,7 +66,7 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
       cases.push(bind({ kind: "robot-review", runId: r.id, seed, label: `seed ${seed}：基准成功，${CANDIDATE[r.candidate]}失败` }));
     }
   }
-  for (const sc of latestBy(s.scenes.filter(x => x.state === "completed" && !x.feedbackId), x => canonical(x.request.requirements) + x.request.variant)) {
+  for (const sc of latestBy(s.scenes.filter(x => x.state === "completed" && !x.feedbackId), x => sceneKey(x.request))) {
     for (const check of sc.baseline?.checks ?? []) {
       if (check.passed && sc.candidate?.checks.find(c => c.id === check.id)?.passed === false) {
         cases.push(bind({ kind: "blender-scene", runId: sc.id, seed: null, checkId: check.id, label: `Blender ${SCENE_CHECK[check.id] ?? check.id}：基准通过，候选失败` }));
@@ -93,7 +94,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   const { project } = s;
   const runs = [
     ...s.reviews.map(r => ({ kind: "robot-review" as const, id: r.id, state: r.state, verdict: r.decision?.verdict, createdAt: r.createdAt, key: `robot:${r.candidate}` })),
-    ...s.scenes.map(r => ({ kind: "blender-scene" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `scene:${r.request.variant}:${canonical(r.request.requirements)}` })),
+    ...s.scenes.map(r => ({ kind: "blender-scene" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `scene:${sceneKey(r.request)}` })),
     ...(s.cads ?? []).map(r => ({ kind: "cad-part" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `cad:${cadKey(r)}` })),
     ...s.factoryReviews.map(r => ({ kind: "factory-twin" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `factory:${r.criteriaId}` })),
   ];
@@ -138,7 +139,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   for (const c of s.factoryCriteria) activity.push({ at: c.createdAt, stage: "requirements", label: "冻结工厂验收标准", detail: `摘要 ${c.digest.slice(0, 8)} · ${c.rationale}` });
   for (const p of s.plans) activity.push({ at: p.createdAt, stage: "design", label: "AI 助手生成计划", detail: p.message, ref: { kind: "plan", id: p.id } });
   for (const r of s.reviews) activity.push({ at: r.createdAt, stage: "validate", label: `Robot Reel 验证 · ${CANDIDATE[r.candidate]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.decision ? VERDICT[r.decision.verdict] : r.state, ref: { kind: "robot-review", id: r.id } });
-  for (const r of s.scenes) activity.push({ at: r.createdAt, stage: "validate", label: `Blender 场景 · ${r.request.variant === "occluded" ? "带遮挡" : "无遮挡"}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] : r.state, ref: { kind: "blender-scene", id: r.id } });
+  for (const r of s.scenes) activity.push({ at: r.createdAt, stage: "validate", label: `Blender ${r.request.variant === "plant" ? `工厂产线 · ${r.request.layout.stations} 工位` : `场景 · ${r.request.variant === "occluded" ? "带遮挡" : "无遮挡"}`}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] : r.state, ref: { kind: "blender-scene", id: r.id } });
   for (const r of s.cads ?? []) activity.push({ at: r.createdAt, stage: "validate", label: `CAD 零件 · ${CAD_VARIANT[r.request.variant]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] ?? r.verdict : r.state, ref: { kind: "cad-part", id: r.id } });
   for (const r of s.factoryReviews) activity.push({ at: r.createdAt, stage: "validate", label: `工厂孪生评估${r.feedbackId ? "（反馈复测）" : ""}`, detail: `${VERDICT[r.verdict]} · 标准 ${r.criteriaDigest.slice(0, 8)}`, ref: { kind: "factory-twin", id: r.id } });
   for (const f of s.feedback) for (const h of f.history) activity.push({ at: h.at, stage: "feedback", label: `反馈${STATUS[h.status]}`, detail: h.reason, ref: { kind: "feedback", id: f.id } });

@@ -20,6 +20,7 @@
     "setup:demo": "tsx scripts/setup-demo.ts",
     "setup:native": "python3 tools/setup_native_tools.py",
     "test:blender": "node --env-file-if-exists=.state/demo.env --import tsx scripts/blender-e2e.ts",
+    "test:plant": "node --env-file-if-exists=.state/demo.env --import tsx scripts/plant-e2e.ts",
     "check": "npm run typecheck && npm test && npm run test:desktop-contract && npm run build",
     "test:desktop-contract": "node --test tests/desktop-contract.test.mjs",
     "setup:cad": "python3 tools/setup_cadquery.py",

@@ -539,3 +539,54 @@ test("design-space sweep: native points on a scatter, lightest feasible point be
   await noOverflow(page);
   expect(errors).toEqual([]);
 });
+
+test("factory production line: native Blender build streams into the viewport, ray-measured rejection, animation and an AI layout fix plan", async ({ page }, testInfo) => {
+  test.setTimeout(900_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.blender) throw new Error("Native Blender is required for this integration check");
+  await createProject(page);
+  await page.goto("/#/design?lane=plant");
+  for (const [label, value] of [["工位数", "6"], ["工位节距", "4.5"], ["AGV 通道设计宽度", "2.4"], ["安全围栏边长", "4.2"], ["检测相机龙门高度", "2.8"], ["AGV 台数", "3"]]) {
+    await page.getByLabel(label, { exact: true }).fill(value, { timeout: 15_000 });
+  }
+  await expect(page.locator(".plant-estimate")).toContainText("626 m²");
+  await page.getByRole("button", { name: "生成并检查工厂产线" }).click();
+  await expect(page.getByLabel("实时工具步骤").first().getByText("Blender 参考产线（4 工位）")).toBeVisible({ timeout: 60_000 });
+  const viewport = page.locator(".viewport");
+  await expect(viewport).toHaveAttribute("data-stage", "8", { timeout: 300_000 });
+  await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible({ timeout: 600_000 });
+  const row = page.locator(".check-table tr.fail");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("AGV 通道净宽"); await expect(row).toContainText("2.08"); await expect(row).toContainText("≥ 2.4");
+  await expect(page.locator(".viewport-hud.bottom-left")).toContainText("6/6");
+  await expect(viewport).not.toHaveAttribute("data-animations", "0", { timeout: 30_000 });
+  await page.getByRole("button", { name: "▶ 播放产线动画" }).click();
+  await expect(viewport).toHaveAttribute("data-playing", "true");
+  for (const name of ["候选产线原生 Cycles 渲染", "参考产线原生 Cycles 渲染"]) {
+    await expect.poll(() => page.getByRole("img", { name }).evaluate(i => (i as HTMLImageElement).naturalWidth)).toBeGreaterThan(400);
+  }
+  await expect.poll(() => page.locator(".plant-renders img").nth(1).evaluate(i => (i as HTMLImageElement).naturalWidth)).toBeGreaterThan(300);
+  await page.screenshot({ path: testInfo.outputPath("plant-desktop.png") });
+  // The failing measurement becomes a typed AI plan; the scripted executor stands in for the model.
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(".state/browser/fake-executor.json", JSON.stringify({ attempts: [{ profile: "kiro-primary", status: "succeeded", answer: "```json\n" + JSON.stringify({
+    kind: "plan", interpretation: ["4.2 m 围栏比参考围栏宽 0.6 m，挤占 0.3 m 通道"],
+    answer: { text: "scene-1 的通道净宽实测 2.08 m < 2.4 m。把设计通道加宽到 2.8 m，占地 641.6 m² 仍 ≤ 650 m²。", citations: ["scene-1"] },
+    plans: [{ ref: "p1", tool: "plant-layout", title: "加宽 AGV 通道复测", payload: { layout: { stations: 6, stationPitch: 4.5, aisleWidth: 2.8, guardSize: 4.2, rackRows: 2, cameraHeight: 2.8, agvs: 3 } } }] }) + "\n```" }] }));
+  await row.getByRole("button", { name: /问 AI：AGV 通道净宽为什么未通过/ }).click();
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  await expect(assistant.locator("#studio-input")).toHaveValue(/AGV 通道净宽.*2\.08/);
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  const card = assistant.getByRole("article", { name: "计划 加宽 AGV 通道复测" });
+  await expect(card.getByText("2.4 → 2.8")).toBeVisible();
+  await expect(assistant.getByRole("group", { name: "引用的记录" }).last()).toContainText("Blender 场景 · plant");
+  await card.getByRole("button", { name: "在专业面板调整" }).click();
+  await expect(page.getByLabel("AGV 通道设计宽度", { exact: true })).toHaveValue("2.8");
+  await expect(page.locator(".plant-estimate")).toContainText("642 m²");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/validate?kind=blender-scene");
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("plant-mobile.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});

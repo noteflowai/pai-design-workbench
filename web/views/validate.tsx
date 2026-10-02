@@ -11,6 +11,7 @@ import type { CadReview } from "../../src/cad";
 import { CAD_CHECK_LABELS, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import { CheckTable, type MeasuredCheck } from "../ui";
 import { CompareCandidates } from "./compare";
+import { isPlantScene, PlantDetail } from "../plant";
 
 const Viewport = lazy(() => import("../viewport"));
 
@@ -165,7 +166,11 @@ export function Validate() {
       <div className="detail">
         {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.running && <Card><LiveSteps session={session} /></Card>}
         {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
-        {detailKind === "blender-scene" && <SceneDetail scene={selected ? c.data.scenes.find(s => s.id === selected.id) : undefined} />}
+        {detailKind === "blender-scene" && (() => {
+          const scene = selected ? c.data.scenes.find(s => s.id === selected.id) : undefined;
+          const plant = scene ? isPlantScene(scene) : session?.kind === "blender-scene" && (session.title.includes("工厂产线") || session.steps.some(x => x.label.includes("产线")));
+          return plant ? <PlantDetail scene={isPlantScene(scene) ? scene : undefined} Receipts={Receipts} /> : <SceneDetail scene={scene} />;
+        })()}
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
         {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
         {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
