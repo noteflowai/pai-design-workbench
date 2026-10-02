@@ -1,9 +1,9 @@
 {
   "schema": "pai-aws-ui-v080",
   "site": "https://pai.oneai.host",
-  "release": "4f9d694d43e92b68c6278282794e0448af78c41168079b5c03f624ea97ec11fe",
-  "sourceCommit": "e3e1878",
-  "checkedAt": "2026-10-02T02:12:16.585Z",
+  "release": "afcfcf7b15f1f35670d73cbf28c7d50bd5b04ae87c9323288e15fafc142a67f7",
+  "sourceCommit": "322789b",
+  "checkedAt": "2026-10-02T10:56:34.603Z",
   "accessibility": {
     "pagesScanned": 30,
     "seriousOrCritical": 0,

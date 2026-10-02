@@ -1,6 +1,6 @@
 {
   "schema": "pai-aws-infrastructure-verification-1",
-  "checkedAt": "2026-10-02T02:15:26.418756+00:00",
+  "checkedAt": "2026-10-02T11:00:51.983728+00:00",
   "result": "passed",
   "region": "ap-northeast-1",
   "stackStatus": "UPDATE_COMPLETE",
@@ -32,7 +32,7 @@
     "retentionDays": 14,
     "snapshotRestoreTested": false
   },
-  "releaseSha256": "4f9d694d43e92b68c6278282794e0448af78c41168079b5c03f624ea97ec11fe",
+  "releaseSha256": "afcfcf7b15f1f35670d73cbf28c7d50bd5b04ae87c9323288e15fafc142a67f7",
   "runtimeSourceCommit": "e3e18789ddcd0be2023818508d589e28f10aefd5",
   "aiSecret": "pai-workbench/kiro-keys-3ZRtph",
   "executorAsset": "1a32b50516d49d698c783a3eb2401bb59328d9bc065fb2acfbe0ca42f5adb0b2.tar"
