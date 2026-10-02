@@ -10,7 +10,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: desktop-${{ github.ref }}
+  # A routine check must not cancel an explicit package/smoke run of the same ref.
+  group: desktop-${{ (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && 'package' || 'check' }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   package:
