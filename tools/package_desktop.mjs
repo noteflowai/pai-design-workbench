@@ -3,9 +3,10 @@
 //   npm run build && node tools/package_desktop.mjs && (cd desktop && npm ci && npm run dist:linux)
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const root = fileURLToPath(new URL("..", import.meta.url));
 const out = join(root, ".state/desktop"), app = join(out, "app"), deps = join(out, "deps");
 for (const need of ["dist/src/server.js", "web-dist/index.html", "desktop/build/icon.png"]) {
   if (!existsSync(join(root, need))) throw new Error(`missing ${need}: run npm run build and node tools/make_icon.mjs`);
