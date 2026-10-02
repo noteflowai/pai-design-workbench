@@ -13,7 +13,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts/check_cpu.sh"
 
 class PreparedDependencies(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        # The sandbox deliberately keeps /tmp noexec; fixtures belong to the
+        # explicitly admitted executable workspace used by the real npm tools.
+        self.temporary = tempfile.TemporaryDirectory(dir=Path.cwd())
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.source = self.root / "source"

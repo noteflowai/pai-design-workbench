@@ -13,7 +13,9 @@ failure, not a completed code check. Repeated reruns do not restore that allowan
 Agent Control's `workbench-cpu` profile uses the existing Radar Docker sandbox:
 an immutable source commit, pre-provisioned image, one CPU, 2 GiB memory, a
 1 GiB temporary workspace, no network, no GPU or host credentials, and retained
-source/toolchain-bound results. Dependency provisioning is explicit:
+source/toolchain-bound results. This profile explicitly allows execution inside
+that bounded workspace for npm tools. The root remains read-only and `/tmp`
+remains noexec. Dependency provisioning is explicit:
 
 ```bash
 bash scripts/prepare_cpu_dependencies.sh /absolute/new-dependency-directory
