@@ -3,15 +3,18 @@
 // shows it in a hardened window. No server code is forked or duplicated; native tools stay external programs.
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell, utilityProcess } from "electron";
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { publicDependencyPins, pinnedDependency, nativeInstallSupported, isWorkbenchUrl } from "./runtime.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = dirname(here);                          // resources/app (dist, web-dist, native, data, tools)
 const resources = app.isPackaged ? process.resourcesPath : join(appDir, ".state");
 const deps = app.isPackaged ? join(resources, "deps") : join(appDir, ".state/deps");
+const dependencyPins = publicDependencyPins(join(appDir, "tools/runtime-pins.json"));
+const canInstall = nativeInstallSupported(process.platform, process.arch);
 // PAI_DESKTOP_USER_DATA isolates a run (tests, portable use) from the default per-user data directory.
 if (process.env.PAI_DESKTOP_USER_DATA) app.setPath("userData", process.env.PAI_DESKTOP_USER_DATA);
 const userData = app.getPath("userData");
@@ -29,10 +32,7 @@ const saveSettings = patch => writeFileSync(settingsFile, JSON.stringify({ ...se
 const envFromFile = () => Object.fromEntries((existsSync(envFile) ? readFileSync(envFile, "utf8") : "").split("\n")
   .map(l => /^([A-Z_]+)=(.*)$/.exec(l.trim())).filter(Boolean).map(m => [m[1], m[2]]));
 // Pinned upstream checkouts (Robot Reel records, EvalArc, Radar) ship as resources/deps/<name>-<commit>.
-const pinned = name => {
-  const hit = existsSync(deps) ? readdirSync(deps).filter(n => n.startsWith(`${name}-`)).sort().at(-1) : undefined;
-  return join(deps, hit ?? name);
-};
+const pinned = name => pinnedDependency(deps, dependencyPins, name);
 
 function toolEnv() {
   const s = settings(), installed = envFromFile();
@@ -55,12 +55,15 @@ async function startServer() {
   delete env.PAI_PUBLIC_ORIGIN; // the desktop server is loopback-only and never authenticates through an ALB
   const log = createWriteStream(logFile, { flags: "a", mode: 0o600 });
   log.write(`\n--- ${new Date().toISOString()} start on 127.0.0.1:${port} (blender ${Boolean(tools.PAI_BLENDER)}, cadquery ${Boolean(tools.PAI_CADQUERY_PYTHON)})\n`);
-  server = utilityProcess.fork(join(appDir, "dist/src/server.js"), [], { env, cwd: appDir, stdio: "pipe", serviceName: `${PRODUCT} server` });
-  server.stdout?.on("data", d => log.write(d)); server.stderr?.on("data", d => log.write(d));
-  server.once("exit", code => {
+  const child = utilityProcess.fork(join(appDir, "dist/src/server.js"), [], { env, cwd: appDir, stdio: "pipe", serviceName: `${PRODUCT} server` });
+  server = child;
+  child.stdout?.on("data", d => log.write(d)); child.stderr?.on("data", d => log.write(d));
+  child.once("exit", code => {
     log.write(`--- server exited ${code}\n`);
-    if (!quitting) dialog.showErrorBox(PRODUCT, `本地工作台服务意外退出（代码 ${code}）。日志：${logFile}`);
-    server = undefined;
+    if (server === child) {
+      server = undefined;
+      if (!quitting) dialog.showErrorBox(PRODUCT, `本地工作台服务意外退出（代码 ${code}）。日志：${logFile}`);
+    }
   });
   origin = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 150; i++) {
@@ -87,8 +90,8 @@ function createWindow() {
   win.once("ready-to-show", () => win.show());
   win.on("close", () => saveSettings({ bounds: win.getBounds() }));
   // Only the local workbench is ever loaded in the window; everything else opens in the system browser.
-  win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(origin)) { e.preventDefault(); openExternal(url); } });
-  win.webContents.setWindowOpenHandler(({ url }) => { if (url.startsWith(origin)) return { action: "allow" }; openExternal(url); return { action: "deny" }; });
+  win.webContents.on("will-navigate", (e, url) => { if (!isWorkbenchUrl(url, origin)) { e.preventDefault(); openExternal(url); } });
+  win.webContents.setWindowOpenHandler(({ url }) => { if (isWorkbenchUrl(url, origin)) return { action: "allow" }; openExternal(url); return { action: "deny" }; });
   return win;
 }
 const openExternal = url => { if (/^https?:\/\//.test(url)) void shell.openExternal(url); };
@@ -102,9 +105,10 @@ async function chooseTool(kind) {
   await restartServer();
 }
 function installTool(kind) {
+  if (!canInstall) throw new Error("Automatic native-tool installation is supported on Linux x64 only. Select an existing executable in the Tools menu.");
   const script = join(appDir, "tools", kind === "blender" ? "setup_native_tools.py" : "setup_cadquery.py");
-  const python = kind === "cadquery" ? (process.platform === "win32" ? "py" : "python3.12") : "python3";
-  const args = kind === "cadquery" && process.platform === "win32" ? ["-3.12", script] : [script];
+  const python = kind === "cadquery" ? "python3.12" : "python3";
+  const args = [script];
   const child = spawn(python, args, { cwd: userData, env: { ...process.env, PAI_TOOLS_DIR: toolsDir, PAI_ENV_FILE: envFile } });
   let err = "";
   child.stderr.on("data", d => { err = (err + d).slice(-2000); });
@@ -138,8 +142,8 @@ function buildMenu() {
       { role: "togglefullscreen", label: "全屏" }, ...(app.isPackaged ? [] : [{ role: "toggleDevTools" }]),
     ] },
     { label: "工具", submenu: [
-      { label: "安装 Blender 5.2.2 LTS（官方校验）", enabled: process.platform === "linux" && process.arch === "x64", click: () => installTool("blender") },
-      { label: "安装 CadQuery 2.8（哈希锁定）", click: () => installTool("cadquery") },
+      { label: "安装 Blender 5.2.2 LTS（官方校验）", enabled: canInstall, click: () => installTool("blender") },
+      { label: "安装 CadQuery 2.8（哈希锁定）", enabled: canInstall, click: () => installTool("cadquery") },
       { type: "separator" },
       { label: "选择 Blender 可执行文件…", click: () => chooseTool("blender") },
       { label: "选择 CadQuery Python…", click: () => chooseTool("cadquery") },
@@ -155,8 +159,22 @@ function buildMenu() {
   ]));
 }
 
-ipcMain.handle("pai:desktop", () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, tools: Object.fromEntries(Object.entries(toolEnv()).map(([k, v]) => [k, Boolean(v)])) }));
-ipcMain.handle("pai:install-tool", (_e, kind) => { if (kind === "blender" || kind === "cadquery") installTool(kind); });
+const trustedSender = event => {
+  if (event.sender !== win?.webContents || !isWorkbenchUrl(event.senderFrame?.url, origin)) {
+    throw new Error("Desktop bridge requires the local workbench window");
+  }
+};
+ipcMain.handle("pai:desktop", event => {
+  trustedSender(event);
+  return { version: app.getVersion(), platform: process.platform, arch: process.arch,
+    installers: { blender: canInstall, cadquery: canInstall },
+    tools: Object.fromEntries(Object.entries(toolEnv()).map(([k, v]) => [k, Boolean(v)])) };
+});
+ipcMain.handle("pai:install-tool", (event, kind) => {
+  trustedSender(event);
+  if (kind !== "blender" && kind !== "cadquery") throw new Error("Unknown native tool");
+  installTool(kind);
+});
 
 app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 app.on("before-quit", () => { quitting = true; });

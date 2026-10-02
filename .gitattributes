@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# These immutable evidence fixtures are hashed byte for byte.
+data/** -text

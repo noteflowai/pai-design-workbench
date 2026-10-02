@@ -1,5 +1,10 @@
 {
   "schema": "pai-runtime-pins-1",
+  "publicDependencies": {
+    "robot-reel": "6124cee3cba53000eb46080422ed913b4439fb5f",
+    "evalarc": "6af26bf0184d1e4f3c5496615eda594603cc68c3",
+    "physical-ai-radar": "c7cd75d3cca62c822d7f5711110aefdf12159103"
+  },
   "node": { "version": "24.21.0", "sha256": { "linux-x64": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6", "linux-arm64": "6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2" } },
   "blender": { "version": "5.2.2", "sha256": { "linux-x64": "84098912789dc450e95697c4184fb8a90acbe5111c2ba4aede3fecb57806a168" }, "note": "No official linux-arm64 build" },
   "kiro": { "version": "2.24.0", "url": "https://prod.download.cli.kiro.dev/stable/2.24.0/kirocli-{arch}-linux.zip",

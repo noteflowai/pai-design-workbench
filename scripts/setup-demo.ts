@@ -2,18 +2,20 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { command } from "../src/adapters.js";
 const root = resolve(".state/deps");
-const pins = [
-  ["robot-reel", "6124cee3cba53000eb46080422ed913b4439fb5f"],
-  ["evalarc", "6af26bf0184d1e4f3c5496615eda594603cc68c3"],
-  ["physical-ai-radar", "c7cd75d3cca62c822d7f5711110aefdf12159103"],
-] as const;
+const registered = JSON.parse(await readFile("tools/runtime-pins.json", "utf8"));
+const names = ["robot-reel", "evalarc", "physical-ai-radar"] as const;
+const pins: [string, string][] = names.map(name => [name, registered.publicDependencies?.[name]]);
+if (registered.schema !== "pai-runtime-pins-1" || Object.keys(registered.publicDependencies ?? {}).length !== names.length
+    || pins.some(([, pin]) => typeof pin !== "string" || !/^[a-f0-9]{40}$/.test(pin))) {
+  throw new Error("Missing or invalid pinned public dependencies");
+}
 await mkdir(root, { recursive: true, mode: 0o700 });
 for (const [repo, pin] of pins) {
   const directory = join(root, `${repo}-${pin.slice(0, 12)}`);
   let exists = false;
   try { await access(directory); exists = true; } catch { /* Fresh owned dependency folder. */ }
   if (!exists) {
-    const clone = await command("git", ["clone", "--filter=blob:none", "--no-checkout",
+    const clone = await command("git", ["-c", "core.autocrlf=false", "clone", "--config", "core.autocrlf=false", "--filter=blob:none", "--no-checkout",
       `https://github.com/noteflowai/${repo}.git`, directory], root, undefined, 180_000);
     if (clone.exitCode !== 0) throw new Error(`Dependency clone failed: ${repo}`);
     if (repo === "robot-reel") {

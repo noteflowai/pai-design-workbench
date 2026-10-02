@@ -1,17 +1,24 @@
 name: Desktop packages
 on:
   workflow_dispatch:
+  pull_request:
+    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
   push:
+    branches: [main]
     tags: ["v*"]
+    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
 permissions:
   contents: read
+concurrency:
+  group: desktop-${{ github.ref }}-${{ github.event_name }}-${{ github.sha }}
+  cancel-in-progress: true
 jobs:
   package:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, target: --linux --x64, smoke: true }
+          - { os: ubuntu-24.04, target: --linux --x64 }
           - { os: windows-2025, target: --win --x64 }
           - { os: macos-15, target: --mac --arm64 }
     runs-on: ${{ matrix.os }}
@@ -26,22 +33,37 @@ jobs:
             package-lock.json
             desktop/package-lock.json
       - run: npm ci
+      - name: Desktop contract on the actual host OS (special paths, retained artifacts, pins)
+        run: npm run test:desktop-contract
       - name: Pinned upstream records (Robot Reel, EvalArc, Radar)
         run: npm run setup:demo
       - run: npm run build
       - name: Stage the app
         run: node tools/package_desktop.mjs
       - name: Package (unsigned)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm ci && npx electron-builder ${{ matrix.target }} --publish never
       - name: Smoke test the packaged app (server, security, menus)
-        if: matrix.smoke
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && runner.os == 'Linux'
+        timeout-minutes: 8
         run: |
-          npx playwright install --with-deps chromium
+          npx playwright install-deps chromium
           xvfb-run -a node --import tsx scripts/desktop-e2e.ts --smoke
+      - name: Smoke test the packaged app on Windows and macOS
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && runner.os != 'Linux'
+        timeout-minutes: 8
+        run: node --import tsx scripts/desktop-e2e.ts --smoke
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
+        with:
+          name: pai-desktop-evidence-${{ matrix.os }}
+          if-no-files-found: warn
+          path: .state/evidence/desktop-e2e.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: success() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
         with:
           name: pai-desktop-${{ matrix.os }}
           if-no-files-found: error
