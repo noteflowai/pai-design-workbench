@@ -4,14 +4,14 @@
 
 共享 React/TypeScript 前端、JSON/Zod 契约和领域记录。已实现响应式浏览器与 PWA 安装清单、图标和静态应用壳缓存；API、私人记录、模型命令与视频不做离线缓存或自动重放。390px 浏览器布局是实际验收项。
 
-本地执行端默认绑定 loopback。已新增 AWS 执行端：`https://pai.oneai.host` 复用 WordPress 的 VPC 与 ALB，使用 Cognito 和应用内签名验证保护单个管理工作区。浏览器可跨网络操作该执行端；设备配对、用户间隔离、桌面原生打包和 App Store 分发尚未实现。
+本地执行端默认绑定 loopback。已新增 AWS 执行端：`https://pai.oneai.host` 复用 WordPress 的 VPC 与 ALB，使用 Cognito 和应用内签名验证保护单个管理工作区。浏览器可跨网络操作该执行端；Electron 桌面打包已实现。设备配对、用户间隔离和 App Store 分发尚未实现。
 
 ## 目标分工
 
 | 端 | 共享能力 | 原生差异与验证 |
 |---|---|---|
 | Web / PWA | 设计任务、验收、回放、反馈、交付 | 当前实现；不同浏览器需真实兼容测试，离线只显示应用壳 |
-| Windows/macOS/Linux 桌面 | 同一前端与契约，原生工具侧车 | 优先考察当前稳定 Tauri 2 系列；精确限定 IPC、文件与进程能力。原生工具与控制器必须逐平台验证 |
+| Windows/macOS/Linux 桌面 | 同一前端与契约，Electron 内置 Node，原生工具侧车 | 见 [桌面方案](DESKTOP.md)。Linux x64 支持自动安装原生工具；Windows/macOS 手动选择。打包和启动检查覆盖三平台，原生工具需分别验证 |
 | Android/iOS | 移动交互、相机/现场反馈、证据回放 | 先 PWA，再评估 Tauri/系统壳；重型 CAD/Blender/仿真在授权执行端运行 |
 | 远程执行端 | 受控生成、CAD、Blender、仿真与原生检查 | AWS 单工作区登录、Blender 和记录检查已实现；设备配对、工作区隔离、配额以及其他原生工具待接入 |
 
@@ -25,6 +25,6 @@
 - Node 最新 LTS **24.21.0**，Current **26.10.0**；本地原生链路使用 LTS，CI 检查两条当前稳定线。
 - Blender 当前稳定 LTS **5.2.2**；官方 SHA-256 清单验证后运行。
 - FreeCAD 最新稳定 release **1.1.4**、CadQuery **2.8.0**；后续真正接入时重新查询与验证。
-- Tauri JS API 查询为 **2.12.0**；此值不能替代 Rust 核心/CLI/driver 的兼容矩阵，桌面壳尚未实现。
+- Tauri JS API 查询为 **2.12.0**；此值不能替代 Rust 核心/CLI/driver 的兼容矩阵。桌面壳选择 Electron **44.5.1**，复用 Node **24.21.0** 服务和统一 Chromium；选择理由见桌面方案。
 
 保留 lockfile 和具体版本，使用更新 PR 与测试验证推进。不能以“永远 latest”的浮动依赖破坏原生证据的可复现性。

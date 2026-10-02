@@ -8,6 +8,8 @@ Priority is one verified decision workflow, then one external task owner, then a
 
 **AI studio:** deterministic parsing, the model planner through the bounded executor (Kiro x3, locally also Codex/Claude), cited answers, a stdio MCP server, sandboxed generated CadQuery code and a native design-space sweep are implemented (0.4.0–0.6.0), locally and on Amazon Bedrock AgentCore (arm64). Next: OpenUSD streaming for multi-object animated scenes, user-owned part families beyond the bracket, and a remote (OAuth, HTTP) MCP endpoint for the hosted site.
 
+**Desktop:** Electron packaging shares the existing server and React UI. CI checks staging on Linux x64, Windows x64 and macOS arm64; manual/tag builds additionally launch each packaged app, check isolation and stop its server. Native automatic installers currently target Linux x64. Next: independently verified Windows/macOS native-tool installers, code signing and macOS notarization before public distribution. Keep supported capabilities explicit; an installer build or startup smoke does not establish native-tool or physical validation on that platform.
+
 Real factory optimization additionally requires measured cycle times, equipment parameters and uncertainty/sensitivity checks. Synthetic parameter examples remain labeled illustrations.
 
 Professional context is in the workspace's portfolio research report (2026-09-30): EngiWorld, CADWorld, ReliCAD, DFM evaluation work and existing replay/visualization competitors. The product difference to test is requirement-bound decisions and reproducible feedback closure, not another generic viewer.

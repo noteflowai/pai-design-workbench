@@ -17,6 +17,8 @@
 | CI 桌面打包（`Desktop packages`，run 36953877489） | Linux（AppImage + deb）、Windows（nsis）、macOS（dmg，arm64）三个平台都打包成功；Linux 上对打包后的应用做了冒烟测试，结果 passed，关闭后服务端口不再响应 |
 | pai.oneai.host（release `4f9d694d…11fe`） | 登录后，axe 扫描 30 个页面（10 个视图 × 浅色/深色 1440 px、深色 390 px）：严重和关键问题 0，无溢出；CAD 实测表格中只有“最小壁厚”一行未通过（2.5 mm，要求 ≥ 3，余量 -17%）；点“问 AI”后输入框带上问题并获得焦点；Ctrl+K 可跳转到 CAD 通道；控制台无错误；WordPress 返回 200，ALB 规则未改。见[回执](evidence/deployment-v080.json)和[截图](evidence/cloud-ui-dark.png) |
 
+表中的原生桌面回执来自 Linux。跨平台 CI 的当前验收规则见 [DESKTOP.md](DESKTOP.md)：PR/main 运行三平台路径、提交和失败保留检查；手动/tag 构建还分别启动三平台打包程序，验证隔离、平台能力与退出，并保存结果或失败证据。Windows/macOS 启动 smoke 不等于已经通过原生 C2，自动安装目前仅支持 Linux x64。
+
 截图：[深色验证工作区](evidence/ui-dark-validate.png)、[浅色 + AI 助手](evidence/ui-light-validate-assistant.png)、[深色手机](evidence/ui-dark-mobile.png)。
 
 ## 0.7.0 工业设计典型用例全量端到端（2026-10-02）

@@ -2,13 +2,13 @@ name: Workbench checks
 on:
   push:
     branches: [main]
-    paths: ["src/**", "native/**", "data/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
+    paths: [".gitattributes", "src/**", "native/**", "data/**", "desktop/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: workbench-${{ github.ref }}
+  group: workbench-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   infrastructure:

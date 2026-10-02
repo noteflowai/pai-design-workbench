@@ -155,7 +155,25 @@ function CadLane() {
 
 /** Desktop app only: install the pinned tool through the shell (official SHA-256 / hash-locked), then the server restarts. */
 function InstallTool({ kind }: { kind: "blender" | "cadquery" }) {
-  const desktop = (window as unknown as { paiDesktop?: { installTool(k: string): Promise<void> } }).paiDesktop;
+  const desktop = (window as unknown as { paiDesktop?: {
+    info(): Promise<{ installers: Record<"blender" | "cadquery", boolean> }>;
+    installTool(k: string): Promise<void>;
+  } }).paiDesktop;
+  const [available, setAvailable] = useState<boolean>();
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (desktop) void desktop.info().then(info => { if (active) setAvailable(info.installers?.[kind] === true); })
+      .catch(() => { if (active) setAvailable(false); });
+    return () => { active = false; };
+  }, [desktop, kind]);
   if (!desktop) return null;
-  return <button type="button" onClick={() => void desktop.installTool(kind)}>{kind === "blender" ? "安装 Blender 5.2.2 LTS（官方校验）" : "安装 CadQuery 2.8（哈希锁定）"}</button>;
+  if (available === false) return <p className="muted">此平台请在“工具”菜单选择已有的 {kind === "blender" ? "Blender 可执行文件" : "CadQuery Python"}。自动安装目前支持 Linux x64。</p>;
+  return <>
+    <button type="button" disabled={!available} onClick={() => {
+      setError("");
+      void desktop.installTool(kind).catch(e => setError(String(e.message ?? e)));
+    }}>{kind === "blender" ? "安装 Blender 5.2.2 LTS（官方校验）" : "安装 CadQuery 2.8（哈希锁定）"}</button>
+    {error && <p role="alert">{error}</p>}
+  </>;
 }

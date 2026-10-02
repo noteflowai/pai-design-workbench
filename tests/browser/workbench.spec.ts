@@ -434,6 +434,10 @@ test("MCP: an external agent reads the workspace and proposes; only the maintain
     expect(record.id).toBe(status.steps[0].confirmed.recordId);
     expect(record.record.verdict).toBe("rejected");
     expect((await call("pai_get_admission", { projectId, handle: "cad-1" })).admissible).toBe(false);
+    // The backend receipt precedes the UI refresh/final GLB handoff. Check the
+    // completed visible result before resizing the still-streaming viewport.
+    await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator(".viewport-hud.top-left")).toContainText("最终 GLB（摘要已核验）", { timeout: 60_000 });
   } finally { await client.close(); }
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
