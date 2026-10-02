@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { stageDesktop } from "../tools/package_desktop.mjs";
 import { isWorkbenchUrl, nativeInstallSupported, pinnedDependency, publicDependencyPins } from "../desktop/runtime.mjs";
+import { packagedExecutable } from "../scripts/desktop-executable.ts";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const names = ["robot-reel", "evalarc", "physical-ai-radar"];
@@ -127,4 +128,21 @@ test("automatic installers advertise only the platform targeted by the pinned wh
   for (const [platform, arch] of [["win32", "x64"], ["darwin", "arm64"], ["linux", "arm64"]]) {
     assert.equal(nativeInstallSupported(platform, arch), false);
   }
+});
+
+test("packaged executable uses the configured name for macOS bundles and Windows/Linux binaries", t => {
+  const root = mkdtempSync(join(tmpdir(), "pai packages "));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const build = { productName: "Display Name", executableName: "pai-workbench" };
+  for (const [platform, arch, path] of [
+    ["darwin", "arm64", "mac-arm64/pai-workbench.app/Contents/MacOS/pai-workbench"],
+    ["darwin", "x64", "mac/pai-workbench.app/Contents/MacOS/pai-workbench"],
+    ["win32", "x64", "win-unpacked/pai-workbench.exe"],
+    ["linux", "x64", "linux-unpacked/pai-workbench"],
+  ]) {
+    const expected = join(root, path);
+    put(expected, "packaged-binary");
+    assert.equal(packagedExecutable(root, build, platform, arch), expected);
+  }
+  assert.throws(() => packagedExecutable(root, { ...build, executableName: "missing" }, "darwin", "arm64"), /Missing packaged executable/);
 });

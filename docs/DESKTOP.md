@@ -48,7 +48,7 @@ Windows（nsis）和 macOS（dmg，arm64）安装包由 GitHub Actions 的 `Desk
 
 普通 PR 和 main 桌面改动会在 Linux、Windows、macOS 上运行路径/提交/失败保留测试并整理真实应用目录。手动触发或版本 tag 还会生成安装包，并在三平台上启动打包后的应用。失败时也上传已经生成的 JSON 证据；启动、交互和清理均设置超时，清理只处理测试自己启动的进程。外链测试替换系统浏览器调用，避免 CI 启动外部浏览器后挂起。
 
-`npm run test:desktop`（`scripts/desktop-e2e.ts`）用 Playwright 驱动打包后的应用。默认选择各平台 unpacked 可执行文件，也可通过 `PAI_DESKTOP_EXE` 指定其他产物：
+`npm run test:desktop`（`scripts/desktop-e2e.ts`）用 Playwright 驱动打包后的应用。默认按 electron-builder 的 `executableName` 定位各平台 unpacked 程序（包括 macOS 的 bundle 名称），也可通过 `PAI_DESKTOP_EXE` 指定其他产物。定位失败也写入 JSON 证据：
 - 版本与安全：Electron 44.5.1、Node 24.21.0；安全设置（contextIsolation、sandbox、无 nodeIntegration、页面内无 Node、外部导航被拦截）全部生效；5 个菜单齐全。
 - 典型用例 C2：通过界面完成，原生 CadQuery 判定轻量化方案为最小壁厚不合格。
 - 退出：关闭应用后，本地服务端口不再响应。

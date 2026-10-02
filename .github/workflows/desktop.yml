@@ -2,11 +2,11 @@ name: Desktop packages
 on:
   workflow_dispatch:
   pull_request:
-    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
+    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "scripts/desktop-executable.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
   push:
     branches: [main]
     tags: ["v*"]
-    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
+    paths: [".gitattributes", "src/**", "web/**", "native/**", "data/**", "tsconfig*.json", "vite.config.ts", "desktop/**", "tools/package_desktop.mjs", "tools/runtime-pins.json", "tools/make_icon.mjs", "scripts/setup-demo.ts", "scripts/desktop-e2e.ts", "scripts/desktop-executable.ts", "tests/desktop-contract.test.mjs", "package*.json", ".github/workflows/desktop.yml"]
 permissions:
   contents: read
 concurrency:

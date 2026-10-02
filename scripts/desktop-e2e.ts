@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { _electron as electron, type ElectronApplication } from "@playwright/test";
+import { packagedExecutable } from "./desktop-executable.js";
 
 process.on("uncaughtExceptionMonitor", error => { console.error(error.stack); });
 const smoke = process.argv.includes("--smoke");
@@ -12,22 +13,25 @@ function executable() {
   if (process.env.PAI_DESKTOP_EXE) return process.env.PAI_DESKTOP_EXE;
   const base = join(process.cwd(), ".state/desktop/dist");
   const pkg = JSON.parse(readFileSync("desktop/package.json", "utf8"));
-  const product = pkg.build.productName, name = pkg.build.executableName;
-  const folder = process.platform === "darwin"
-    ? join(base, process.arch === "arm64" ? "mac-arm64" : "mac", `${product}.app`, "Contents/MacOS")
-    : join(base, process.platform === "win32" ? "win-unpacked" : "linux-unpacked");
-  const suffix = process.platform === "win32" ? ".exe" : "";
-  const paths = [...new Set([name, product])].map(n => join(folder, n + suffix)).filter(existsSync);
-  assert.equal(paths.length, 1, `Expected one packaged executable in ${folder}: ${paths}`);
-  return paths[0];
+  return packagedExecutable(base, pkg.build);
 }
-const exe = executable();
 let completedChecks = 0;
-const report: Record<string, unknown> = { schema: "pai-desktop-e2e-2", checkedAt: new Date().toISOString(), executable: exe, smoke, result: "incomplete" };
+const report: Record<string, unknown> = { schema: "pai-desktop-e2e-2", checkedAt: new Date().toISOString(), smoke, result: "incomplete" };
 const evidence = join(process.cwd(), ".state/evidence/desktop-e2e.json");
 async function save() {
   await mkdir(join(process.cwd(), ".state/evidence"), { recursive: true });
   await writeFile(evidence, JSON.stringify(report, null, 2));
+}
+let exe: string;
+try {
+  exe = executable();
+  report.executable = exe;
+  await save();
+} catch (error) {
+  report.result = "failed";
+  report.error = String(error);
+  await save();
+  throw error;
 }
 // Cleanup is bounded and can terminate only the Electron process launched by this test.
 async function ownApp(t: TestContext, fresh = false): Promise<{ app: ElectronApplication; userData: string }> {
@@ -68,7 +72,7 @@ await test("packaged app: startup, local bridge, navigation isolation and shutdo
   const info = await app.evaluate(({ app, Menu, BrowserWindow }) => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron, node: process.versions.node,
     chrome: process.versions.chrome, menu: Menu.getApplicationMenu()!.items.map((i: { label: string }) => i.label), userData: app.getPath("userData"),
     prefs: (() => { const w = BrowserWindow.getAllWindows()[0]; const p = w.webContents.getLastWebPreferences(); return { contextIsolation: p?.contextIsolation, sandbox: p?.sandbox, nodeIntegration: p?.nodeIntegration }; })() }));
-  assert.equal(info.node, "24.21.0"); assert.equal(info.userData, userData);
+  assert.equal(info.node, "24.21.0"); assert.equal(realpathSync(info.userData), realpathSync(userData));
   assert.deepEqual(info.prefs, { contextIsolation: true, sandbox: true, nodeIntegration: false });
   for (const menu of ["文件", "编辑", "视图", "工具", "帮助"]) assert.ok(info.menu.includes(menu), menu);
   const bridge = await win.evaluate(() => (window as unknown as { paiDesktop: { info(): Promise<unknown> } }).paiDesktop.info());
