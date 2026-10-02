@@ -84,7 +84,7 @@ PAI_BROWSER=/path/to/google-chrome npm run test:browser
 
 证据见 [验证报告](docs/VERIFICATION.md)。维护者验证、测试夹具和独立试用分别计量。没有独立试用或曝光分母时，独立采用数保持 0，转化率保持未知。
 
-[云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/36723476548)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、17 组边界测试和原生记录闭环；CDK 基础设施检查也通过。详见报告中的环境与范围。
+[云端 CI 已通过](https://github.com/noteflowai/pai-design-workbench/actions/runs/37076297416)：最新 Node LTS 验证完整原生与浏览器链路，最新 Current 验证构建、17 组边界测试和原生记录闭环；CDK 基础设施检查也通过。详见报告中的环境与范围。
 
 ![AI 工作室：对话计划驱动 Blender 原生构建，实时视口显示遮挡射线](docs/evidence/studio-desktop.png)
 

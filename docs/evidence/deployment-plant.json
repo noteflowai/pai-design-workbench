@@ -1,0 +1,64 @@
+{
+  "schema": "pai-aws-plant",
+  "site": "https://pai.oneai.host",
+  "release": "5dff2b8e8d65deca28bda407b4836e97215a2dedd0641f69f4c751ac3d306e3d",
+  "sourceCommit": "0d35427",
+  "checkedAt": "2026-10-02T23:38:42.994Z",
+  "capabilities": {
+    "blender": true
+  },
+  "rejected": {
+    "state": "completed",
+    "verdict": "rejected",
+    "aisle": 2.08,
+    "coverage": 6,
+    "blocking": 1,
+    "seconds": 145
+  },
+  "corrected": {
+    "state": "completed",
+    "verdict": "accepted-static-scene",
+    "aisle": 2.48,
+    "footprint": 641.6,
+    "seconds": 145
+  },
+  "ui": {
+    "failRow": "×AGV 通道净宽 未通过 41 截面 × 3 高度射线，最窄处 2.08m ≥ 2.4m -13% ✦ 问 AI",
+    "viewport": {
+      "webgl": "ok",
+      "objects": "148",
+      "stage": "8",
+      "ray": "target",
+      "animations": "40",
+      "playing": "false"
+    },
+    "renderWidths": [
+      960,
+      480,
+      640
+    ],
+    "phoneOverflow": false,
+    "pageErrors": 0
+  },
+  "passed": true,
+  "previousReleaseRetained": "afcfcf7b15f1f35670d73cbf28c7d50bd5b04ae87c9323288e15fafc142a67f7",
+  "infrastructure": {
+    "existingAlbRulesUnchanged": [
+      "100",
+      "110",
+      "default"
+    ],
+    "wordPressPublicStatus": 200,
+    "targetHealth": "healthy",
+    "ingressOnlyFromAlb": true
+  },
+  "ci": {
+    "workflow": "Workbench checks",
+    "run": 37076297416,
+    "commit": "0d35427",
+    "result": "success",
+    "industrialSuite": "25/25",
+    "browser": "16 passed",
+    "desktopPackagesRun": 37059789103
+  }
+}
