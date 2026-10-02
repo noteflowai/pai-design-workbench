@@ -107,6 +107,7 @@ export function stageDesktop(root, { install = installProduction } = {}) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && existsSync(process.argv[1])
+    && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   console.log(JSON.stringify(stageDesktop(fileURLToPath(new URL("..", import.meta.url)))));
 }

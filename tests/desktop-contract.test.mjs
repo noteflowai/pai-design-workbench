@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -78,6 +78,17 @@ test("missing and dirty pinned inputs cannot replace a working stage or call the
   assert.throws(() => stageDesktop(dir, { install }), /Missing desktop/);
   assert.equal(installs, 0);
   assert.equal(text(join(out, "deps/previous.txt")), "previous-working-release");
+});
+
+test("CLI reached through a directory alias still stages instead of silently returning", t => {
+  const { dir, out, pins } = fixture(t);
+  cpSync(join(repository, "tools/package_desktop.mjs"), join(dir, "tools/package_desktop.mjs"));
+  const alias = join(dir, "directory alias");
+  symlinkSync(dir, alias, process.platform === "win32" ? "junction" : "dir");
+  execFileSync(process.execPath, [join(alias, "tools/package_desktop.mjs")], { cwd: tmpdir(), stdio: "pipe" });
+  assert.equal(existsSync(join(out, "app/previous.txt")), false);
+  assert.equal(text(join(out, "deps", `robot-reel-${pins["robot-reel"].slice(0, 12)}`, "record.txt")), "robot-reel");
+  assert.equal(text(join(out, "dist/previous-installer.txt")), "previous-working-release");
 });
 
 test("production install failure preserves the previous app, dependency pair and installer bytes", t => {
