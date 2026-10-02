@@ -66,7 +66,7 @@ function SceneLane() {
   const [radius, setRadius] = useState(Number(q.get("radius") ?? 1.4));
   const [visible, setVisible] = useState(q.get("visible") !== "false");
   useEffect(() => { if (q.get("variant")) c.toast("计划参数已填入 Blender 专业面板，可调整后执行。"); }, []);
-  if (!c.data.capabilities.blender) return <Empty title="未配置原生 Blender">设置 PAI_BLENDER 指向原生 Blender 可执行文件；其他证据类型不受影响。</Empty>;
+  if (!c.data.capabilities.blender) return <Empty title="未配置原生 Blender" action={<InstallTool kind="blender" />}>设置 PAI_BLENDER 指向原生 Blender 可执行文件；其他证据类型不受影响。</Empty>;
   return <Card title="Blender 工作单元（合成静态几何）" aside={<small>4 m × 3 m 显式配方</small>}>
     <div className="field-grid">
       <label>设计变体<select aria-label="Blender 设计变体" value={variant} onChange={e => setVariant(e.target.value as typeof variant)}>
@@ -114,7 +114,7 @@ function CadLane() {
   useEffect(() => { if (code) sessionStorage.setItem(CAD_DRAFT_KEY, code); setCodeCheck(undefined); }, [code]);
   const feedback = q.get("feedback") ? c.data.feedback.find(f => f.id === q.get("feedback") && f.status === "fix-proposed") : undefined;
   const generated = variant === "generated";
-  if (!cap) return <Empty title="未配置 CadQuery">运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
+  if (!cap) return <Empty title="未配置 CadQuery" action={<InstallTool kind="cadquery" />}>运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
   return <><Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
     {feedback && <p className="notice" role="status">反馈复测：修改代码后提交，新回执将绑定到反馈「{feedback.observed.slice(0, 40)}」；零件要求保持不变。</p>}
     <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).filter(([id]) => id !== "parametric").map(([id, [label, note]]) => {
@@ -151,4 +151,11 @@ function CadLane() {
   </Card>
   {!feedback && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
   </>;
+}
+
+/** Desktop app only: install the pinned tool through the shell (official SHA-256 / hash-locked), then the server restarts. */
+function InstallTool({ kind }: { kind: "blender" | "cadquery" }) {
+  const desktop = (window as unknown as { paiDesktop?: { installTool(k: string): Promise<void> } }).paiDesktop;
+  if (!desktop) return null;
+  return <button type="button" onClick={() => void desktop.installTool(kind)}>{kind === "blender" ? "安装 Blender 5.2.2 LTS（官方校验）" : "安装 CadQuery 2.8（哈希锁定）"}</button>;
 }

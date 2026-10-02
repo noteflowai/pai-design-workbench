@@ -5,6 +5,7 @@ Writes PAI_CADQUERY_PYTHON to .state/demo.env; never touches other workspaces.
 """
 import hashlib
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -17,7 +18,8 @@ if sys.version_info[:2] != (3, 12):
 root = Path(__file__).resolve().parents[1]
 lock = root / "native/cadquery-requirements.txt"
 # Resolve .state so a release directory symlinked to persistent state records a stable interpreter path.
-target = (root / ".state").resolve() / "tools/cadquery-2.8.0"
+tools_dir = Path(os.environ["PAI_TOOLS_DIR"]).resolve() if os.environ.get("PAI_TOOLS_DIR") else (root / ".state").resolve() / "tools"
+target = tools_dir / "cadquery-2.8.0"
 python = target / "bin/python"
 if not (target / "bin/pip").exists():
     try:
@@ -34,8 +36,8 @@ result = json.loads(probe.stdout)
 if result["cadquery"] != "2.8.0" or not result["valid"]:
     raise SystemExit(f"CadQuery self-check failed: {result}")
 receipt = {**result, "lockSha256": hashlib.sha256(lock.read_bytes()).hexdigest(), "python": platform.python_version(), "interpreter": str(python)}
-((root / ".state").resolve() / "tools/cadquery-install-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
-env_file = root / ".state/demo.env"
+(tools_dir / "cadquery-install-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+env_file = Path(os.environ["PAI_ENV_FILE"]) if os.environ.get("PAI_ENV_FILE") else root / ".state/demo.env"
 existing = env_file.read_text() if env_file.exists() else ""
 lines = [line for line in existing.splitlines() if line and not line.startswith("PAI_CADQUERY_PYTHON=")]
 env_file.write_text("\n".join(lines) + f"\nPAI_CADQUERY_PYTHON={python}\n")

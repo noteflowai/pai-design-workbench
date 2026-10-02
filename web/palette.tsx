@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export interface Command { id: string; label: string; hint?: string; run: () => void }
 
 /** Ctrl/⌘+K command palette, as in professional design tools. */
-export function Palette({ commands }: { commands: Command[] }) {
+export function Palette({ commands, onAsk }: { commands: Command[]; onAsk?: (question: string) => void }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -20,13 +20,17 @@ export function Palette({ commands }: { commands: Command[] }) {
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pai-palette", onOpen); };
   }, []);
   useEffect(() => { if (open) setTimeout(() => input.current?.focus(), 0); else restore.current?.focus?.(); }, [open]);
-  const results = useMemo(() => commands.filter(c => `${c.label} ${c.hint ?? ""}`.toLowerCase().includes(query.toLowerCase())), [commands, query]);
+  const results = useMemo(() => {
+    const hits = commands.filter(c => `${c.label} ${c.hint ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+    // As in AI-assisted design tools, free text that is not a command becomes a question to the assistant.
+    return query.trim() && onAsk ? [...hits, { id: "ask", label: `问 AI：${query.trim()}`, hint: "↵", run: () => onAsk(query.trim()) }] : hits;
+  }, [commands, query, onAsk]);
   if (!open) return null;
   const choose = (c?: Command) => { if (!c) return; setOpen(false); setTimeout(c.run, 0); };
   return <div className="palette-backdrop" onMouseDown={() => setOpen(false)}>
     <div className="palette" role="dialog" aria-modal="true" aria-label="命令面板" onMouseDown={e => e.stopPropagation()}>
       <input ref={input} value={query} role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={results[active] ? `cmd-${results[active].id}` : undefined}
-        placeholder="输入命令：场景、工厂、视图、跳转…" onChange={e => { setQuery(e.target.value); setActive(0); }}
+        placeholder="输入命令或问题：CAD、扫描、视图、跳转…" onChange={e => { setQuery(e.target.value); setActive(0); }}
         onKeyDown={e => {
           if (e.key === "Escape") setOpen(false);
           if (e.key === "ArrowDown") { e.preventDefault(); setActive(a => Math.min(a + 1, results.length - 1)); }

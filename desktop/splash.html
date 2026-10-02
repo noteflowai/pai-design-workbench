@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>PAI Design Workbench</title>
+<style>
+  html,body{height:100%;margin:0;font-family:Inter,"Noto Sans SC","PingFang SC",system-ui,sans-serif;background:#f4f6f5;color:#17262c}
+  @media (prefers-color-scheme: dark){html,body{background:#0f1a1e;color:#dbe7e4}}
+  main{height:100%;display:grid;place-content:center;gap:14px;text-align:center}
+  .mark{width:64px;height:64px;margin:0 auto;border-radius:14px;background:#1d6b5b;color:#fff;display:grid;place-content:center;font:700 34px/1 Inter,sans-serif}
+  .bar{width:220px;height:3px;border-radius:2px;background:#cfd9d4;overflow:hidden;margin:0 auto}
+  .bar i{display:block;width:40%;height:100%;background:#1d6b5b;animation:s 1.1s ease-in-out infinite}
+  @keyframes s{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+  small{opacity:.65}
+</style></head>
+<body><main><div class="mark">P</div><strong>PAI Design Workbench</strong><div class="bar"><i></i></div><small>正在启动本地工作台服务…</small></main></body></html>

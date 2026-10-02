@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-10-01T23:42:44.058Z",
+  "caseC2WithAI": {
+    "clicks": 6,
+    "toFailureSeconds": 22,
+    "totalSeconds": 41,
+    "viewportTop": 367,
+    "viewportHeight": 522,
+    "askedFrom": "failed check row",
+    "aiMode": "engine (scripted executor)",
+    "outcome": "rejected → accepted"
+  },
+  "keyboard": {
+    "paletteToCadLaneMs": 1347,
+    "paletteKeystrokes": "Ctrl+K, type, Enter",
+    "askFromPalette": true,
+    "railShortcut": "[",
+    "themePersists": true,
+    "skipLinkFirst": true
+  },
+  "accessibility": {
+    "standard": "WCAG 2.1 A/AA (axe-core 4.13)",
+    "pagesScanned": 40,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      1440,
+      390
+    ],
+    "seriousOrCritical": 0
+  },
+  "casesG1S1": {
+    "g1Seconds": 30,
+    "s1Seconds": 14,
+    "g1Steps": [
+      "选择生成代码",
+      "改一行",
+      "运行"
+    ],
+    "s1Steps": [
+      "填 3 个轴",
+      "运行扫描"
+    ],
+    "phoneOverflow": false
+  }
+}

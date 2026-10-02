@@ -1,6 +1,6 @@
 {
   "name": "pai-design-workbench",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "A TypeScript workbench connecting PAI design requirements, native validation, replay and feedback.",
   "type": "module",
@@ -28,7 +28,10 @@
     "mcp": "node dist/src/mcp.js",
     "test:cad-code": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-code-e2e.ts",
     "test:cad-sweep": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-sweep-e2e.ts",
-    "test:agentcore-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/agentcore-live.ts"
+    "test:agentcore-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/agentcore-live.ts",
+    "desktop:stage": "npm run build && node tools/make_icon.mjs && node tools/package_desktop.mjs",
+    "desktop:linux": "npm run desktop:stage && cd desktop && npm ci --no-audit --no-fund && npm run dist:linux",
+    "test:desktop": "node --env-file-if-exists=.state/demo.env --import tsx scripts/desktop-e2e.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agentcore": "3.1144.0",
@@ -43,6 +46,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "@types/node": "26.6.3",
     "@types/proper-lockfile": "4.1.4",

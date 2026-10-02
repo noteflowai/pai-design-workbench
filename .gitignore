@@ -10,3 +10,4 @@ test-results/
 infra/cdk.out/
 infra/cdk.context.json
 __pycache__/
+desktop/node_modules/

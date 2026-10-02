@@ -1,0 +1,52 @@
+name: Desktop packages
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: --linux --x64, smoke: true }
+          - { os: windows-2025, target: --win --x64 }
+          - { os: macos-15, target: --mac --arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - name: Pinned upstream records (Robot Reel, EvalArc, Radar)
+        run: npm run setup:demo
+      - run: npm run build
+      - name: Stage the app
+        run: node tools/package_desktop.mjs
+      - name: Package (unsigned)
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm ci && npx electron-builder ${{ matrix.target }} --publish never
+      - name: Smoke test the packaged app (server, security, menus)
+        if: matrix.smoke
+        run: |
+          npx playwright install --with-deps chromium
+          xvfb-run -a node --import tsx scripts/desktop-e2e.ts --smoke
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pai-desktop-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            .state/desktop/dist/*.AppImage
+            .state/desktop/dist/*.deb
+            .state/desktop/dist/*.exe
+            .state/desktop/dist/*.dmg

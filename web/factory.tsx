@@ -80,11 +80,13 @@ function factoryDetail(review: FactoryReview, id: string): string {
   } as Record<string, string>)[id] ?? id;
 }
 export function FactoryResult({ review }: { review: FactoryReview }) {
+  const c = useApp();
   return <>
     <Verdict tone={review.verdict === "rejected" ? "bad" : "ok"} eyebrow={`工厂孪生评审 · ${review.aggregate.pairs} 个配对种子 · 演示仿真`}
       title={review.verdict === "rejected" ? "维护方案拒绝" : "演示仿真范围内通过"}
       detail={`净良品 ${review.aggregate.netGoodUnitsGain > 0 ? "+" : ""}${review.aggregate.netGoodUnitsGain}；改善 ${review.aggregate.pairsImproved} 对、退化 ${review.aggregate.pairsWorse} 对；单位良品电耗平均变化 ${review.aggregate.meanImportIntensityChange} kWh（不抵消其他约束）。`} />
-    <ul className="checks">{review.checks.map(x => <Check key={x.id} passed={x.passed} title={CHECK_LABELS[x.id]} detail={factoryDetail(review, x.id)} />)}</ul>
+    <ul className="checks">{review.checks.map(x => <Check key={x.id} passed={x.passed} title={CHECK_LABELS[x.id]} detail={factoryDetail(review, x.id)}
+      onAsk={() => c.askAI(`工厂孪生评估的「${CHECK_LABELS[x.id]}」未通过：${factoryDetail(review, x.id)}。哪些种子导致失败？请引用记录，不要放宽冻结标准。`)} />)}</ul>
     <div className="charts"><figure><figcaption>良品增减（闭环 − 影子）</figcaption><Bars review={review} /></figure><figure><figcaption>EV 充电服务（闭环 / 影子计划）</figcaption><EvLine review={review} /></figure></div>
     <div className="table-wrap"><table className="seed-table"><caption className="visually-hidden">逐种子结果</caption>
       <thead><tr><th scope="col">种子</th><th scope="col">良品增减</th><th scope="col">EV 服务</th><th scope="col">车间最高</th><th scope="col">超限</th><th scope="col">故障</th><th scope="col">指令</th></tr></thead>

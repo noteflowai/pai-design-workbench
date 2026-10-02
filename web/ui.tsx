@@ -21,10 +21,28 @@ export function Verdict({ tone, eyebrow, title, detail }: { tone: Tone; eyebrow:
   return <div className={`verdict ${tone}`}><span className="verdict-mark" aria-hidden="true">{tone === "ok" ? "✓" : tone === "bad" ? "!" : tone === "live" ? "◉" : "…"}</span>
     <div><p>{eyebrow}</p><h3>{title}</h3>{detail && <div className="verdict-detail">{detail}</div>}</div></div>;
 }
-export function Check({ passed, title, detail }: { passed: boolean | null; title: string; detail: string }) {
+export function Check({ passed, title, detail, onAsk }: { passed: boolean | null; title: string; detail: string; onAsk?: () => void }) {
   return <li className={`check-item ${passed === false ? "fail" : passed === null ? "skip" : "pass"}`}>
     <span aria-hidden="true">{passed === null ? "—" : passed ? "✓" : "×"}</span>
-    <div><strong>{title}</strong><p>{detail}</p></div><span className="visually-hidden">{passed === null ? "未要求" : passed ? "通过" : "未通过"}</span></li>;
+    <div><strong>{title}</strong><p>{detail}</p></div><span className="visually-hidden">{passed === null ? "未要求" : passed ? "通过" : "未通过"}</span>
+    {passed === false && onAsk && <button type="button" className="ask-ai" onClick={onAsk} aria-label={`问 AI：${title}为什么未通过`}>✦ 问 AI</button>}</li>;
+}
+
+/** One measured rule: value, limit and how much of the allowance is used (like DFM / interference panels in CAD tools). */
+export interface MeasuredCheck { id: string; title: string; passed: boolean; observed: string; required: string; unit: string; margin?: number; note?: string }
+export function CheckTable({ rows, caption, onAsk }: { rows: MeasuredCheck[]; caption: string; onAsk?: (row: MeasuredCheck) => void }) {
+  const failed = rows.filter(r => !r.passed).length;
+  return <div className="table-wrap check-table">
+    <table className="data-table"><caption>{caption}<span className={`chip ${failed ? "bad" : "ok"}`}>{failed ? `${failed} 项未通过` : `${rows.length} 项全部通过`}</span></caption>
+      <thead><tr><th scope="col">检查</th><th scope="col">实测</th><th scope="col">要求</th><th scope="col">余量</th><th scope="col"><span className="visually-hidden">操作</span></th></tr></thead>
+      <tbody>{rows.map(r => <tr key={r.id} className={r.passed ? "pass" : "fail"}>
+        <th scope="row"><span className="mark" aria-hidden="true">{r.passed ? "✓" : "×"}</span>{r.title}<span className="visually-hidden">{r.passed ? "通过" : "未通过"}</span>{r.note && <small>{r.note}</small>}</th>
+        <td className="num">{r.observed}<small>{r.unit}</small></td><td className="num">{r.required}<small>{r.unit}</small></td>
+        <td>{r.margin === undefined ? <span className="muted">—</span> : <span className="margin" title={`余量 ${Math.round(r.margin * 100)}%`}>
+          <span className="margin-bar"><i style={{ width: `${Math.min(100, Math.abs(r.margin) * 100)}%` }} className={r.margin < 0 ? "neg" : ""} /></span>
+          <span className="num">{r.margin > 0 ? "+" : ""}{Math.round(r.margin * 100)}%</span></span>}</td>
+        <td>{!r.passed && onAsk && <button type="button" className="ask-ai" onClick={() => onAsk(r)} aria-label={`问 AI：${r.title}为什么未通过`}>✦ 问 AI</button>}</td>
+      </tr>)}</tbody></table></div>;
 }
 export function Toasts({ items, dismiss }: { items: { id: number; message: string; tone: "ok" | "bad" }[]; dismiss: (id: number) => void }) {
   useEffect(() => {

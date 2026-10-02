@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { CANDIDATES, KIND_LABEL, useApp, type RunKind } from "../context";
 import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, time, verdictOf, type RunItem } from "../ui";
 import { LiveSteps, viewportModel } from "../studio";
@@ -9,6 +9,7 @@ import type { Review } from "../../src/contracts";
 import type { SceneReview } from "../../src/scenes";
 import type { CadReview } from "../../src/cad";
 import { CAD_CHECK_LABELS, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
+import { CheckTable, type MeasuredCheck } from "../ui";
 import { CompareCandidates } from "./compare";
 
 const Viewport = lazy(() => import("../viewport"));
@@ -40,6 +41,7 @@ function robotDetail(run: Review, id: string, passed: boolean | null): string {
   return t ? `Holm 调整 p=${t.holm_adjusted_p}，α=${r.alpha}；${passed === null ? "本任务未要求显著改善" : passed ? "显著改善" : "不支持显著改善"}` : "基准设置不是改善比较";
 }
 function ReviewDetail({ run }: { run: Review }) {
+  const c = useApp();
   const v = verdictOf("robot-review", run.decision?.verdict, run.state);
   const lost = run.diff?.blocking_changes;
   return <>
@@ -48,7 +50,8 @@ function ReviewDetail({ run }: { run: Review }) {
     {run.stress && <div className="metrics">{run.stress.conditions.map(x => <div key={x.id} className={x.id === run.candidate ? "current" : ""}>
       <span>{CANDIDATES[x.id]}</span><strong>{x.successes}<small>/{x.trials}</small></strong><p>Wilson 95% {x.wilson95.map(n => `${(n * 100).toFixed(0)}%`).join("–")}</p></div>)}</div>}
     {run.decision && <ul className="checks">{run.decision.checks.map(x => <Check key={x.id} passed={x.passed} detail={robotDetail(run, x.id, x.passed)}
-      title={{ "minimum-recorded-success": "最低成功率", "preserve-baseline-success": "基准成功保留", "independent-improvement": "统计改善要求" }[x.id] ?? x.id} />)}</ul>}
+      title={{ "minimum-recorded-success": "最低成功率", "preserve-baseline-success": "基准成功保留", "independent-improvement": "统计改善要求" }[x.id] ?? x.id}
+      onAsk={() => c.askAI(`机器人记录评审（${CANDIDATES[run.candidate]}）的检查「${x.id}」未通过：${robotDetail(run, x.id, x.passed)}。为什么？请引用记录，并说明下一步应该复测什么。`)} />)}</ul>}
     <Receipts value={{ request: run.request, requirementDigest: run.requirementDigest, sourceDigests: run.sourceDigests, receipts: run.receipts, controller: run.controller }} />
   </>;
 }
@@ -72,7 +75,8 @@ function SceneDetail({ scene }: { scene?: SceneReview }) {
         const hit = x.firstHit === "Target" ? "目标中心" : x.firstHit === "Visibility obstruction" ? "遮挡物" : "其他物体";
         const detail = x.id === "footprint-area" ? `占地 ${observed} m²；允许上限 ${required} m²` : x.id === "declared-target-envelope" ? `目标平面距离 ${observed} m；声明包络半径 ${required} m，不代表关节可达性`
           : `相机射线首先命中${hit}；原生投影与射线检查${x.passed ? "通过" : "失败"}`;
-        return <Check key={x.id} passed={x.passed} title={SCENE_CHECK[x.id]} detail={detail} />;
+        return <Check key={x.id} passed={x.passed} title={SCENE_CHECK[x.id]} detail={detail}
+          onAsk={() => c.askAI(`Blender 场景的「${SCENE_CHECK[x.id]}」未通过（${detail}）。为什么？请引用记录，并给出不放宽需求的布局修正方案。`)} />;
       })}</ul>
       <div className="scene-previews">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}合成工作单元原生 Cycles 渲染`} src={`/api/scenes/${scene.id}/files/${w}/preview.png`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · 原生 Cycles 渲染</figcaption></figure>)}</div>
@@ -81,16 +85,26 @@ function SceneDetail({ scene }: { scene?: SceneReview }) {
   </>;
 }
 
-function cadDetail(id: string, x: Record<string, unknown>): string {
-  const o = x.observed as never, r = x.required as never;
-  if (id === "nema17-interface") { const v = x.observed as { pilotBore: number; boltHoles: number[]; pitch: number[] };
-    return `止口孔 Ø${v.pilotBore}（≥ Ø22.2）；M3 孔 ${v.boltHoles.map(d => `Ø${d}`).join("/")}（Ø3.4）；孔距 ${v.pitch.join("/")}（31.0）`; }
-  if (id === "motor-interference") return `与 NEMA 17 电机机体/止口/轴的布尔交集 ${o} mm³；要求 0`;
-  if (id === "min-wall") return `实测最小壁厚 ${o} mm；要求 ≥ ${r} mm（板厚与孔间韧带）`;
-  if (id === "hole-edge-distance") return `最不利紧固孔边距 ${o} mm；要求 ≥ ${r} mm（1.5×d 经验规则）`;
-  if (id === "mass") return `${o} g（6061 铝名义密度）；上限 ${r} g`;
-  if (id === "envelope") return `包围盒 ${(x.observed as number[]).join(" × ")} mm；上限 ${(x.required as number[]).join(" × ")} mm`;
-  return `单一闭合实体：${o}；OCCT BRepCheck`;
+/** CAD checks as measured rows; margin = share of the allowance left (negative = violated). */
+function cadRows(checks: { id: string; passed: boolean; observed?: unknown; required?: unknown }[]): MeasuredCheck[] {
+  const num = (v: unknown) => typeof v === "number" ? v : NaN;
+  const ge = (o: number, r: number) => r ? (o - r) / r : undefined, le = (o: number, r: number) => r ? (r - o) / r : undefined;
+  return checks.map(x => {
+    const o = num(x.observed), r = num(x.required), title = CAD_CHECK_LABELS[x.id] ?? x.id;
+    if (x.id === "min-wall") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≥ ${r}`, unit: "mm", margin: ge(o, r), note: "板厚与孔间韧带" };
+    if (x.id === "hole-edge-distance") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≥ ${r}`, unit: "mm", margin: ge(o, r), note: "1.5×d 经验规则" };
+    if (x.id === "mass") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "g", margin: le(o, r), note: "6061 铝名义密度" };
+    if (x.id === "motor-interference") return { id: x.id, title, passed: x.passed, observed: String(o), required: "0", unit: "mm³", note: "与电机机体、止口、轴的布尔交集" };
+    if (x.id === "envelope") {
+      const ob = x.observed as number[], rq = x.required as number[];
+      return { id: x.id, title, passed: x.passed, observed: ob.join(" × "), required: `≤ ${rq.join(" × ")}`, unit: "mm", margin: Math.min(...ob.map((v, i) => (rq[i] - v) / rq[i])) };
+    }
+    if (x.id === "nema17-interface") {
+      const v = x.observed as { pilotBore: number; boltHoles: number[]; pitch: number[] };
+      return { id: x.id, title, passed: x.passed, observed: `Ø${v.pilotBore} · 4×Ø${v.boltHoles[0] ?? "—"} · ${v.pitch.join("/")}`, required: "≥ Ø22.2 · 4×Ø3.4 · 31", unit: "mm", margin: ge(v.pilotBore, 22.2) };
+    }
+    return { id: x.id, title, passed: x.passed, observed: String(x.observed), required: "1", unit: "实体", note: "OCCT BRepCheck" };
+  });
 }
 const SANDBOX_STATUS: Record<string, string> = { ok: "已生成实体", policy: "违反代码策略", error: "代码出错", limit: "超出资源上限" };
 function CadDetail({ cad }: { cad?: CadReview }) {
@@ -114,7 +128,8 @@ function CadDetail({ cad }: { cad?: CadReview }) {
       <pre className="code">{cad.request.source!.code}</pre>
     </details>}
     {cad?.state === "completed" && shown && <>
-      <ul className="checks">{shown.checks.map(x => <Check key={x.id} passed={x.passed} title={CAD_CHECK_LABELS[x.id]} detail={cadDetail(x.id, x)} />)}</ul>
+      <CheckTable caption={`${which === "baseline" ? "基准" : "候选"}零件 · B-Rep 实测`} rows={cadRows(shown.checks)}
+        onAsk={row => c.askAI(`${CAD_VARIANTS[cad.request.variant][0]}零件的「${row.title}」实测 ${row.observed} ${row.unit}，要求 ${row.required} ${row.unit}，为什么未通过？请引用检查记录，并给出在不放宽要求的前提下的修正方案（预设变体或 cad-code）。`)} />
       <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · OCCT 投影视图（含隐藏线）</figcaption></figure>)}</div>
       <Receipts value={{ request: cad.request, requirementDigest: cad.requirementDigest, receipts: cad.receipts, files: cad.files, parameters: { baseline: cad.baseline?.parameters, candidate: cad.candidate?.parameters } }} />
@@ -130,6 +145,8 @@ export function Validate() {
   const live = session?.running && session.kind !== "assistant" && session.kind !== "cad-sweep" ? { ...session, kind: session.kind as RunKind } : undefined;
   const selected: RunItem | undefined = runs.find(r => r.id === id) ?? (live && !id ? undefined : runs.find(r => !kind || r.kind === kind));
   const liveKind = live && !selected ? live.kind : undefined;
+  // Keep the selected record visible in the list or strip (it may be off-screen after navigation).
+  useEffect(() => { document.querySelector(".run-list .run.selected")?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [selected?.id]);
   if (!project) return <><ViewHeader step="阶段 3 / 6 · 原生验证" title="原生验证" /><Empty title="先冻结需求" action={<button type="button" onClick={() => c.navigate("requirements", { new: "1" })}>新建评审任务</button>} /></>;
   const detailKind = selected?.kind ?? liveKind;
   return <>
@@ -146,12 +163,14 @@ export function Validate() {
           <small>{time(r.createdAt)} · 需求 v{r.revision} · {r.id.slice(0, 8)}</small></button>; })}
       </nav>
       <div className="detail">
-        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && (session.running || session.recordId === selected?.id) && <Card><LiveSteps session={session} /></Card>}
+        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.running && <Card><LiveSteps session={session} /></Card>}
         {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
         {detailKind === "blender-scene" && <SceneDetail scene={selected ? c.data.scenes.find(s => s.id === selected.id) : undefined} />}
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
         {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
         {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
+        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && !session.running && session.recordId === selected?.id &&
+          <details className="card run-log"><summary>本次执行记录 · {session.steps.length} 步</summary><LiveSteps session={session} /></details>}
         {selected && selected.state === "completed" && <>
           <CaseList runId={selected.id} />
           <CompareCandidates kind={selected.kind} selected={selected.id} />

@@ -37,6 +37,8 @@ export interface Ctx {
   perform(action: () => Promise<unknown>, message: string): Promise<boolean>;
   refresh(): Promise<State>; selectProject(id: string): void; toast(message: string, tone?: "ok" | "bad"): void;
   track: LiveTrack; session?: LiveSession; openAssistant(): void;
+  /** Open the assistant with a prefilled, context-specific question (Fusion/NX-style "ask about this"). */
+  askAI(message: string): void;
 }
 export const AppContext = createContext<Ctx | null>(null);
 export function useApp(): Ctx {

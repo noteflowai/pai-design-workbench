@@ -249,8 +249,9 @@ test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and 
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
   await expect(viewport).toHaveAttribute("data-objects", "2");
   await expect(page.locator(".outliner").getByText("NEMA 17 motor")).toBeVisible();
-  await expect(page.locator(".check-item.fail")).toHaveCount(1);
-  await expect(page.locator(".check-item.fail")).toContainText("最小壁厚");
+  // CAD checks are a measured table; a failed row carries the rule name and an "ask AI" action.
+  await expect(page.locator(".check-table tr.fail")).toHaveCount(1);
+  await expect(page.locator(".check-table tr.fail")).toContainText("最小壁厚");
   // ~85 kB SVG drawings decode after the native run; allow for a loaded CI runner.
   await expect.poll(() => page.locator(".drawings img").evaluateAll(images => images.length === 2 && images.every(i => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0)),
     { timeout: 30_000 }).toBe(true);
@@ -388,7 +389,9 @@ test("AI engine: Kiro fallback receipt, cited answer, validated plan, reconcilia
   await expect(assistant.getByText(/已核对 · local-maintainer/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("ai-desktop.png") });
   const state = await (await page.request.get("/api/state")).json();
-  const runs = state.assistantPlans.filter((p: { source?: string }) => p.source === "model");
+  // Only this test's project: other specs share the server and also create model runs.
+  const mine = state.projects.at(-1).id;
+  const runs = state.assistantPlans.filter((p: { source?: string; projectId?: string }) => p.source === "model" && p.projectId === mine);
   expect(runs.map((p: { state: string }) => p.state)).toEqual(["done", "reconcile"]);
   expect(runs.every((p: { authority: string }) => p.authority === "none")).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -459,8 +462,9 @@ test("generated CadQuery code: policy check, sandboxed build, native failure, re
   await expect(page.getByText("符合沙箱策略")).toBeVisible();
   await page.getByRole("button", { name: "在沙箱中运行并检查" }).click();
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 240_000 });
-  await expect(page.locator(".check-item.fail")).toHaveCount(1);
-  await expect(page.locator(".check-item.fail")).toContainText("最小壁厚");
+  // CAD checks are a measured table; a failed row carries the rule name and an "ask AI" action.
+  await expect(page.locator(".check-table tr.fail")).toHaveCount(1);
+  await expect(page.locator(".check-table tr.fail")).toContainText("最小壁厚");
   await expect(page.locator(".code-source summary")).toContainText("沙箱结果 已生成实体");
   await page.getByRole("button", { name: "查看证据与回放 →" }).click();
   await page.getByRole("button", { name: /记录反馈：CAD 最小壁厚/ }).click();

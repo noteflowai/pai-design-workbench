@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+type Theme = "system" | "light" | "dark";
+const THEME_LABEL: Record<Theme, string> = { system: "跟随系统", light: "浅色", dark: "深色" };
+const nextTheme = (t: Theme): Theme => t === "system" ? "light" : t === "light" ? "dark" : "system";
 import { createRoot } from "react-dom/client";
 import { api } from "./api";
 import { AppContext, VIEWS, type Ctx, type Route, type State, type ViewId } from "./context";
@@ -68,6 +71,26 @@ function App() {
   }, [assistant]);
   useEffect(() => { if (innerWidth >= 1024) localStorage.setItem("pai-assistant", assistant ? "open" : "closed"); }, [assistant]);
 
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("pai-theme") as Theme | null) ?? "system");
+  useEffect(() => {
+    localStorage.setItem("pai-theme", theme);
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => { document.documentElement.dataset.theme = theme === "system" ? (media.matches ? "dark" : "light") : theme; };
+    apply(); media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+  const [railCollapsed, setRailCollapsed] = useState(() => localStorage.getItem("pai-rail") === "collapsed");
+  useEffect(() => { localStorage.setItem("pai-rail", railCollapsed ? "collapsed" : "expanded"); }, [railCollapsed]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.key === "[" && !e.ctrlKey && !e.metaKey && !e.altKey && !["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) && !t.isContentEditable) setRailCollapsed(v => !v);
+    };
+    const onToggle = () => setAssistant(a => !a);
+    addEventListener("keydown", onKey); addEventListener("pai-toggle-assistant", onToggle);
+    return () => { removeEventListener("keydown", onKey); removeEventListener("pai-toggle-assistant", onToggle); };
+  }, []);
+
   const toast = useCallback((message: string, tone: "ok" | "bad" = "ok") => setToasts(t => [...t.filter(x => x.tone === "bad").slice(-1), { id: ++seq.current, message, tone }]), []);
   const dismiss = useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
   const navigate = useCallback((view: ViewId, params: Record<string, string | undefined> = {}) => {
@@ -86,9 +109,12 @@ function App() {
   const project = data?.projects.find(p => p.id === projectId) ?? data?.projects.at(-1);
   const lifecycle = project ? data?.lifecycles?.[project.id] : undefined;
   const ctx: Ctx | undefined = data && { data, project, lifecycle, busy, route, navigate, perform, refresh, selectProject, toast, track, session,
-    openAssistant: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); } };
+    openAssistant: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); },
+    askAI: (message: string) => { setAssistant(true); setTimeout(() => dispatchEvent(new CustomEvent("pai-ask", { detail: message })), 60); } };
 
   const commands: Command[] = useMemo(() => [
+    { id: "theme", label: `外观：${THEME_LABEL[theme]} → ${THEME_LABEL[nextTheme(theme)]}`, run: () => setTheme(nextTheme(theme)) },
+    { id: "rail", label: railCollapsed ? "展开生命周期侧栏" : "收起生命周期侧栏", hint: "[", run: () => setRailCollapsed(v => !v) },
     { id: "assistant", label: "打开 AI 助手", hint: "/", run: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); } },
     ...VIEWS.map(v => ({ id: `go-${v.id}`, label: `前往：${v.index ? `${v.index} ` : ""}${v.label}`, run: () => navigate(v.id) })),
     { id: "new", label: "新建评审任务", run: () => navigate("requirements", { new: "1" }) },
@@ -101,13 +127,13 @@ function App() {
       hint: { persp: "5", top: "7", front: "1", right: "3", camera: "0" }[v], run: () => dispatchEvent(new CustomEvent("pai-view", { detail: v })) })),
     { id: "wire", label: "切换线框显示", hint: "Z", run: () => dispatchEvent(new CustomEvent("pai-view", { detail: "wire" })) },
     { id: "xray", label: "切换 X 光透视", hint: "Alt Z", run: () => dispatchEvent(new CustomEvent("pai-view", { detail: "xray" })) },
-  ], [navigate, ctx, data?.capabilities.blender]);
+  ], [navigate, ctx, data?.capabilities.blender, theme, railCollapsed]);
 
   if (!ctx) return <div className="boot" role="status">{loadError ? `无法加载工作区：${loadError}` : "正在加载工作区…"}</div>;
   const view = { overview: <Overview />, requirements: <Requirements />, design: <Design />, validate: <Validate />, evidence: <Evidence />, feedback: <FeedbackView />, deliver: <Deliver /> }[route.view];
   return <AppContext.Provider value={ctx}>
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); (document.querySelector("main h1") as HTMLElement | null)?.focus(); }}>跳到主要内容</a>
-    <div className={`app ${assistant ? "with-assistant" : ""}`}>
+    <div className={`app ${assistant ? "with-assistant" : ""} ${railCollapsed ? "rail-collapsed" : ""}`}>
       <header className="topbar">
         <a className="brand" href="#/overview" aria-label="PAI Design Workbench 总览"><span className="brand-mark">P</span><span>PAI<small>DESIGN WORKBENCH</small></span></a>
         <div className="project-switch">
@@ -118,8 +144,11 @@ function App() {
             aria-label={`成熟度：${lifecycle.maturity.state === "released" ? `${lifecycle.maturity.number} 已发布` : lifecycle.maturity.state === "in-review" ? `${lifecycle.maturity.number} 待审批` : "设计中"}`}>
             {lifecycle.maturity.state === "released" ? `${lifecycle.maturity.number} · ${MATURITY.released[0]}` : lifecycle.maturity.state === "in-review" ? `${lifecycle.maturity.number} · ${MATURITY["in-review"][0]}` : "设计中"}</button>}
         </div>
+        <button type="button" className="omnibox" onClick={() => dispatchEvent(new Event("pai-palette"))} aria-label="打开命令面板：搜索命令、跳转或问 AI">
+          <span aria-hidden="true">⌕</span><span className="omni-text">搜索命令、跳转或问 AI…</span><kbd>Ctrl K</kbd></button>
         <div className="top-actions">
-          <button type="button" className="ghost command" onClick={() => dispatchEvent(new Event("pai-palette"))} aria-label="打开命令面板">命令 <kbd>Ctrl K</kbd></button>
+          <button type="button" className="ghost icon theme-toggle" onClick={() => setTheme(nextTheme(theme))} aria-label={`外观：${THEME_LABEL[theme]}（点击切换）`} title={`外观：${THEME_LABEL[theme]}`}>
+            <span aria-hidden="true">{theme === "dark" ? "☾" : theme === "light" ? "☀" : "◐"}</span></button>
           <button type="button" className={assistant ? "assistant-toggle on" : "assistant-toggle"} aria-pressed={assistant} onClick={() => setAssistant(a => !a)}>AI 助手</button>
           {ctx.data.capabilities.authenticatedWorkspace && <a className="session-logout" href="/logout">退出登录</a>}
         </div>
@@ -133,6 +162,8 @@ function App() {
             <span className="rail-text"><span className="rail-label">{v.label}</span><span className="rail-short" aria-hidden="true">{v.short}</span>{stage && <small>{stage.metric}</small>}</span>
             {stage && <span className="rail-dot" title={DOT[stage.status]} />}</a></li>; })}</ol>
         <p className="rail-foot">反馈 → 复测 → 验证 形成闭环<br />记录仿真 · 合成场景 · 演示孪生<br />尚未现场验证</p>
+        <button type="button" className="ghost rail-toggle" onClick={() => setRailCollapsed(v => !v)} aria-pressed={railCollapsed} aria-label={railCollapsed ? "展开侧栏" : "收起侧栏"}
+          title={railCollapsed ? "展开侧栏 [" : "收起侧栏 ["}><span aria-hidden="true">{railCollapsed ? "»" : "«"}</span><span className="rail-toggle-text">收起侧栏</span></button>
       </nav>
       <main id="main" aria-busy={busy}>{busy && <div className="busy" role="progressbar" aria-label="正在执行并保存回执" />}{view}</main>
       <footer className="statusbar" aria-label="状态栏">
@@ -146,7 +177,7 @@ function App() {
       {assistant && <aside className="assistant" aria-label="AI 助手"><Assistant onClose={() => setAssistant(false)} /></aside>}
     </div>
     <Toasts items={toasts} dismiss={dismiss} />
-    <Palette commands={commands} />
+    <Palette commands={commands} onAsk={q => ctx.askAI(q)} />
   </AppContext.Provider>;
 }
 createRoot(document.getElementById("root")!).render(<App />);

@@ -1,0 +1,53 @@
+{
+  "schema": "pai-desktop-e2e-1",
+  "checkedAt": "2026-10-01T23:36:49.814Z",
+  "executable": "/home/dcvuser/work/pai-design-workbench/.state/desktop/dist/linux-unpacked/pai-workbench",
+  "startupSeconds": 1.1,
+  "result": "passed",
+  "app": {
+    "name": "PAI Design Workbench",
+    "version": "0.8.0",
+    "electron": "44.5.1",
+    "node": "24.21.0",
+    "chrome": "152.0.7977.130"
+  },
+  "menu": [
+    "文件",
+    "编辑",
+    "视图",
+    "工具",
+    "帮助"
+  ],
+  "security": {
+    "contextIsolation": true,
+    "sandbox": true,
+    "nodeIntegration": false,
+    "nodeInPage": "undefined",
+    "foreignNavigationBlocked": true
+  },
+  "bridge": {
+    "version": "0.8.0",
+    "platform": "linux",
+    "arch": "x64",
+    "tools": {
+      "PAI_BLENDER": true,
+      "PAI_CADQUERY_PYTHON": true
+    }
+  },
+  "caseC2": {
+    "verdict": "rejected",
+    "failed": [
+      "min-wall"
+    ]
+  },
+  "blender": true,
+  "serverStoppedWithApp": true,
+  "freshInstall": {
+    "cadInstallOffered": true,
+    "blenderInstallOffered": true,
+    "tools": {
+      "PAI_BLENDER": false,
+      "PAI_CADQUERY_PYTHON": false
+    }
+  }
+}

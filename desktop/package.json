@@ -1,0 +1,84 @@
+{
+  "name": "pai-design-workbench-desktop",
+  "private": true,
+  "description": "Electron packaging for PAI Design Workbench (the app itself is staged by tools/package_desktop.mjs)",
+  "author": "NoteFlow AI <admin@noteflowai.com>",
+  "license": "MIT",
+  "scripts": {
+    "dist:linux": "electron-builder --linux --x64",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "dir": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.noteflowai.pai-workbench",
+    "productName": "PAI Design Workbench",
+    "executableName": "pai-workbench",
+    "electronVersion": "44.5.1",
+    "copyright": "Copyright © 2026 NoteFlow AI",
+    "directories": {
+      "app": "../.state/desktop/app",
+      "output": "../.state/desktop/dist",
+      "buildResources": "build"
+    },
+    "asar": false,
+    "npmRebuild": false,
+    "extraResources": [
+      {
+        "from": "../.state/desktop/deps",
+        "to": "deps"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Engineering",
+      "icon": "build/icon.png",
+      "synopsis": "Requirements → candidates → native checks → feedback → release, with AI that proposes and never approves",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "PAI Design Workbench"
+        }
+      },
+      "syncDesktopName": true,
+      "maintainer": "NoteFlow AI <admin@noteflowai.com>"
+    },
+    "deb": {
+      "depends": [
+        "python3",
+        "bubblewrap"
+      ],
+      "recommends": [
+        "python3.12-venv"
+      ]
+    },
+    "appImage": {
+      "artifactName": "PAI-Design-Workbench-${version}-${arch}.AppImage"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "homepage": "https://github.com/noteflowai/pai-design-workbench"
+}

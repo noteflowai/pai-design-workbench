@@ -135,9 +135,12 @@ export function Assistant({ onClose }: { onClose: () => void }) {
   useEffect(() => { timeline.current?.scrollTo({ top: timeline.current.scrollHeight, behavior: "smooth" }); }, [plans.length, session?.steps.length, running]);
   useEffect(() => {
     const focus = () => input.current?.focus();
-    window.addEventListener("pai-focus-chat", focus);
-    return () => window.removeEventListener("pai-focus-chat", focus);
-  }, []);
+    // Context questions from the workspace ("问 AI" on a failed check, palette free text) prefill the composer.
+    const ask = (e: Event) => { const text = (e as CustomEvent<string>).detail; if (typeof text !== "string") return;
+      setMessage(text); if (aiAvailable) setMode("ai"); setTimeout(() => { input.current?.focus(); input.current?.setSelectionRange(text.length, text.length); }, 0); };
+    window.addEventListener("pai-focus-chat", focus); window.addEventListener("pai-ask", ask);
+    return () => { window.removeEventListener("pai-focus-chat", focus); window.removeEventListener("pai-ask", ask); };
+  }, [aiAvailable]);
 
   async function send(e?: FormEvent, text = message) {
     e?.preventDefault();
