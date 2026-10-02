@@ -9,6 +9,8 @@ import { packagedExecutable } from "./desktop-executable.js";
 
 process.on("uncaughtExceptionMonitor", error => { console.error(error.stack); });
 const smoke = process.argv.includes("--smoke");
+const startedAt = Date.now();
+const step = (message: string) => console.error(`[desktop-e2e +${Math.round((Date.now() - startedAt) / 1000)}s] ${message}`);
 function executable() {
   if (process.env.PAI_DESKTOP_EXE) return process.env.PAI_DESKTOP_EXE;
   const base = join(process.cwd(), ".state/desktop/dist");
@@ -39,7 +41,7 @@ async function ownApp(t: TestContext, fresh = false): Promise<{ app: ElectronApp
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !fresh || !["PAI_CADQUERY_PYTHON", "PAI_BLENDER"].includes(k))) as Record<string, string>;
   let app: ElectronApplication;
   try {
-    app = await electron.launch({ executablePath: exe, args: [], env: { ...env, PAI_DESKTOP_USER_DATA: userData }, timeout: 60_000 });
+    app = await electron.launch({ executablePath: exe, args: [], env: { ...env, PAI_DESKTOP_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: "0" }, timeout: 60_000 });
   } catch (error) {
     await rm(userData, { recursive: true, force: true });
     await save();
@@ -50,6 +52,7 @@ async function ownApp(t: TestContext, fresh = false): Promise<{ app: ElectronApp
   // Cache the owned child before closing Playwright's channel. node:test also aborts
   // its signal on successful completion, when app.process() is no longer available.
   const child = app.process();
+  child.stderr?.on("data", data => { process.stderr.write(`[electron] ${data}`); });
   const abort = () => { child.kill(); };
   t.signal.addEventListener("abort", abort, { once: true });
   t.after(async () => {
@@ -63,10 +66,12 @@ async function ownApp(t: TestContext, fresh = false): Promise<{ app: ElectronApp
 }
 
 await test("packaged app: startup, local bridge, navigation isolation and shutdown", { timeout: smoke ? 180_000 : 450_000 }, async t => {
-  console.log("desktop phase: launch");
+  step(`launch ${exe}${smoke ? " (smoke)" : ""}`);
   const t0 = Date.now(), { app, userData } = await ownApp(t);
   const win = await app.firstWindow({ timeout: 60_000 });
+  step("window open");
   await win.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
+  step("workbench loaded");
   const origin = new URL(win.url()).origin;
   report.startupSeconds = Math.round((Date.now() - t0) / 100) / 10;
   const info = await app.evaluate(({ app, Menu, BrowserWindow }) => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron, node: process.versions.node,
@@ -80,7 +85,7 @@ await test("packaged app: startup, local bridge, navigation isolation and shutdo
   assert.equal(nodeInPage, "undefined", "no Node.js in the page");
   // Assert the real navigation handlers without launching an external browser/xdg-open on the runner.
   await app.evaluate(({ shell }) => { shell.openExternal = async () => undefined; });
-  console.log("desktop phase: navigation isolation");
+  step("navigation isolation");
   for (const target of ["https://example.com/", `${origin}@example.com/`]) {
     await win.evaluate(url => { location.href = url; }, target);
     await win.waitForTimeout(500);
@@ -88,7 +93,7 @@ await test("packaged app: startup, local bridge, navigation isolation and shutdo
   }
   const st = await (await fetch(`${origin}/api/state`, { signal: AbortSignal.timeout(5000) })).json() as { capabilities: { cad: unknown; blender: boolean } };
   if (!smoke) {
-    console.log("desktop phase: native case C2");
+    step("native case C2");
     assert.ok(st.capabilities.cad, "CadQuery configured (PAI_CADQUERY_PYTHON)");
     await win.goto(`${origin}/#/requirements?new=1`);
     await win.getByRole("button", { name: "创建评审任务" }).click();
@@ -104,7 +109,7 @@ await test("packaged app: startup, local bridge, navigation isolation and shutdo
   }
   Object.assign(report, { app: { name: info.name, version: info.version, electron: info.electron, node: info.node, chrome: info.chrome }, menu: info.menu,
     security: { ...info.prefs, nodeInPage, foreignNavigationBlocked: true }, bridge, caseC2: smoke ? "skipped (smoke)" : { verdict: "rejected", failed: ["min-wall"] }, blender: st.capabilities.blender });
-  console.log("desktop phase: shutdown");
+  step("shutdown");
   await app.close();
   await new Promise(r => setTimeout(r, 500));
   report.serverStoppedWithApp = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(3000) }).then(() => false, () => true);
@@ -114,7 +119,7 @@ await test("packaged app: startup, local bridge, navigation isolation and shutdo
 });
 
 await test("fresh install: platform capabilities and supported tool choices", { timeout: 180_000 }, async t => {
-  console.log("desktop phase: fresh install");
+  step("fresh-install launch");
   const { app } = await ownApp(t, true);
   const win = await app.firstWindow({ timeout: 60_000 });
   await win.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
@@ -139,6 +144,7 @@ await test("fresh install: platform capabilities and supported tool choices", { 
     else await win.getByText(`此平台请在“工具”菜单选择已有的 ${kind}。自动安装目前支持 Linux x64。`, { exact: true }).waitFor();
   }
   report.freshInstall = { cadInstallOffered: nativeInstaller, blenderInstallOffered: nativeInstaller, tools: info.tools };
+  step("fresh-install path checked");
   completedChecks++;
   await save();
 });

@@ -1,8 +1,8 @@
 {
   "schema": "pai-desktop-e2e-1",
-  "checkedAt": "2026-10-01T23:36:49.814Z",
+  "checkedAt": "2026-10-02T01:46:49.289Z",
   "executable": "/home/dcvuser/work/pai-design-workbench/.state/desktop/dist/linux-unpacked/pai-workbench",
-  "startupSeconds": 1.1,
+  "startupSeconds": 3.6,
   "result": "passed",
   "app": {
     "name": "PAI Design Workbench",
@@ -41,6 +41,7 @@
     ]
   },
   "blender": true,
+  "smoke": false,
   "serverStoppedWithApp": true,
   "freshInstall": {
     "cadInstallOffered": true,

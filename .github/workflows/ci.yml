@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: workbench-${{ github.ref }}
+  group: workbench-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   infrastructure:

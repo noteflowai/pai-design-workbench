@@ -50,6 +50,8 @@ jobs:
         if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && runner.os == 'Linux'
         timeout-minutes: 8
         run: |
+          # Preserve the Ubuntu sandbox setup used by the unpacked build.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
           npx playwright install-deps chromium
           xvfb-run -a node --import tsx scripts/desktop-e2e.ts --smoke
       - name: Smoke test the packaged app on Windows and macOS
