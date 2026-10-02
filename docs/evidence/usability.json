@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-10-01T23:42:44.058Z",
+  "checkedAt": "2026-10-02T10:17:34.297Z",
   "caseC2WithAI": {
     "clicks": 6,
-    "toFailureSeconds": 22,
-    "totalSeconds": 41,
+    "toFailureSeconds": 69,
+    "totalSeconds": 116,
     "viewportTop": 367,
     "viewportHeight": 522,
     "askedFrom": "failed check row",
@@ -11,7 +11,7 @@
     "outcome": "rejected → accepted"
   },
   "keyboard": {
-    "paletteToCadLaneMs": 1347,
+    "paletteToCadLaneMs": 334,
     "paletteKeystrokes": "Ctrl+K, type, Enter",
     "askFromPalette": true,
     "railShortcut": "[",
@@ -32,8 +32,8 @@
     "seriousOrCritical": 0
   },
   "casesG1S1": {
-    "g1Seconds": 30,
-    "s1Seconds": 14,
+    "g1Seconds": 81,
+    "s1Seconds": 32,
     "g1Steps": [
       "选择生成代码",
       "改一行",

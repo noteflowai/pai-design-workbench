@@ -59,9 +59,15 @@ test("keyboard first: palette jumps and asks AI, [ collapses the rail, theme per
   await page.evaluate(() => { localStorage.setItem("pai-theme", "light"); localStorage.setItem("pai-rail", "expanded"); localStorage.setItem("pai-assistant", "closed"); });
   await page.goto("/#/overview"); await page.reload();
   await expect(page.getByRole("navigation", { name: "生命周期" })).toBeVisible();
-  // Skip link is the first stop and focus is visible.
-  await page.keyboard.press("Tab");
+  // Skip link is the first focusable element (DOM order) and shows a visible focus ring. Chromium's sequential
+  // focus starting point after a reload is browser state, so the order is checked deterministically:
+  // the first focusable element is the skip link, and Shift+Tab from the brand lands on it.
+  const firstFocusable = await page.evaluate(() => (document.querySelector("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])") as HTMLElement).className);
+  expect(firstFocusable).toBe("skip-link");
+  await page.locator(".brand").focus();
+  await page.keyboard.press("Shift+Tab");
   await expect(page.getByRole("link", { name: "跳到主要内容" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "跳到主要内容" })).toBeInViewport();
   const outline = await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle);
   expect(outline).not.toBe("none");
   // Palette: type, arrow, enter.
@@ -69,6 +75,7 @@ test("keyboard first: palette jumps and asks AI, [ collapses the rail, theme per
   await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "命令面板" });
   await expect(palette).toBeVisible();
+  await expect(palette.getByRole("combobox")).toBeFocused();
   await page.keyboard.type("CAD 零件");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#\/design\?lane=cad/);
@@ -76,7 +83,9 @@ test("keyboard first: palette jumps and asks AI, [ collapses the rail, theme per
   const paletteMs = Date.now() - t0;
   // Free text becomes a question to the assistant.
   await page.keyboard.press("Control+k");
+  await expect(palette.getByRole("combobox")).toBeFocused();
   await page.keyboard.type("轻量化支架为什么壁厚不合格");
+  await expect(palette.getByRole("combobox")).toHaveValue("轻量化支架为什么壁厚不合格");
   await expect(palette.getByRole("option", { name: /问 AI：轻量化支架为什么壁厚不合格/ })).toBeVisible();
   await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter");
   const assistant = page.getByRole("complementary", { name: "AI 助手" });
@@ -96,7 +105,9 @@ test("keyboard first: palette jumps and asks AI, [ collapses the rail, theme per
   // Theme toggle cycles light → dark → system and persists across reloads.
   await page.getByRole("button", { name: /外观：浅色/ }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("pai-theme"))).toBe("dark");
   await page.reload();
+  await expect(page.getByRole("navigation", { name: "生命周期" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
   await page.getByRole("button", { name: /外观：深色/ }).click();
   expect(await page.evaluate(() => localStorage.getItem("pai-theme"))).toBe("system");

@@ -19,7 +19,8 @@ export function Palette({ commands, onAsk }: { commands: Command[]; onAsk?: (que
     window.addEventListener("keydown", onKey); window.addEventListener("pai-palette", onOpen);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pai-palette", onOpen); };
   }, []);
-  useEffect(() => { if (open) setTimeout(() => input.current?.focus(), 0); else restore.current?.focus?.(); }, [open]);
+  // Focus synchronously on open (autoFocus on the input) so the first keystrokes after Ctrl+K are never lost.
+  useEffect(() => { if (!open) restore.current?.focus?.(); }, [open]);
   const results = useMemo(() => {
     const hits = commands.filter(c => `${c.label} ${c.hint ?? ""}`.toLowerCase().includes(query.toLowerCase()));
     // As in AI-assisted design tools, free text that is not a command becomes a question to the assistant.
@@ -29,7 +30,7 @@ export function Palette({ commands, onAsk }: { commands: Command[]; onAsk?: (que
   const choose = (c?: Command) => { if (!c) return; setOpen(false); setTimeout(c.run, 0); };
   return <div className="palette-backdrop" onMouseDown={() => setOpen(false)}>
     <div className="palette" role="dialog" aria-modal="true" aria-label="命令面板" onMouseDown={e => e.stopPropagation()}>
-      <input ref={input} value={query} role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={results[active] ? `cmd-${results[active].id}` : undefined}
+      <input ref={input} autoFocus value={query} role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={results[active] ? `cmd-${results[active].id}` : undefined}
         placeholder="输入命令或问题：CAD、扫描、视图、跳转…" onChange={e => { setQuery(e.target.value); setActive(0); }}
         onKeyDown={e => {
           if (e.key === "Escape") setOpen(false);

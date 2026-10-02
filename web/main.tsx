@@ -180,5 +180,10 @@ function App() {
     <Palette commands={commands} onAsk={q => ctx.askAI(q)} />
   </AppContext.Provider>;
 }
+// Apply the stored theme before the first render (no light flash, and correct even while the workspace loads).
+{
+  const t = (localStorage.getItem("pai-theme") as Theme | null) ?? "system";
+  document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
+}
 createRoot(document.getElementById("root")!).render(<App />);
 if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => { /* Installability is optional; never queue API commands offline. */ });
