@@ -13,13 +13,20 @@ const smoke = process.argv.includes("--smoke");
 const exe = process.env.PAI_DESKTOP_EXE ?? join(process.cwd(), ".state/desktop/dist/linux-unpacked/pai-workbench");
 const userData = await mkdtemp(join(tmpdir(), "pai-desktop-"));
 const t0 = Date.now();
+const step = (m: string) => console.error(`[desktop-e2e +${Math.round((Date.now() - t0) / 1000)}s] ${m}`);
+step(`launch ${exe}${smoke ? " (smoke)" : ""}`);
 const appRun = await electron.launch({ executablePath: exe, args: [],
   env: { ...process.env, PAI_DESKTOP_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: "0" } as Record<string, string>, timeout: 60_000 });
 let origin = "";
 const report: Record<string, unknown> = { schema: "pai-desktop-e2e-1", checkedAt: new Date().toISOString(), executable: exe };
+appRun.process().stderr?.on("data", d => process.stderr.write(`[electron] ${d}`));
 try {
-  const win = await appRun.firstWindow();
+  // Outside the test runner Playwright has no default timeouts; a stalled step must fail, not hang.
+  appRun.context().setDefaultTimeout(60_000);
+  const win = await appRun.firstWindow({ timeout: 60_000 });
+  step("window open");
   await win.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
+  step("workbench loaded");
   report.startupSeconds = Math.round((Date.now() - t0) / 100) / 10;
   origin = new URL(win.url()).origin;
   const info = await appRun.evaluate(({ app, Menu, BrowserWindow }) => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron, node: process.versions.node,
@@ -63,8 +70,10 @@ try {
 {
   const fresh = await mkdtemp(join(tmpdir(), "pai-desktop-fresh-"));
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !["PAI_CADQUERY_PYTHON", "PAI_BLENDER"].includes(k))) as Record<string, string>;
+  step("fresh-install launch");
   const run = await electron.launch({ executablePath: exe, args: [], env: { ...env, PAI_DESKTOP_USER_DATA: fresh }, timeout: 60_000 });
   try {
+    run.context().setDefaultTimeout(60_000);
     const w = await run.firstWindow();
     await w.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
     const o = new URL(w.url()).origin;
@@ -76,6 +85,7 @@ try {
     await w.goto(`${o}/#/design?lane=scene`);
     await w.getByRole("button", { name: "安装 Blender 5.2.2 LTS（官方校验）" }).waitFor();
     const tools = await w.evaluate(() => (window as unknown as { paiDesktop: { info(): Promise<{ tools: unknown }> } }).paiDesktop.info().then(i => i.tools));
+    step("fresh-install path checked");
     report.freshInstall = { cadInstallOffered: true, blenderInstallOffered: true, tools };
   } finally { await run.close(); await rm(fresh, { recursive: true, force: true }); }
 }

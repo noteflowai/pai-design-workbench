@@ -38,9 +38,13 @@ jobs:
         run: npm ci && npx electron-builder ${{ matrix.target }} --publish never
       - name: Smoke test the packaged app (server, security, menus)
         if: matrix.smoke
+        timeout-minutes: 10
         run: |
+          # Ubuntu 24.04 restricts unprivileged user namespaces, which the Chromium sandbox needs; the deb
+          # installs an AppArmor profile for this, the unpacked CI build does not.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
           npx playwright install --with-deps chromium
-          xvfb-run -a node --import tsx scripts/desktop-e2e.ts --smoke
+          PAI_DESKTOP_EXE="$PWD/.state/desktop/dist/linux-unpacked/pai-workbench" xvfb-run -a node --import tsx scripts/desktop-e2e.ts --smoke
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pai-desktop-${{ matrix.os }}
