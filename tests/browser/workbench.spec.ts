@@ -235,6 +235,8 @@ test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and 
   await rail(page, /候选设计/).click();
   await page.getByRole("tab", { name: "CAD 零件" }).click();
   // Choose a non-default option first so a dead hit target cannot pass silently.
+  // This case freezes the seven B-Rep requirements; structural checks have their own integration case.
+  await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true }).uncheck();
   await page.getByRole("radio", { name: /紧凑化/ }).check();
   await expect(page.getByRole("radio", { name: /紧凑化/ })).toBeChecked();
   await page.locator(".option", { hasText: "止口孔偏小" }).click();
@@ -285,6 +287,7 @@ test("release gate: blocked until failures are closed, approval, compare matrix 
   await expect(page.getByText("还没有可发布的检查")).toBeVisible();
   await rail(page, /候选设计/).click();
   await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true }).uncheck();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
   await rail(page, /反馈复测/).click();
@@ -455,6 +458,7 @@ test("generated CadQuery code: policy check, sandboxed build, native failure, re
   await createProject(page);
   await rail(page, /候选设计/).click();
   await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true }).uncheck();
   await page.getByRole("radio", { name: /生成代码/ }).check();
   const editor = page.getByRole("textbox", { name: /CadQuery 代码/ });
   await expect(editor).toHaveValue(template);
@@ -610,6 +614,7 @@ test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell wit
   await page.screenshot({ path: testInfo.outputPath("robot-cell.png") });
   await page.goto("/#/design?lane=cad");
   await page.getByRole("radio", { name: /紧凑化/ }).click();
+  await expect(page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true })).toBeChecked();
   await expect(page.getByLabel("电机轴挠度上限", { exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 600_000 });

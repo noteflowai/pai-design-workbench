@@ -128,6 +128,8 @@ test("classic case C2 with AI in context: failed row → ask AI → validated pl
   await click(page.getByRole("button", { name: "创建评审任务" }));
   await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
   await page.goto("/#/design?lane=cad");
+  // C2 exercises the frozen geometry requirements; Y1 covers the default structural requirements.
+  await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true }).uncheck();
   await click(page.getByRole("radio", { name: /轻量化/ }));
   await click(page.getByRole("button", { name: "生成并检查 CAD 零件" }));
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 240_000 });
@@ -181,6 +183,7 @@ test("classic cases G1 and S1 by mouse: code editor and sweep in a few clicks, n
   await expect(page.getByText("任务和验收要求已冻结为版本 1。")).toBeVisible();
   const t0 = Date.now();
   await page.goto("/#/design?lane=cad");
+  await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA", exact: true }).uncheck();
   await page.getByRole("radio", { name: /生成代码/ }).check();
   const editor = page.getByRole("textbox", { name: /CadQuery 代码/ });
   await editor.fill((await editor.inputValue()).replace("T = 4.0 ", "T = 2.5 "));
