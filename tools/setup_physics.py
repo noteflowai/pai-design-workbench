@@ -67,6 +67,8 @@ versions = json.loads(probe.stdout)
 banner = subprocess.run([str(wrapper), "-v"], capture_output=True, text=True, timeout=30)
 ccx_version = next((line.strip() for line in (banner.stdout + banner.stderr).splitlines() if "Version" in line), "")
 if "2.21" not in ccx_version:
+    print(banner.stdout, end="", file=sys.stderr)
+    print(banner.stderr, end="", file=sys.stderr)
     raise SystemExit(f"CalculiX self-check failed: {ccx_version!r}")
 receipt = {**versions, "ccx": ccx_version, "ccxBinary": str(wrapper), "debs": debs or "previously unpacked",
            "lockSha256": hashlib.sha256(lock.read_bytes()).hexdigest(), "python": platform.python_version(), "interpreter": str(python)}

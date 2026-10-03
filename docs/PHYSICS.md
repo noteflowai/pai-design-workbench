@@ -19,6 +19,10 @@ On Ubuntu 24.04, Gmsh's wheel also requires GLU, X11 and OpenMP runtime librarie
 The CI native dependency step installs them before the physics
 probe. Missing shared libraries remain setup failures with the importer's
 stderr retained; they never become skipped or passing simulation evidence.
+Ubuntu's `libspooles2.2t64`, unpacked with CalculiX, also links to OpenMPI.
+Install the host runtime `libopenmpi3t64` (with its APT-resolved dependencies);
+CI does this in the same native dependency step. CalculiX's failed version probe
+retains its loader diagnostics as well.
 
 ## Structural FEA in the CAD review
 
