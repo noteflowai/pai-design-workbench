@@ -63,10 +63,10 @@ jobs:
         with:
           python-version: "3.12"
           update-environment: false
-      - name: Bubblewrap OS sandbox for generated CAD code
+      - name: Native CAD sandbox and Gmsh shared-library dependencies
         if: matrix.node == '24.21.0'
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap libglu1-mesa libxcursor1 libxinerama1 libxft2 libgomp1
           # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; the sandbox needs them.
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       - name: Hash-locked CadQuery 2.8 / OCCT 7.9 and native parametric CAD loop

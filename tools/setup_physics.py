@@ -55,7 +55,13 @@ wrapper.chmod(0o755)
 
 probe = subprocess.run([str(python), "-c", "import gmsh, optuna, sklearn, mujoco, numpy, scipy, json;"
     "print(json.dumps({'gmsh': gmsh.__version__, 'optuna': optuna.__version__, 'sklearn': sklearn.__version__, 'mujoco': mujoco.__version__, 'numpy': numpy.__version__}))"],
-    check=True, capture_output=True, text=True)
+    capture_output=True, text=True, timeout=60)
+if probe.returncode:
+    # Preserve native loader/import evidence, rather than hiding stderr behind
+    # a CalledProcessError. No environment or credential dump is needed.
+    print(probe.stdout, end="", file=sys.stderr)
+    print(probe.stderr, end="", file=sys.stderr)
+    raise SystemExit("Physics import self-check failed; check Gmsh's GLU/X11/OpenMP runtime dependencies.")
 versions = json.loads(probe.stdout)
 # ccx prints its version banner when run without an input deck.
 banner = subprocess.run([str(wrapper), "-v"], capture_output=True, text=True, timeout=30)

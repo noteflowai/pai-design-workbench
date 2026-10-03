@@ -14,6 +14,12 @@ The geometry checks of the CAD lane answer "does it fit and can it be made". Thi
 
 The receipt (`.state/tools/physics-install-receipt.json`) records every .deb digest and the lock hash.
 
+On Ubuntu 24.04, Gmsh's wheel also requires GLU, X11 and OpenMP runtime libraries
+(`libglu1-mesa`, `libxcursor1`, `libxinerama1`, `libxft2`, `libgomp1`).
+The CI native dependency step installs them before the physics
+probe. Missing shared libraries remain setup failures with the importer's
+stderr retained; they never become skipped or passing simulation evidence.
+
 ## Structural FEA in the CAD review
 
 Freezing `requirements.structural` adds two checks to the ordinary CAD review. Both baseline and candidate are solved, compared by EvalArc, and included in the release gate.
