@@ -671,3 +671,29 @@ test("robot cell closed loop in the UI: MuJoCo rejection, fixed cell, feedback r
   await page.screenshot({ path: testInfo.outputPath("robot-release.png") });
   expect(errors).toEqual([]);
 });
+
+test("aerodynamics lane: form submits the typed request and the API refuses an out-of-range body", async ({ page }) => {
+  const state = await (await page.request.get("/api/state")).json();
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "车身气动" }).click();
+  if (!state.capabilities.aero) {
+    // Without a pinned OpenFOAM image the lane says so and offers no solve button (fail closed, no fabricated result).
+    await expect(page.getByText(/未配置 OpenFOAM/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "求解并检查车身" })).toHaveCount(0);
+  } else {
+    // Intercept the solve: this browser check covers the form and request contract; npm run test:aero covers OpenFOAM.
+    let sent: Record<string, unknown> | undefined;
+    await page.route("**/api/projects/*/aero", route => { sent = route.request().postDataJSON(); return route.fulfill({ status: 503, json: { error: "TEST_INTERCEPT", message: "intercepted" } }); });
+    await page.getByLabel("后斜角", { exact: true }).fill("12.5");
+    await page.getByRole("button", { name: "求解并检查车身" }).click();
+    await expect.poll(() => sent?.parameters).toEqual({ slantAngleDeg: 12.5, noseRadius: 0.1, length: 1.044, height: 0.288 });
+    expect(sent?.requirements).toEqual(state.capabilities.aero.defaultRequirements);
+  }
+  const project = (await (await page.request.get("/api/state")).json()).projects.at(-1);
+  const bad = await page.request.post(`/api/projects/${project.id}/aero`, { data: { requestId: crypto.randomUUID(), projectRevision: project.revision,
+    parameters: { slantAngleDeg: 60, noseRadius: 0.1, length: 1.044, height: 0.288 } }, headers: { origin: new URL(page.url()).origin } });
+  expect(bad.status()).toBeGreaterThanOrEqual(400);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+});

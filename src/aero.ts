@@ -43,7 +43,7 @@ export const AeroChecks = z.object({
 }).strict();
 export type AeroChecks = z.infer<typeof AeroChecks>;
 const Level = z.object({ level: z.number().int(), cells: z.number().int(), meshOk: z.boolean(), openfoam: z.string(), iterations: z.number().int(),
-  cd: z.number(), cl: z.number(), cdBand: z.number(), seconds: z.number() }).strict();
+  cd: z.number(), cl: z.number(), window: z.number().int(), cdDrift: z.number(), cdBand: z.number(), seconds: z.number() }).strict();
 export interface AeroReview {
   id: string; projectId: string; projectRevision: number; request: z.infer<typeof AeroRequest>; requirementDigest: string;
   state: "running" | "completed" | "failed" | "interrupted"; error?: string; createdAt: string; finishedAt?: string; feedbackId?: string;
@@ -108,7 +108,7 @@ export async function reviewAero(store: Store, config: Config, project: Project,
       publish(request.requestId, { kind: "step", id: `cfd-${name}`, label, status: "running", which: name });
       const inputFile = join(directory, `${name}-input.json`);
       await writePrivate(inputFile, JSON.stringify({ parameters, requirements: request.requirements, cadquery: config.cadquery, levels: AERO_LEVELS,
-        iterations: 800, speedMs: 40, processors, runner: { kind: "docker", image: config.openfoamImage } }));
+        iterations: 1200, speedMs: 40, processors, runner: { kind: "docker", image: config.openfoamImage } }));
       let observed = Promise.resolve();
       const observe = (line: string) => {
         if (!line.startsWith("PAI_EVENT ")) return;
