@@ -8,6 +8,7 @@ import { Id, type Feedback, type Project, type Receipt, type DiffResult } from "
 import { canonical, DomainError, sha256 } from "./domain.js";
 import { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
+import type { CadReview } from "./cad.js";
 
 export interface SceneStage { index: number; id: string; label: string; file: string; sha256: string; objects: string[] }
 export interface SceneRay { origin: number[]; target: number[]; hit: number[] | null; firstHit: string | null; visible: boolean; frame: "gltf-y-up" }
@@ -42,6 +43,12 @@ export const RobotCell = z.object({
   pickDistance: z.number().min(0.25).max(1.1), placeDistance: z.number().min(0.25).max(1.1), pickHeight: z.number().min(0.6).max(1.2), placeHeight: z.number().min(0.6).max(1.2),
   pedestalHeight: z.number().min(0.3).max(1.0), guardClearance: z.number().min(0.1).max(1.5), speedFraction: z.number().min(0.1).max(1.0), jitter: z.number().min(0).max(0.08),
 }).strict();
+/**
+ * End-effector part from the CAD lane: an accepted CAD review of the same project, mounted on the gripper with its exact
+ * STL (mass and inertia from the mesh, cross-checked against the B-Rep mass) plus a declared payload (default: a NEMA 17
+ * motor, 0.28 kg). The same tool is used for the reference and the candidate cell, so the comparison isolates the cell.
+ */
+export const RobotTool = z.object({ cadReviewId: Id, payloadKg: z.number().min(0).max(3).default(0.28) }).strict();
 export const RobotRequirements = z.object({ maxCycleSeconds: z.number().min(1).max(60), minSuccessRate: z.number().min(0).max(1) }).strict();
 export const ROBOT_REFERENCE: z.infer<typeof RobotCell> = { pickDistance: 0.55, placeDistance: 0.55, pickHeight: 0.85, placeHeight: 0.85, pedestalHeight: 0.7, guardClearance: 0.4, speedFraction: 0.5, jitter: 0.03 };
 export const DEFAULT_ROBOT_REQUIREMENTS: z.infer<typeof RobotRequirements> = { maxCycleSeconds: 6, minSuccessRate: 0.9 };
@@ -52,7 +59,7 @@ const Common = { requestId: Id, projectRevision: z.number().int().positive(), fe
 export const SceneRequest = z.union([
   z.object({ ...Common, variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements }).strict(),
   z.object({ ...Common, variant: z.literal("plant"), layout: PlantLayout, requirements: PlantRequirements }).strict(),
-  z.object({ ...Common, variant: z.literal("robot-cell"), cell: RobotCell, requirements: RobotRequirements }).strict(),
+  z.object({ ...Common, variant: z.literal("robot-cell"), cell: RobotCell, requirements: RobotRequirements, tool: RobotTool.optional() }).strict(),
 ]);
 export type SceneRequestValue = z.infer<typeof SceneRequest>;
 export const SceneChecks = z.union([
@@ -82,6 +89,10 @@ export interface SceneReview {
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>; rays?: Partial<Record<"baseline" | "candidate", SceneRay>>;
   scope: "generated-static-geometry" | "rigid-body-simulation"; physicalValidation: false;
+  /** Robot cells with a CAD end-effector: provenance and the native mass cross-check. */
+  tool?: { cadReviewId: string; stlSha256: string; brepMassG: number; mujocoMassG?: number; payloadKg: number; motorAxisMm: number };
+  /** OpenUSD export summary (UsdPhysics bodies, joints, validators run). */
+  usd?: { usdVersion: string; rigidBodies: number; joints: string[]; validators: number };
 }
 export type PlantLayoutValue = z.infer<typeof PlantLayout>;
 export type PlantRequirementsValue = z.infer<typeof PlantRequirements>;
@@ -91,7 +102,7 @@ export const isPlant = (s: SceneReview): s is PlantScene => s.request.variant ==
 /** Derived hall size of the native plant recipe (metres); the same formula as native/blender_plant.py. */
 export const plantHall = (l: PlantLayoutValue) => ({ x: l.stations * l.stationPitch + 12, y: 10.95 + l.aisleWidth + 1.35 * l.rackRows });
 /** Identity of a scene candidate: recipe, its layout parameters and the static requirements. */
-export const sceneKey = (r: SceneRequestValue) => `${r.variant}:${canonical(r.variant === "plant" ? r.layout : r.variant === "robot-cell" ? r.cell : null)}:${canonical(r.requirements)}`;
+export const sceneKey = (r: SceneRequestValue) => `${r.variant}:${canonical(r.variant === "plant" ? r.layout : r.variant === "robot-cell" ? { cell: r.cell, tool: r.tool ?? null } : null)}:${canonical(r.requirements)}`;
 export const isRobotCell = (s: SceneReview): s is SceneReview & { request: Extract<SceneRequestValue, { variant: "robot-cell" }> } => s.request.variant === "robot-cell";
 export function sceneCaseText(run: SceneReview) {
   if (run.request.variant === "plant") {
@@ -151,6 +162,23 @@ export async function reviewScene(store: Store, config: Config, project: Project
     const engineKey = robot ? "physics-python" : "blender-binary";
     record.sourceDigests = { ...nativeBefore, [plant ? "blender-plant.py" : robot ? "robot-sim.py" : "blender-workcell.py"]: scriptHash, [engineKey]: sha256(await readFile(engine)),
       ...(robot ? { "physics-lock": sha256(await readFile(join(config.repository, "native/physics-requirements.txt"))) } : {}) };
+    let toolInput: { stl: string; sha256: string; brepMassG: number; motorAxisMm: number; payloadKg: number } | undefined;
+    if (robot && request.tool) {
+      // Only an accepted part of this project, and only the exact file its review measured.
+      const cad = store.get<CadReview>("cad-review", request.tool.cadReviewId);
+      if (!cad || cad.projectId !== project.id || cad.state !== "completed" || cad.verdict !== "accepted-cad-part") {
+        throw new DomainError("TOOL_NOT_ACCEPTED", "The end-effector must be an accepted CAD part of this project", 422);
+      }
+      const stl = join(config.state, "cad", cad.id, "candidate", "part.stl");
+      const stlSha256 = sha256(await readFile(stl));
+      const brepMassG = Number(cad.candidate?.checks.find(c => c.id === "mass")?.observed);
+      const motorAxisMm = Number((cad.candidate as { parameters?: { motorAxisHeight?: number } } | undefined)?.parameters?.motorAxisHeight ?? cad.sandbox?.motorAxisZ);
+      if (stlSha256 !== cad.files["candidate/part.stl"]) throw new DomainError("TOOL_DIGEST", "The CAD part file differs from its review record", 422);
+      if (!(brepMassG > 0) || !(motorAxisMm > 0)) throw new DomainError("TOOL_CONTEXT", "The CAD part does not declare its mass and motor axis", 422);
+      toolInput = { stl, sha256: stlSha256, brepMassG, motorAxisMm, payloadKg: request.tool.payloadKg };
+      record.tool = { cadReviewId: cad.id, stlSha256, brepMassG, payloadKg: request.tool.payloadKg, motorAxisMm };
+      record.sourceDigests["tool-stl"] = stlSha256;
+    }
     const cellOf = (name: "baseline" | "candidate") => name === "baseline" ? ROBOT_REFERENCE : (request as { cell: z.infer<typeof RobotCell> }).cell;
     for (const [name, variant] of [["baseline", plant ? "plant" : robot ? "robot-cell" : "clear"], ["candidate", request.variant]] as const) {
       const target = join(directory, name);
@@ -182,7 +210,7 @@ export async function reviewScene(store: Store, config: Config, project: Project
         }).catch(() => { /* Presentation events never fail the native review. */ });
       };
       await writePrivate(join(directory, `${name}-input.json`), JSON.stringify(robot
-        ? { cell: cellOf(name), requirements: request.requirements, seeds: ROBOT_SEEDS }
+        ? { cell: cellOf(name), requirements: request.requirements, seeds: ROBOT_SEEDS, ...(toolInput ? { tool: toolInput } : {}) }
         : plant
         ? { variant, layout: name === "baseline" ? PLANT_REFERENCE : (request as { layout: unknown }).layout, requirements: request.requirements, render: name === "baseline" ? "preview" : "hero" }
         : { variant, requirements: request.requirements }));
@@ -209,7 +237,13 @@ export async function reviewScene(store: Store, config: Config, project: Project
         throw new DomainError("SCENE_CONTEXT", "Native robot cell differs from the requested cell");
       }
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(record[name]!), { mode: 0o600, flag: "wx" });
-      for (const file of robot ? ["robot.json", "scene.xml", "robot.glb", "checks.json"] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
+      if (robot) {
+        const m = record[name] as { tool?: { stlSha256: string; mujocoMassG: number } | null; usd?: SceneReview["usd"] };
+        if (toolInput && (m.tool?.stlSha256 !== toolInput.sha256)) throw new DomainError("SCENE_CONTEXT", "Native simulation mounted a different tool");
+        if (toolInput && name === "candidate") record.tool = { ...record.tool!, mujocoMassG: m.tool!.mujocoMassG };
+        if (m.usd) record.usd = { usdVersion: m.usd.usdVersion, rigidBodies: m.usd.rigidBodies, joints: m.usd.joints, validators: m.usd.validators };
+      }
+      for (const file of robot ? ["robot.json", "scene.xml", "scene.usda", "robot.glb", "checks.json", ...(toolInput ? ["tool.stl"] : [])] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
         record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       }
       store.put("scene-review", record);

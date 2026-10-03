@@ -330,12 +330,12 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(scene, reply, "scenes");
   });
   app.get("/api/scenes/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "inspection.png", "checks.json", "robot.json", "scene.xml", "robot.glb"]) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "inspection.png", "checks.json", "robot.json", "scene.xml", "scene.usda", "tool.stl", "robot.glb"]) }).parse(request.params);
     const scene = store.get<SceneReview>("scene-review", p.id), name = `${p.which}/${p.file}`;
     if (!scene || scene.state !== "completed" || !scene.files[name]) throw new DomainError("NOT_FOUND", "Completed scene evidence required", 404);
     const content = await readFile(join(config.state, "scenes", p.id, p.which, p.file));
     if (sha256(content) !== scene.files[name]) throw new DomainError("SCENE_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
-    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "inspection.png": "image/png", "checks.json": "application/json", "robot.json": "application/json", "scene.xml": "application/xml", "robot.glb": "model/gltf-binary" };
+    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "inspection.png": "image/png", "checks.json": "application/json", "robot.json": "application/json", "scene.xml": "application/xml", "scene.usda": "model/vnd.usda", "tool.stl": "model/stl", "robot.glb": "model/gltf-binary" };
     if (!p.file.endsWith(".png") && !p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
     return reply.type(types[p.file]).send(content);
   });

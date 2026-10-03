@@ -8,7 +8,7 @@ import type { Config } from "./config.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
-import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, SceneRequest, SceneRequirements,
+import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, RobotTool, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
 import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
@@ -44,7 +44,8 @@ const ModelPayload = {
   "robot-review": z.object({ candidate: Candidate }).strict(),
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
   "plant-layout": z.object({ layout: PlantLayout, requirements: PlantRequirements.partial().default({}) }).strict(),
-  "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}) }).strict(),
+  "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}),
+    tool: z.object({ cad: z.string().regex(/^cad-\d{1,3}$/), payloadKg: z.number().min(0).max(3).optional() }).strict().optional() }).strict(),
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
@@ -63,7 +64,8 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "robot-cell": "MuJoCo 机器人工作单元（通用六轴臂，UR5e 级连杆：上臂 0.425 m、前臂 0.392 m，最大伸展约 0.95 m）。cell 全部 8 个字段必填（米，speedFraction 为额定关节速度的比例）："
     + "pickDistance/placeDistance 0.25–1.1、pickHeight/placeHeight 0.6–1.2、pedestalHeight 0.3–1、guardClearance 0.1–1.5（围栏离最远工位）、speedFraction 0.1–1、jitter 0–0.08（来料偏差）。"
     + "10 个种子逐一做 IK、五次多项式轨迹与 500 Hz 动力学；检查 reach、collision-free、cycle-time（≤ maxCycleSeconds）、success-rate（≥ minSuccessRate）。经验：参考单元速度 50% 时节拍约 5.9 s，"
-    + "节拍大致与 1/speedFraction 成正比（加上约 0.3 s 稳定时间）；guardClearance < 0.2 m 时肘部会碰到围栏；工位距离 > 0.9 m 时 IK 不可达",
+    + "节拍大致与 1/speedFraction 成正比（加上约 0.3 s 稳定时间）；guardClearance < 0.2 m 时肘部会碰到围栏；工位距离 > 0.9 m 时 IK 不可达。"
+    + "可选 tool：{ cad: \"cad-N\" }，把本项目一个已通过的 CAD 零件（及默认 0.28 kg 的 NEMA 17 电机负载）装到末端，质量和惯量取自精确网格并与 B-Rep 质量交叉核对；省略时沿用上一次的末端工装",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
   "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
   "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
@@ -106,7 +108,7 @@ const ModelOutput = z.object({
 
 type Handle = { kind: string; id: string; label: string };
 export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
-  lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements> } }; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
+  lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements>; tool?: z.infer<typeof RobotTool> } }; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
   cadCode?: { template: string } }
 export interface ContextOptions { cadCode?: { template: string } }
@@ -129,12 +131,14 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
       successes: cond ? `${cond.successes}/${cond.trials}` : null, lostBaselineSeeds: lost, recheck: Boolean(r.feedbackId),
       checks: r.decision?.checks.map(c => ({ id: c.id, passed: c.passed, detail: c.detail })) };
   });
+  // CAD handles are numbered in record order (the same numbering the cad list below assigns).
+  const cadHandle = (id: string) => { const i = mine<CadReview>("cad-review").findIndex(c => c.id === id); return i < 0 ? null : `cad-${i + 1}`; };
   const scenes = mine<SceneReview>("scene-review").map((s, i) => {
     const h = add("scene", i + 1, "scene-review", s.id, `Blender 场景 · ${s.request.variant}`); handleOf.set(s.id, h);
     return { handle: h, at: s.createdAt, state: s.state, verdict: s.verdict, variant: s.request.variant, requirements: s.request.requirements, revision: s.projectRevision,
       failed: s.candidate?.checks.filter(c => !c.passed).map(c => c.id), firstHit: s.rays?.candidate?.firstHit ?? null, recheck: Boolean(s.feedbackId),
       // Plant layouts: the layout and every measured value, so the planner reasons on native numbers rather than guesses.
-      ...(s.request.variant === "robot-cell" ? { cell: s.request.cell,
+      ...(s.request.variant === "robot-cell" ? { cell: s.request.cell, tool: s.tool ? { cad: cadHandle(s.tool.cadReviewId), brepMassG: s.tool.brepMassG, payloadKg: s.tool.payloadKg } : null,
         measured: s.candidate?.checks.map(c => ({ id: c.id, passed: c.passed, observed: (c as { observed?: unknown }).observed, required: (c as { required?: unknown }).required })),
         lostBaselineSeeds: ((s.baseline as { trials?: { seed: number; success: boolean }[] } | undefined)?.trials ?? [])
           .filter(b => b.success && (s.candidate as { trials?: { seed: number; success: boolean }[] } | undefined)?.trials?.find(t => t.seed === b.seed)?.success === false).map(b => b.seed) } : {}),
@@ -291,7 +295,15 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const p = parsed as { cell: z.infer<typeof RobotCell>; requirements: Partial<z.infer<typeof RobotRequirements>> };
     const prev = context.lastRobot?.request;
     const requirements = RobotRequirements.parse({ ...(prev?.requirements ?? DEFAULT_ROBOT_REQUIREMENTS), ...p.requirements });
-    const payload = { projectRevision: opts.revision, variant: "robot-cell" as const, cell: p.cell, requirements };
+    // The end-effector: an explicitly cited accepted CAD part, else whatever the previous cell carried.
+    const asked = (parsed as { tool?: { cad: string; payloadKg?: number } }).tool;
+    let tool = prev?.tool;
+    if (asked) {
+      const h = context.handles.get(asked.cad);
+      if (!h || h.kind !== "cad-review") throw new Error(`末端工装引用了不存在的 CAD 记录 ${asked.cad}`);
+      tool = { cadReviewId: h.id, payloadKg: asked.payloadKg ?? 0.28 };
+    }
+    const payload = { projectRevision: opts.revision, variant: "robot-cell" as const, cell: p.cell, requirements, ...(tool ? { tool } : {}) };
     SceneRequest.parse({ ...payload, requestId: placeholder });
     const changes: PlanChange[] = [
       ...Object.keys(p.cell).map(k => { const from = (prev?.cell as Record<string, number> | undefined)?.[k] ?? null, to = (p.cell as Record<string, number>)[k];

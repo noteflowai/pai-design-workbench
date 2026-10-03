@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import { DEFAULT_ROBOT_REQUIREMENTS, ROBOT_REFERENCE, type SceneReview } from "../src/scenes.js";
+import { DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
 import type { Feedback, Project } from "../src/contracts.js";
 
 const config = configuration();
@@ -44,10 +45,34 @@ try {
   assert.equal(fixed.verdict, "accepted-static-scene", fixed.error ?? JSON.stringify(fixed.candidate?.checks));
   f = await req<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "rechecked", reason: "New MuJoCo run is collision-free at 75 % speed", recheckRunId: fixed.id });
   f = await req<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "closed", reason: "Guard clearance restored; simulation only" });
+  // CAD → MJCF/USD: mount the accepted CAD part of this project on the gripper; mass comes from the exact mesh volume.
+  let toolReport: unknown = "skipped: CadQuery not configured";
+  if (config.cadquery) {
+    const cad = await req<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: DEFAULT_CAD_REQUIREMENTS });
+    assert.equal(cad.verdict, "accepted-cad-part", cad.error ?? "CAD review failed");
+    const mounted = await req<SceneReview>("POST", `/api/projects/${project.id}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant: "robot-cell",
+      cell: { ...tight, guardClearance: 0.3 }, requirements, tool: { cadReviewId: cad.id } });
+    assert.equal(mounted.state, "completed", mounted.error ?? "mounted cell failed");
+    const t = mounted.tool!;
+    assert.equal(t.stlSha256, cad.files["candidate/part.stl"], "the exact reviewed STL is mounted");
+    assert.ok(Math.abs(t.mujocoMassG! - t.brepMassG) / t.brepMassG < 0.03, `mesh mass ${t.mujocoMassG} g vs B-Rep ${t.brepMassG} g`);
+    assert.ok(mounted.usd && mounted.usd.validators > 20 && mounted.usd.joints.filter(j => !j.startsWith("fixed_")).length === 6 && mounted.usd.joints.includes("fixed_cad_tool"));
+    const mjcf = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/scene.xml`, headers: { host } });
+    assert.match(mjcf.body, /<mesh name="cad-tool" file="tool.stl"/); assert.doesNotMatch(String(mjcf.body), /\/home\/|\/var\//, "portable MJCF without local paths");
+    const usda = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/scene.usda`, headers: { host } });
+    assert.match(usda.body, /^#usda 1\.0/); assert.match(usda.body, /PhysicsRevoluteJoint/); assert.match(usda.body, /PhysicsArticulationRootAPI/);
+    const stl = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/tool.stl`, headers: { host } });
+    assert.equal(stl.statusCode, 200);
+    const refused = await app.inject({ method: "POST", url: `/api/projects/${project.id}/scenes`, headers: { host, "content-type": "application/json" },
+      payload: JSON.stringify({ requestId: randomUUID(), projectRevision: 1, variant: "robot-cell", cell: tight, requirements, tool: { cadReviewId: randomUUID() } }) });
+    assert.match(refused.body, /TOOL_NOT_ACCEPTED/, "only an accepted CAD part of this project can be mounted");
+    const wrist = (s: SceneReview) => (s.candidate as unknown as { checks: { id: string; observed: number }[] }).checks.find(c => c.id === "cycle-time")!.observed;
+    toolReport = { cadReview: cad.id, brepMassG: t.brepMassG, mujocoMassG: t.mujocoMassG, payloadKg: t.payloadKg, verdict: mounted.verdict, cycle: wrist(mounted), usd: mounted.usd };
+  }
   const report = { schema: "pai-robot-e2e-1", checkedAt: new Date().toISOString(), result: "passed", engine: (first.candidate as { engine?: string }).engine,
     baseline: { cycle: (first.baseline!.checks.find(c => c.id === "cycle-time") as unknown as { observed: number }).observed, verdictOfBaselineChecks: first.baseline!.checks.map(c => `${c.id}=${c.passed}`) },
     rejected: { cycle: observed(first, "cycle-time").observed, collisionFreeSeeds: observed(first, "collision-free").observed, blocking: first.diff!.blocking_changes },
-    fixed: { cycle: observed(fixed, "cycle-time").observed, successRate: observed(fixed, "success-rate").observed, verdict: fixed.verdict }, feedback: f.status };
+    fixed: { cycle: observed(fixed, "cycle-time").observed, successRate: observed(fixed, "success-rate").observed, verdict: fixed.verdict }, feedback: f.status, tool: toolReport };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence", "robot-e2e.json"), JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify(report));

@@ -6,9 +6,21 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 首个可运行场景是机器人实验设计评审。Radar 提供专业线索，领域适配器连接 Robot Reel 的真实记录核验与 EvalArc 的独立检查项对照，现有 NoteFlow 控制器保留模型预算、路由和恢复职责。
 
+[![机器人工作单元提速：MuJoCo 发现碰撞、AI 修正、CalculiX 否决几何最优、物理寻优、KMS 签名发布](docs/media/physics-demo.gif)](docs/media/physics-demo.mp4)
+
+**演示 A · 机器人工作单元提速，AI 设计、物理求解器裁决**：[docs/media/physics-demo.mp4](docs/media/physics-demo.mp4)（约 5.5 分钟，1280×800）。在 pai.oneai.host 上实时录制，也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-physics-2026-10-03) 下载。
+
+1. 目标是节拍 ≤ 5 s（参考单元 5.9 s）。初版把关节速度提到 75 %、围栏内收到 0.12 m。MuJoCo 跑了 10 个种子：节拍 4.6 s 达标，但每个种子肘部都撞到围栏，EvalArc 判定候选丢失了基准通过的检查，结论为拒绝。
+2. 在失败的检查上点“问 AI”。Kiro 2.27.1（claude-opus-5.5）引用 scene-1，把围栏退回 0.30 m，速度保持不变，没有放宽任何要求。复测 4 项全部通过：节拍 4.6 s，比参考单元快 22 %，10/10 个种子成功。失败案例通过绑定的复测关闭。
+3. 电机支架冻结结构要求（60 N 皮带载荷、挠度 ≤ 0.06 mm）。只看几何时最轻的 t = 3 mm 能通过 7 项几何检查，但 CalculiX 实测挠度为 0.095 mm，被否决。
+4. AI 按第一性原理提出 3 个种子并附上挠度估算。实测 19 个点，其中 7 个可行；最轻的可行点由代理模型的 exploit 步骤找到：t 3.67、W 60.05、H 49.53，46.9 g，挠度 0.058 mm。正式复核 9/9 通过。AI 的 3 个种子都略超限，求解器给它们打分，挠度估算偏低 10–14 %。
+5. 两条反馈都已关闭，准入 5/5，R1 发布。在界面里核验签名：AWS KMS ECDSA P-256，20 个原生文件的摘要一致。
+
+回执见 [physics-demo.json](docs/evidence/physics-demo.json)。
+
 [![AI + Blender 设计工厂产线：原生生成、射线实测、AI 修正、复测通过](docs/media/factory-demo.gif)](docs/media/factory-demo.mp4)
 
-**演示一 · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-factory-2026-10-03) 下载。
+**演示 B · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-factory-2026-10-03) 下载。
 
 1. 用一句话描述 6 工位 CNC 机加工产线（围栏加大到 4.2 m、AGV 通道 2.4 m、厂房 ≤ 650 m²），解析成类型化计划。
 2. Blender 5.2 按 8 个阶段生成整座车间，实时推送到三维视口：柱网桁架、输送线、CNC 加工中心、六轴机器人、安全围栏、货架、AGV、桥式起重机和检测相机，共 181 个对象，带 Cycles 渲染和动画。
@@ -19,7 +31,7 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 ![Blender Cycles 渲染：AI 修正后的 6 工位 CNC 产线](docs/media/factory-render.png)
 
-**演示二 · 生成式 CAD**：
+**演示 C · 生成式 CAD**：
 
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
 
@@ -31,7 +43,7 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 3. 代码在三层沙箱中建模，通过全部 7 项检查，39.6 g。
 4. 16 点原生设计空间扫描，找到最轻的可行设计 t = 3 mm，37.4 g，作为正式候选也通过了检查。
 
-两段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
+三段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
 
 实现了五条原生证据通道：**机器人历史记录评审**、**Blender 工作单元布局**、**Blender 工厂产线布局**、**CadQuery/OCCT 参数化 CAD 零件**、**工厂孪生维护与能源评审**。它们共用同一条生命周期闭环：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 发布交付。需求版本只追加、可逐项比较；发布候选须通过准入检查（检查通过、绑定当前需求、失败案例均已关闭）并经维护者批准，需求修订后自动废止。底部状态栏显示原生任务、需求哈希与工具状态。左侧栏显示每个阶段的状态，总览页给出“下一步”，二者都由已保存的记录推导。
 
@@ -44,6 +56,8 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 **物理层**：冻结结构要求后，CAD 评审会用 Gmsh 划分二次四面体网格，再用 CalculiX 计算电机轴挠度和峰值应力。基准件与候选件都要算，各用两级网格并给出收敛对照，结果同样经 EvalArc 对照、进入发布准入。
 
 **物理寻优**：先实测参考件、AI 种子和 Sobol 点；再用高斯过程代理模型与 NSGA-II 排序候选，先做几何筛查，再交给 CalculiX 求解。代理模型只负责排序，推荐的是实测最轻的可行点，选中后还要经过正式复核。AI 提出种子时要附上自己的物理估算，系统用求解器结果给它打分。见 [PHYSICS.md](docs/PHYSICS.md)。
+
+**CAD → 仿真 → 孪生**：已通过的 CAD 零件可以装到 MuJoCo 机械臂末端，质量和惯量取自已核验 STL 的精确体积，并与 B-Rep 质量交叉核对（差值 ≤ 3 %，否则失败）。每次仿真都导出可移植的 MJCF 和 OpenUSD（UsdPhysics 刚体、质量、转动/固定关节、碰撞体），后者经 OpenUSD 26.8 全部 28 个 UsdValidation 校验器检查，可直接导入 Isaac Sim / Omniverse。
 
 **外部 Agent**：AgentForge 会话可以经治理网关使用工作台：按会话放行工具、审计、限流。托管站点用 OAuth 客户端凭据访问，ALB 先验证一次 JWT，工作台再按 scope 验证一次。见 [integrations/agentforge](integrations/agentforge/README.md)。
 

@@ -1,0 +1,204 @@
+{
+  "schema": "pai-physics-demo-1",
+  "recordedAt": "2026-10-03T13:03:00Z",
+  "site": "https://pai.oneai.host",
+  "hostedRelease": "6450322a582ce91db2e3911f09b5e51a7567fb3988bfdb76ec1648092eec84bf",
+  "video": {
+    "file": "docs/media/physics-demo.mp4",
+    "sha256": "b4822c9259307f59ac7851ecd3752ab3d992eebc86df2482994c3260fee6ff23",
+    "sourceSeconds": 659,
+    "editing": "none cut or reordered; visually static waits played 6x after 2.5 s (tools/render_demo.py)"
+  },
+  "chapters": [
+    {
+      "name": "requirements",
+      "seconds": 7.5
+    },
+    {
+      "name": "mujoco",
+      "seconds": 14.1
+    },
+    {
+      "name": "ai-cell",
+      "seconds": 49.6
+    },
+    {
+      "name": "feedback-cell",
+      "seconds": 99.4
+    },
+    {
+      "name": "fea",
+      "seconds": 123.6
+    },
+    {
+      "name": "ai-optimize",
+      "seconds": 191.9
+    },
+    {
+      "name": "release",
+      "seconds": 585.7
+    }
+  ],
+  "loop": {
+    "mujocoRejection": {
+      "cell": {
+        "speedFraction": 0.75,
+        "guardClearance": 0.12
+      },
+      "cycleSeconds": 4.598,
+      "collisionFreeSeeds": 0,
+      "of": 10,
+      "referenceCycleSeconds": 5.897
+    },
+    "aiCellFix": {
+      "engine": {
+        "profile": "kiro-primary",
+        "provider": "kiro",
+        "model": "claude-opus-5.5",
+        "engineVersion": "2.27.1",
+        "modelEvidence": "acp_advertised"
+      },
+      "changes": [
+        "guardClearance 0.12 → 0.3"
+      ],
+      "citations": [
+        "scene-1"
+      ],
+      "requirementsRelaxed": false
+    },
+    "fixedCell": {
+      "cycleSeconds": 4.598,
+      "successRate": 1,
+      "fasterThanReference": 0.22
+    },
+    "feaRejection": {
+      "parameters": {
+        "thickness": 3,
+        "width": 60,
+        "plateHeight": 46
+      },
+      "geometryChecksPassed": true,
+      "deflectionMm": 0.095,
+      "limitMm": 0.06,
+      "meshConvergence": 0.0185
+    },
+    "aiOptimize": {
+      "engine": {
+        "profile": "kiro-primary",
+        "provider": "kiro",
+        "model": "claude-opus-5.5",
+        "engineVersion": "2.27.1",
+        "modelEvidence": "acp_advertised"
+      },
+      "aiSeeds": [
+        {
+          "thickness": 3.6,
+          "width": 60,
+          "plateHeight": 46,
+          "expectedDeflectionMm": 0.055,
+          "expectedMassG": 44
+        },
+        {
+          "thickness": 3.5,
+          "width": 57,
+          "plateHeight": 46,
+          "expectedDeflectionMm": 0.054,
+          "expectedMassG": 40.7
+        },
+        {
+          "thickness": 3.4,
+          "width": 57,
+          "plateHeight": 45,
+          "expectedDeflectionMm": 0.058,
+          "expectedMassG": 39.1
+        }
+      ],
+      "measuredPoints": 19,
+      "feasible": 7,
+      "lightestFeasible": {
+        "origin": "exploit",
+        "thickness": 3.67,
+        "width": 60.05,
+        "plateHeight": 49.53,
+        "pilotBore": 22.5,
+        "mass": 46.873,
+        "deflectionMm": 0.058
+      },
+      "aiSeedScores": [
+        {
+          "index": 2,
+          "expected": 0.055,
+          "measured": 0.0612,
+          "relativeError": 0.1013
+        },
+        {
+          "index": 3,
+          "expected": 0.054,
+          "measured": 0.0626,
+          "relativeError": 0.1374
+        },
+        {
+          "index": 4,
+          "expected": 0.058,
+          "measured": 0.0671,
+          "relativeError": 0.1356
+        }
+      ],
+      "surrogateCalibrationLastRound": [
+        {
+          "index": 14,
+          "predicted": 0.0117,
+          "measured": 0.0116,
+          "relativeError": 0.0086
+        },
+        {
+          "index": 17,
+          "predicted": 0.058,
+          "measured": 0.058,
+          "relativeError": 0
+        },
+        {
+          "index": 18,
+          "predicted": 0.0509,
+          "measured": 0.0507,
+          "relativeError": 0.0039
+        },
+        {
+          "index": 19,
+          "predicted": 0.0131,
+          "measured": 0.0145,
+          "relativeError": 0.0966
+        }
+      ]
+    },
+    "formalReview": {
+      "verdict": "accepted-cad-part",
+      "massG": 46.87,
+      "deflectionMm": 0.058,
+      "checks": "9/9",
+      "referenceMassG": 48.37
+    },
+    "feedback": [
+      [
+        "blender-scene",
+        "collision-free",
+        "closed"
+      ],
+      [
+        "cad-part",
+        "max-deflection",
+        "closed"
+      ]
+    ],
+    "release": {
+      "number": "R1",
+      "maturity": "released",
+      "admission": "5/5"
+    },
+    "signature": "签名有效 · AWS KMS ECDSA P-256 · 20 个原生文件摘要一致 · 签名者已固定"
+  },
+  "notes": [
+    "The lightest feasible point came from a surrogate exploit step, not from an AI seed. All three AI seeds were slightly infeasible (measured 0.061–0.067 mm > 0.06 mm); the model under-estimated deflection by 10–14 %.",
+    "Rigid-body simulation and linear static FEA under nominal material; not physical validation or certification."
+  ]
+}

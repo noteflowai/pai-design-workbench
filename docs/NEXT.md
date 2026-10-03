@@ -31,7 +31,7 @@ The model proposes and the native solvers decide. This layer table follows the e
 | 3 High-fidelity solve | Structural done: Gmsh C3D10 + CalculiX, two-mesh convergence, in reviews and in the release gate | Next: OpenFOAM for flow; scale-out of solves on AWS Batch / ParallelCluster |
 | 4 Physics-AI surrogate | Partial: GP surrogate trained only on our own solver results, ranks candidates only, calibration and leave-one-out error reported | Next: PhysicsNeMo (Transolver / GeoTransolver) once a solver dataset exists (Batch-generated FEA; DrivAerML for aero) |
 | 5 Optimisation | Done: Optuna NSGA-II on the surrogate, multi-fidelity B-Rep screen, explore/exploit, solver re-measurement, formal review of the pick | Next: BoTorch qNEHVI for expensive multi-objective; topology optimisation |
-| 6 System / robot | Done: MuJoCo workcell (IK, dynamics, contacts, cycle time over paired seeds) | Next: CAD → URDF/MJCF of designed parts (gripper, camera bracket); OpenUSD scene as the twin source; Isaac Lab policy success |
+| 6 System / robot | Done: MuJoCo workcell (IK, dynamics, contacts, cycle time over paired seeds); accepted CAD parts mounted on the arm with exact-mesh mass/inertia cross-checked against the B-Rep; portable MJCF and OpenUSD (UsdPhysics bodies, joints, colliders; all 28 UsdValidation validators clean) | Next: Isaac Lab policy success on the exported USD; grasp physics instead of kinematic attachment |
 | 7 Manufacturability | Geometry rules (wall, hole edge, envelope) | Next: CAM/slicer CLI checks and cost |
 | 8 Evidence | Done: hash-bound bundles, EvalArc, release admission, KMS-signed release packages with in-UI and offline verification | Next: RFC 3161 trusted timestamps, S3 Object Lock retention of packages |
 

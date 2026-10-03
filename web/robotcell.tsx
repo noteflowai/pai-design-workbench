@@ -9,7 +9,8 @@ const Viewport = lazy(() => import("./viewport"));
 type Cell = { pickDistance: number; placeDistance: number; pickHeight: number; placeHeight: number; pedestalHeight: number; guardClearance: number; speedFraction: number; jitter: number };
 type Req = { maxCycleSeconds: number; minSuccessRate: number };
 type Trial = { seed: number; success: boolean; reached: boolean; collisionFree: boolean; cycleSeconds: number };
-export type RobotScene = SceneReview & { request: { variant: "robot-cell"; cell: Cell; requirements: Req } };
+type Tool = { cadReviewId: string; payloadKg: number };
+export type RobotScene = SceneReview & { request: { variant: "robot-cell"; cell: Cell; requirements: Req; tool?: Tool } };
 export const isRobotScene = (s?: SceneReview): s is RobotScene => s?.request.variant === "robot-cell";
 export const ROBOT_CHECK_LABELS: Record<string, string> = { reach: "机械臂可达", "collision-free": "运动无碰撞", "cycle-time": "节拍", "success-rate": "多种子成功率" };
 const REFERENCE: Cell = { pickDistance: 0.55, placeDistance: 0.55, pickHeight: 0.85, placeHeight: 0.85, pedestalHeight: 0.7, guardClearance: 0.4, speedFraction: 0.5, jitter: 0.03 };
@@ -21,13 +22,13 @@ const FIELDS: { k: keyof Cell; label: string; min: number; max: number; step: nu
   { k: "speedFraction", label: "关节速度", min: 10, max: 100, step: 1, unit: "%", scale: 100 }, { k: "jitter", label: "来料位置偏差 ±", min: 0, max: 80, step: 1, unit: "mm", scale: 1000 },
 ];
 
-export function runRobotCell(c: Ctx, cell: Cell, requirements: Req) {
+export function runRobotCell(c: Ctx, cell: Cell, requirements: Req, tool?: Tool) {
   const p = c.project!;
-  const requestId = requestIdFor(`pai-robot-${p.id}-${p.revision}-${JSON.stringify(cell)}-${JSON.stringify(requirements)}`);
+  const requestId = requestIdFor(`pai-robot-${p.id}-${p.revision}-${JSON.stringify(cell)}-${JSON.stringify(requirements)}-${JSON.stringify(tool ?? null)}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "blender-scene" });
     const s = await c.track(requestId, `MuJoCo 机器人工作单元 · 速度 ${Math.round(cell.speedFraction * 100)}%`, "blender-scene",
-      () => api<SceneReview>(`/projects/${p.id}/scenes`, { requestId, projectRevision: p.revision, variant: "robot-cell", cell, requirements }));
+      () => api<SceneReview>(`/projects/${p.id}/scenes`, { requestId, projectRevision: p.revision, variant: "robot-cell", cell, requirements, ...(tool ? { tool } : {}) }));
     c.navigate("validate", { kind: "blender-scene", id: s.id });
     if (s.state !== "completed") throw new Error(s.error ?? s.state);
   }, "MuJoCo 多种子仿真与独立对照已完成。");
@@ -39,6 +40,12 @@ export function RobotLaneCell() {
   const last = c.data.scenes.filter(s => s.projectId === c.project!.id && isRobotScene(s)).at(-1) as RobotScene | undefined;
   const [cell, setCell] = useState<Cell>(() => Object.fromEntries(Object.entries(last?.request.cell ?? REFERENCE).map(([k, v]) => [k, q.has(k) ? Number(q.get(k)) : v])) as Cell);
   const [req, setReq] = useState<Req>(last?.request.requirements ?? DEFAULT_REQ);
+  // Accepted CAD parts of this project can be mounted on the gripper (exact mesh mass/inertia, B-Rep cross-check).
+  const parts = (c.data.cads ?? []).filter(x => x.projectId === c.project!.id && x.verdict === "accepted-cad-part");
+  const [toolId, setToolId] = useState<string>(last?.request.tool?.cadReviewId ?? "");
+  const tool = parts.some(x => x.id === toolId) ? { cadReviewId: toolId, payloadKg: 0.28 } : undefined;
+  const partLabel = (x: (typeof parts)[number]) => { const m = x.candidate?.checks.find(k => k.id === "mass") as { observed?: number } | undefined;
+    return `cad-${(c.data.cads ?? []).filter(y => y.projectId === c.project!.id).indexOf(x) + 1} · ${x.request.variant}${m?.observed ? ` · ${m.observed} g` : ""}`; };
   if (!c.data.capabilities.physics) return <Card title="机器人工作单元（MuJoCo）"><p className="muted">未配置物理工具链：运行 npm run setup:physics。</p></Card>;
   return <Card title="机器人工作单元（MuJoCo 刚体动力学）" aside={<Chip tone="info">通用六轴臂 · UR5e 级连杆</Chip>}>
     <p className="muted">按参数生成 MJCF：六轴机械臂、底座、输送线取料点、工装放料点和四面围栏。用 10 个固定种子模拟来料位置偏差，每个种子都做逆运动学、五次多项式轨迹和 500 Hz 动力学仿真，
@@ -50,8 +57,13 @@ export function RobotLaneCell() {
       <label>节拍上限<span className="unit-input"><input type="number" aria-label="节拍上限" min={1} max={60} step={0.1} value={req.maxCycleSeconds} onChange={e => setReq({ ...req, maxCycleSeconds: Number(e.target.value) })} /><em>s</em></span></label>
       <label>成功率下限<span className="unit-input"><input type="number" aria-label="成功率下限" min={0} max={100} step={1} value={Math.round(req.minSuccessRate * 100)} onChange={e => setReq({ ...req, minSuccessRate: Number(e.target.value) / 100 })} /><em>%</em></span></label>
     </fieldset>
-    <div className="form-foot"><small>MuJoCo 3.14 · 逆运动学 + 动力学 · 10 个种子 · EvalArc 对照</small>
-      <button type="button" disabled={c.busy} onClick={() => void runRobotCell(c, cell, req)}>仿真并检查工作单元</button></div>
+    <fieldset className="field-grid"><legend>末端工装</legend>
+      <label>CAD 零件<select aria-label="末端工装 CAD 零件" value={tool ? toolId : ""} onChange={e => setToolId(e.target.value)}>
+        <option value="">默认夹爪（不加装）</option>{parts.map(x => <option key={x.id} value={x.id}>{partLabel(x)}</option>)}</select></label>
+      <p className="muted">装到夹爪侧面，加 0.28 kg NEMA 17 电机负载。质量和惯量取自已核验的 STL 精确体积，并与 B-Rep 质量交叉核对（差值 ≤ 3 %）；参考与候选工作单元使用同一工装。</p>
+    </fieldset>
+    <div className="form-foot"><small>MuJoCo 3.14 · 逆运动学 + 动力学 · 10 个种子 · EvalArc 对照 · 导出 MJCF 与 OpenUSD</small>
+      <button type="button" disabled={c.busy} onClick={() => void runRobotCell(c, cell, req, tool)}>仿真并检查工作单元</button></div>
   </Card>;
 }
 
@@ -92,7 +104,10 @@ export function RobotDetail({ scene, Receipts }: { scene?: RobotScene; Receipts:
           return <tr key={t.seed} className={b?.success && !t.success ? "fail" : ""}><td>{t.seed}</td><td>{b ? (b.success ? "✓" : "×") : "—"}</td>
             <td>{t.success ? "✓" : `× ${!t.reached ? "不可达" : !t.collisionFree ? "碰撞" : "超节拍"}`}</td><td>{t.cycleSeconds}</td></tr>; })}</tbody></table></div>
       <div className="button-row"><a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.xml`}>下载 MJCF（scene.xml）</a>
+        <a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.usda`}>下载 OpenUSD（UsdPhysics）</a>
         <a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/robot.json`}>下载逐种子结果</a></div>
+      {(scene.tool || scene.usd) && <p className="muted">{scene.tool && <>末端工装：CAD 零件 STL {scene.tool.stlSha256.slice(0, 12)}…，B-Rep {scene.tool.brepMassG} g / MuJoCo 网格 {scene.tool.mujocoMassG ?? "—"} g，负载 {scene.tool.payloadKg} kg。</>}
+        {scene.usd && <>OpenUSD {scene.usd.usdVersion}：{scene.usd.rigidBodies} 个刚体、{scene.usd.joints.length} 个关节，{scene.usd.validators} 个 UsdValidation 校验器无错误，可导入 Isaac Sim / Omniverse。</>}</p>}
       <Receipts value={{ request: scene.request, requirementDigest: scene.requirementDigest, receipts: scene.receipts, files: scene.files }} />
     </>}
   </>;

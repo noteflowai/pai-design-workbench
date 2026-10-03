@@ -1,4 +1,4 @@
-# Physics lane (FEA meshing, multi-objective optimization, ranking surrogate, rigid-body simulation).
+# Physics lane (FEA meshing, multi-objective optimization, ranking surrogate, rigid-body simulation, OpenUSD export).
 # Exact pins; regenerate native/physics-requirements.txt with:
 #   uv pip compile --python-version 3.12 --python-platform x86_64-manylinux_2_31 --generate-hashes native/physics-requirements.in -o native/physics-requirements.txt
 gmsh==4.15.2
@@ -7,3 +7,4 @@ scikit-learn==1.9.1
 mujoco==3.14.0
 numpy==2.5.3
 scipy==1.18.1
+usd-core==26.8

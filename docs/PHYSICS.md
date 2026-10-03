@@ -90,3 +90,25 @@ Feedback is closed by that recheck. Scope: a rigid-body simulation of a generic 
 ## Scope
 
 Linear static, small deformation, nominal material. Not included: contact, bolt preload, fatigue, thermal effects, tolerances, or test data. Results are simulation evidence, not certification.
+
+## CAD → MJCF / OpenUSD
+
+A robot-cell request may carry `tool: { cadReviewId, payloadKg }`. The server accepts only a completed, accepted CAD
+review of the same project and checks the STL against the digest that review recorded. `native/robot_sim.py` then:
+
+- mounts the exact STL on the gripper as a mesh body, with mass and inertia from the exact (non-convex) mesh volume
+  (`inertia="exact"`, 2.70 g/cm³) and collisions on its convex hull, plus the declared payload (default: a 0.28 kg
+  NEMA 17 motor) on the motor axis;
+- fails closed if the mesh mass differs from the B-Rep mass by more than 3 %. The default convex-hull inertia gave
+  110 g for a 31.85 g part, which is what this check exists to catch;
+- uses the same tool for the reference and the candidate, so EvalArc compares cells, not tools;
+- writes `scene.xml` that references `tool.stl` beside it, so the MJCF carries no local paths and reloads elsewhere;
+- writes `scene.usda`: Z-up, metres, one rigid body per MuJoCo body with `MassAPI` (mass, centre of mass, diagonal
+  inertia and principal axes), collision shapes (mesh colliders as convex hulls), six revolute joints with limits,
+  fixed joints for welded bodies, and an articulation root. Every registered OpenUSD 26.8 `UsdValidation` validator
+  runs on the reopened stage, including the UsdPhysics rigid-body, joint, articulation and collider checks. Any
+  error or warning fails the run.
+
+`npm run test:robot` mounts the reference bracket (B-Rep 48.37 g, MuJoCo mesh 48.37 g). It checks that the MJCF is
+portable, that the USD has the physics joints and articulation root, and that a part that is not accepted is refused
+(`TOOL_NOT_ACCEPTED`).
