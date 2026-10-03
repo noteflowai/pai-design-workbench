@@ -259,7 +259,7 @@ test("parametric CAD part: live B-Rep build, measured DFM failure, drawings and 
   const step = await page.request.get(await page.getByRole("link", { name: "下载可编辑 STEP" }).getAttribute("href") as string);
   expect(step.status()).toBe(200); expect((await step.text()).startsWith("ISO-10303-21")).toBe(true);
   await page.getByRole("button", { name: /记录反馈：CAD 最小壁厚/ }).click();
-  await advance(page, ["记录复现", "分配处理", "提出回退方案", "恢复基准参数并复测", "关闭已复测反馈"], 180_000);
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "按修正方案复测", "关闭已复测反馈"], 180_000);
   const latest = await (await page.request.get("/api/state")).json();
   const mine = latest.cads.filter((c: { projectId: string }) => c.projectId === latest.projects.at(-1).id);
   expect(mine.map((c: { verdict: string }) => c.verdict).sort()).toEqual(["accepted-cad-part", "rejected"]);
@@ -289,7 +289,7 @@ test("release gate: blocked until failures are closed, approval, compare matrix 
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
   await rail(page, /反馈复测/).click();
   await page.getByRole("button", { name: /记录反馈：CAD 最小壁厚/ }).click();
-  await advance(page, ["记录复现", "分配处理", "提出回退方案", "恢复基准参数并复测"], 180_000);
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "按修正方案复测"], 180_000);
   // Passing recheck exists but its feedback is still open: admission must block the release.
   await rail(page, /发布交付/).click();
   const gate = page.getByLabel("发布准入检查");

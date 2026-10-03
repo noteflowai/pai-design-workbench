@@ -91,7 +91,7 @@ export const nextStatus = (f: Feedback) => ({ received: "reproducible", "needs-c
   assigned: f.evidenceKind === "factory-twin" ? "no-change-with-reason" : "fix-proposed", rechecked: "closed" } as Record<string, string>)[f.status];
 export const feedbackAction = (f: Feedback, generated = false) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
   assigned: f.evidenceKind === "factory-twin" ? "记录保留原因" : "提出回退方案",
-  "fix-proposed": f.evidenceKind === "blender-scene" ? "按修正方案复测" : f.evidenceKind === "cad-part" ? (generated ? "修订代码并复测" : "恢复基准参数并复测") : "回退基准并复测", "no-change-with-reason": "复测保留方案",
+  "fix-proposed": f.evidenceKind === "blender-scene" ? "按修正方案复测" : f.evidenceKind === "cad-part" ? (generated ? "修订代码并复测" : "按修正方案复测") : "回退基准并复测", "no-change-with-reason": "复测保留方案",
   rechecked: "关闭已复测反馈" } as Record<string, string>)[f.status];
 export const defaultReason = (f: Feedback, generated = false) => ({
   received: "已按原始证据复现该失败案例。", "needs-context": "补充上下文后已复现。", reproducible: "分配给维护者处理。",

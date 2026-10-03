@@ -8,12 +8,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
-import { DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
+import { DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
 import { verifyPackage, type ReleasePackage } from "../src/signing.js";
 import type { Project } from "../src/contracts.js";
 
 const config = configuration();
-assert.ok(config.cadquery, "Run npm run setup:cad");
+assert.ok(config.cadquery && config.physicsPython && config.ccx, "Run npm run setup:cad and npm run setup:physics");
 const state = join(config.state, "package-e2e", randomUUID());
 const { app } = await createApp({ ...config, state });
 const host = `127.0.0.1:${config.port}`;
@@ -24,7 +24,7 @@ const req = async <T>(method: "POST" | "PATCH" | "GET", url: string, payload?: u
 try {
   const project = await req<Project>("POST", "/api/projects", { title: "Release a bracket", intendedDecision: "Adopt the reference bracket within its evidence scope",
     requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
-  const cad = await req<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: DEFAULT_CAD_REQUIREMENTS });
+  const cad = await req<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL } });
   assert.equal(cad.verdict, "accepted-cad-part");
   const rel = await req<{ id: string; revision: number; number: string }>("POST", `/api/projects/${project.id}/releases`,
     { requestId: randomUUID(), projectRevision: 1, evidenceKind: "cad-part", runId: cad.id, title: "Reference bracket" });
@@ -33,9 +33,12 @@ try {
   await req("PATCH", `/api/projects/${project.id}/releases/${rel.id}`, { expectedRevision: rel.revision, decision: "approve", reason: "All admission checks pass" });
   const pkg = await req<ReleasePackage>("GET", `/api/releases/${rel.id}/package`);
   const key = await req<{ publicKeyPem: string; keyId: string; algorithm: string }>("GET", "/api/signing/public-key");
+  // With FEA results the package is far above the global 4 MB body limit; the verify route has its own limit.
+  assert.ok(JSON.stringify(pkg).length > 4_000_000, "package carries the FEA result files");
   const result = await req<ReturnType<typeof verifyPackage>>("POST", "/api/packages/verify", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
   assert.equal(result.valid, true); assert.equal(result.signer.trusted, true);
   assert.ok(Object.keys(pkg.files).some(f => f.endsWith("part.step")), "native STEP is inside the package");
+  assert.ok(Object.keys(pkg.files).some(f => f.endsWith("bracket-fine.frd")), "CalculiX results are inside the package");
   const offline = verifyPackage(pkg, key.publicKeyPem);
   const tampered = structuredClone(pkg); const step = Object.keys(tampered.files).find(f => f.endsWith("part.step"))!;
   tampered.files[step].contentBase64 = Buffer.from("tampered").toString("base64");

@@ -10,7 +10,7 @@ import { configuration, type Config } from "./config.js";
 import { Candidate, CreateProject, Id } from "./contracts.js";
 import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
-import { buildPackage, signer, verifyPackage } from "./signing.js";
+import { buildPackage, MAX_PACKAGE_BYTES, signer, verifyPackage } from "./signing.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -170,7 +170,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return pkg;
   });
   app.get("/api/signing/public-key", async () => { const s = await signer(config); return { keyId: s.keyId, algorithm: s.algorithm, publicKeyPem: s.publicKeyPem }; });
-  app.post("/api/packages/verify", async request => {
+  // Packages carry base64 native files (FEA results are several MB): this route alone accepts up to the package cap.
+  app.post("/api/packages/verify", { bodyLimit: Math.ceil(MAX_PACKAGE_BYTES * 1.4) + 1_000_000 }, async request => {
     const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
     return verifyPackage(body.package, body.trustedPublicKeyPem);
   });
