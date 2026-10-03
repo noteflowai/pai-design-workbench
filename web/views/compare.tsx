@@ -2,6 +2,7 @@ import { CAD_CHECK_LABELS, CAD_VARIANTS, CANDIDATES, KIND_LABEL, useApp, type Ru
 import { Card, Chip, projectRuns, time, verdictOf } from "../ui";
 import { CHECK_LABELS } from "../factory";
 import { PLANT_CHECK_LABELS } from "../plant";
+import { ROBOT_CHECK_LABELS } from "../robotcell";
 
 const SCENE: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机射线可见性" };
 const ROBOT: Record<string, string> = { "minimum-recorded-success": "最低成功率", "preserve-baseline-success": "基准成功保留", "independent-improvement": "统计改善要求" };
@@ -12,8 +13,8 @@ type Column = { id: string; title: string; verdict: { label: string; tone: Retur
 export function CompareCandidates({ kind, selected }: { kind: RunKind; selected?: string }) {
   const c = useApp(), p = c.project!;
   // Plant layouts and workcells are different recipes with different checks: compare within one family.
-  const plantOf = (id?: string) => c.data.scenes.find(s => s.id === id)?.request.variant === "plant";
-  const runs = projectRuns(c.data, p.id).filter(r => r.kind === kind && r.state === "completed" && (kind !== "blender-scene" || plantOf(r.id) === plantOf(selected))).slice(0, 6);
+  const family = (id?: string) => { const v = c.data.scenes.find(s => s.id === id)?.request.variant; return v === "plant" || v === "robot-cell" ? v : "workcell"; };
+  const runs = projectRuns(c.data, p.id).filter(r => r.kind === kind && r.state === "completed" && (kind !== "blender-scene" || family(r.id) === family(selected))).slice(0, 6);
   if (runs.length < 2) return null;
   let rows: [string, string][] = [];
   const columns: Column[] = runs.map(r => {
@@ -32,9 +33,16 @@ export function CompareCandidates({ kind, selected }: { kind: RunKind; selected?
         return { ...base, title: `${x.request.layout.stations} 工位 · 通道 ${x.request.layout.aisleWidth} m`, cells: Object.fromEntries(x.candidate!.checks.map(k => [k.id, k.passed])),
           metrics: [["厂房占地", `${m["footprint-area"]} m²`], ["通道净宽", `${m["aisle-clearance"]} m`], ["围栏间距", `${m["guard-clearance"]} m`]] };
       }
+      if (x.request.variant === "robot-cell") {
+        rows = Object.entries(ROBOT_CHECK_LABELS);
+        const m = Object.fromEntries(x.candidate!.checks.map(k => [k.id, (k as { observed?: number }).observed]));
+        return { ...base, title: `速度 ${Math.round(x.request.cell.speedFraction * 100)}% · 围栏 ${x.request.cell.guardClearance} m`, cells: Object.fromEntries(x.candidate!.checks.map(k => [k.id, k.passed])),
+          metrics: [["成功率", `${Math.round(Number(m["success-rate"] ?? 0) * 100)}%`], ["节拍", `${m["cycle-time"] ?? "—"} s`], ["丢失检查", `${x.diff?.blocking_changes ?? "—"}`]] };
+      }
+      const req = x.request.requirements as { maxFootprintArea: number };
       rows = Object.entries(SCENE);
       return { ...base, title: x.request.variant === "occluded" ? "带遮挡" : "无遮挡", cells: Object.fromEntries(x.candidate!.checks.map(k => [k.id, k.passed])),
-        metrics: [["占地上限", `${x.request.requirements.maxFootprintArea} m²`], ["首个命中", x.rays?.candidate?.firstHit ?? "—"]] };
+        metrics: [["占地上限", `${req.maxFootprintArea} m²`], ["首个命中", x.rays?.candidate?.firstHit ?? "—"]] };
     }
     if (kind === "factory-twin") {
       const x = (c.data.factoryReviews ?? []).find(y => y.id === r.id)!;

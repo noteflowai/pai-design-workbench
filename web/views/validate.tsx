@@ -12,6 +12,7 @@ import { CAD_CHECK_LABELS, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import { CheckTable, type MeasuredCheck } from "../ui";
 import { CompareCandidates } from "./compare";
 import { isPlantScene, PlantDetail } from "../plant";
+import { isRobotScene, RobotDetail } from "../robotcell";
 
 const Viewport = lazy(() => import("../viewport"));
 
@@ -122,7 +123,7 @@ function CadDetail({ cad }: { cad?: CadReview }) {
   const shownModel = model && fea && stressView ? { ...model, stages: [], finalUrl: `/api/cad/${cad!.id}/files/${which}/fea.glb`, title: `${model.title} · von Mises` } : model;
   return <>
     <Verdict tone={v.tone} eyebrow={`参数化 CAD · NEMA 17 电机支架${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
-      detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何，不含 FEA 或实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
+      detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何${cad.fea ? "；结构检查为 CalculiX 线性静力 FEA" : "，未冻结结构要求（无 FEA）"}，不含实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
     <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={shownModel} /></Suspense>
     {fea && <div className="fea-bar" role="group" aria-label="FEA 结果">
       <label className="check"><input type="checkbox" checked={stressView} onChange={e => setStressView(e.target.checked)} />显示 von Mises 应力云图（变形放大 {fea.displayScale}×）</label>
@@ -179,6 +180,7 @@ export function Validate() {
         {detailKind === "blender-scene" && (() => {
           const scene = selected ? c.data.scenes.find(s => s.id === selected.id) : undefined;
           const plant = scene ? isPlantScene(scene) : session?.kind === "blender-scene" && (session.title.includes("工厂产线") || session.steps.some(x => x.label.includes("产线")));
+          if (isRobotScene(scene) || (!scene && session?.kind === "blender-scene" && session.title.includes("MuJoCo"))) return <RobotDetail scene={isRobotScene(scene) ? scene : undefined} Receipts={Receipts} />;
           return plant ? <PlantDetail scene={isPlantScene(scene) ? scene : undefined} Receipts={Receipts} /> : <SceneDetail scene={scene} />;
         })()}
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}

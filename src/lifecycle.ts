@@ -40,7 +40,8 @@ const VERDICT: Record<string, string> = { "accepted-in-recorded-panel": "记录�
 const FACTORY_CHECK: Record<string, string> = { "output-per-seed": "单种子产出", "demand-intervals": "需量超限", "hall-comfort": "车间舒适度",
   "ev-service": "EV 充电服务", "closed-failures": "闭环故障" };
 const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性",
-  "aisle-clearance": "AGV 通道净宽", "guard-clearance": "围栏安全间距", "camera-coverage": "检测相机覆盖", "egress-travel": "疏散距离" };
+  "aisle-clearance": "AGV 通道净宽", "guard-clearance": "围栏安全间距", "camera-coverage": "检测相机覆盖", "egress-travel": "疏散距离",
+  reach: "机械臂可达（MuJoCo）", "collision-free": "运动无碰撞（MuJoCo）", "cycle-time": "节拍（MuJoCo）", "success-rate": "多种子成功率（MuJoCo）" };
 const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络", "max-deflection": "电机轴挠度（FEA）", "max-stress": "峰值应力（FEA）" };
 export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", parametric: "参数化", generated: "生成代码" };
@@ -139,7 +140,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   for (const c of s.factoryCriteria) activity.push({ at: c.createdAt, stage: "requirements", label: "冻结工厂验收标准", detail: `摘要 ${c.digest.slice(0, 8)} · ${c.rationale}` });
   for (const p of s.plans) activity.push({ at: p.createdAt, stage: "design", label: "AI 助手生成计划", detail: p.message, ref: { kind: "plan", id: p.id } });
   for (const r of s.reviews) activity.push({ at: r.createdAt, stage: "validate", label: `Robot Reel 验证 · ${CANDIDATE[r.candidate]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.decision ? VERDICT[r.decision.verdict] : r.state, ref: { kind: "robot-review", id: r.id } });
-  for (const r of s.scenes) activity.push({ at: r.createdAt, stage: "validate", label: `Blender ${r.request.variant === "plant" ? `工厂产线 · ${r.request.layout.stations} 工位` : `场景 · ${r.request.variant === "occluded" ? "带遮挡" : "无遮挡"}`}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] : r.state, ref: { kind: "blender-scene", id: r.id } });
+  for (const r of s.scenes) activity.push({ at: r.createdAt, stage: "validate", label: r.request.variant === "robot-cell" ? `MuJoCo 机器人工作单元 · 速度 ${Math.round(r.request.cell.speedFraction * 100)}%` : `Blender ${r.request.variant === "plant" ? `工厂产线 · ${r.request.layout.stations} 工位` : `场景 · ${r.request.variant === "occluded" ? "带遮挡" : "无遮挡"}`}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] : r.state, ref: { kind: "blender-scene", id: r.id } });
   for (const r of s.cads ?? []) activity.push({ at: r.createdAt, stage: "validate", label: `CAD 零件 · ${CAD_VARIANT[r.request.variant]}${r.feedbackId ? "（反馈复测）" : ""}`, detail: r.verdict ? VERDICT[r.verdict] ?? r.verdict : r.state, ref: { kind: "cad-part", id: r.id } });
   for (const r of s.factoryReviews) activity.push({ at: r.createdAt, stage: "validate", label: `工厂孪生评估${r.feedbackId ? "（反馈复测）" : ""}`, detail: `${VERDICT[r.verdict]} · 标准 ${r.criteriaDigest.slice(0, 8)}`, ref: { kind: "factory-twin", id: r.id } });
   for (const f of s.feedback) for (const h of f.history) activity.push({ at: h.at, stage: "feedback", label: `反馈${STATUS[h.status]}`, detail: h.reason, ref: { kind: "feedback", id: f.id } });

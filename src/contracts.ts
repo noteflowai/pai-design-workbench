@@ -25,7 +25,7 @@ export const CreateFeedback = z.object({
   runId: Id,
   kind: z.enum(["regression", "design-check", "usability", "evidence", "value"]),
   evidenceKind: z.enum(["robot-review", "blender-scene", "factory-twin", "cad-part"]).default("robot-review"),
-  checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel",
+  checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel", "reach", "collision-free", "cycle-time", "success-rate",
     "output-per-seed", "demand-intervals", "hall-comfort", "ev-service", "closed-failures",
     "solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope", "max-deflection", "max-stress"]).optional(),
   // Robot panels use seeds 0–9; Factory Twin panels use their own recorded seed IDs.

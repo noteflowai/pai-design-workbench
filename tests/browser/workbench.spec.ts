@@ -590,3 +590,34 @@ test("factory production line: native Blender build streams into the viewport, r
   await page.screenshot({ path: testInfo.outputPath("plant-mobile.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
+
+test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell with paired seeds", async ({ page }, testInfo) => {
+  test.setTimeout(900_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.physics) throw new Error("The pinned physics toolchain is required for this integration check");
+  await createProject(page);
+  await page.goto("/#/design?lane=robotcell");
+  await page.getByLabel("关节速度", { exact: true }).fill("75");
+  await page.getByLabel("围栏离最远工位", { exact: true }).fill("0.12");
+  await page.getByLabel("节拍上限", { exact: true }).fill("5");
+  await page.getByRole("button", { name: "仿真并检查工作单元" }).click();
+  await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible({ timeout: 300_000 });
+  const fail = page.locator(".check-table tr.fail");
+  await expect(fail.filter({ hasText: "运动无碰撞" })).toHaveCount(1);
+  await expect(page.locator(".viewport")).toHaveAttribute("data-objects", /[1-9]/, { timeout: 60_000 });
+  await expect(page.getByRole("table", { name: "配对种子（同一来料偏差）" }).locator("tbody tr")).toHaveCount(10);
+  await page.screenshot({ path: testInfo.outputPath("robot-cell.png") });
+  await page.goto("/#/design?lane=cad");
+  await page.getByRole("radio", { name: /紧凑化/ }).click();
+  await expect(page.getByLabel("电机轴挠度上限", { exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 600_000 });
+  await expect(page.locator(".check-table")).toContainText("电机轴挠度（FEA）");
+  await expect(page.getByRole("group", { name: "FEA 结果" })).toContainText("CalculiX");
+  await expect(page.locator(".viewport")).toHaveAttribute("data-objects", /[1-9]/, { timeout: 60_000 });
+  await page.screenshot({ path: testInfo.outputPath("fea-view.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  expect(errors).toEqual([]);
+});

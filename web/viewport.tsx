@@ -200,7 +200,10 @@ export default function Viewport({ model }: { model?: ViewportModel }) {
       for (const material of Array.isArray(m.material) ? m.material : [m.material]) {
         const standard = material as THREE.MeshStandardMaterial;
         standard.wireframe = wire;
-        standard.transparent = xray; standard.opacity = xray ? 0.32 : 1; standard.depthWrite = !xray;
+        // Respect authored transparency (e.g. guard mesh panels); X-ray only makes things more transparent.
+        if (standard.userData.baseOpacity === undefined) standard.userData.baseOpacity = standard.opacity;
+        const base = Number(standard.userData.baseOpacity);
+        standard.opacity = xray ? Math.min(0.32, base) : base; standard.transparent = xray || base < 1; standard.depthWrite = !(xray || base < 1);
         if (standard.emissive && selected !== undefined) standard.emissiveIntensity = name === selected ? 1 : 0;
         if (standard.emissive && name === selected) standard.emissive.setRGB(0.1, 0.35, 0.3);
         else if (standard.emissive && selected !== undefined) standard.emissive.setRGB(0, 0, 0);

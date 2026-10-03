@@ -20,7 +20,7 @@ import { CadRequest, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 export const AssistantInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
 }).strict();
-export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "plant-layout" | "robot-review" | "cad-review" | "cad-code" | "cad-sweep" | "cad-optimize"
+export type PlanTool = "create-project" | "update-requirements" | "scene-review" | "plant-layout" | "robot-cell" | "robot-review" | "cad-review" | "cad-code" | "cad-sweep" | "cad-optimize"
   | "factory-criteria" | "factory-review" | "model-proposal";
 export interface PlanChange { field: string; from: unknown; to: unknown; direction: "new" | "same" | "tightened" | "relaxed" | "changed" }
 export interface ToolPlan {
@@ -289,7 +289,7 @@ export function confirmPlan(store: Store, planId: string, input: unknown): Assis
   if (!step) throw new DomainError("NOT_FOUND", "Plan step not found", 404);
   // Plans from a model run are usable only when its effects are verified or a human has reconciled them.
   preflightPlan(store, planId, change.planId);
-  const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-review": "review",
+  const expectedKind = ({ "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-cell": "scene-review", "robot-review": "review",
     "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-review": "cad-review", "cad-code": "cad-review", "cad-sweep": "cad-sweep", "cad-optimize": "cad-optimize" } as const)[step.tool];
   if (expectedKind !== change.recordKind) throw new DomainError("PLAN_KIND_MISMATCH", "Executed record kind differs from the plan step", 422);
   const record = store.get<Record<string, unknown>>(change.recordKind, change.recordId);

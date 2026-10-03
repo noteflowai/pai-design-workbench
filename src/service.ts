@@ -12,7 +12,7 @@ import { factoryCaseText, FACTORY_CHECKS, type FactoryReview, type FactoryCheckI
 import type { LiveBus } from "./live.js";
 import { CAD_CHECKS, cadCaseText, type CadReview } from "./cad.js";
 
-const SCENE_CHECKS = ["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel"];
+const SCENE_CHECKS = ["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel", "reach", "collision-free", "cycle-time", "success-rate"];
 
 export class Workbench {
   constructor(public store: Store, public adapters: Adapters, public stateDirectory: string, public live?: LiveBus) {}

@@ -8,7 +8,7 @@ import type { Config } from "./config.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
-import { DEFAULT_PLANT_REQUIREMENTS, isPlant, PlantLayout, PlantRequirements, SceneRequest, SceneRequirements,
+import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
 import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
@@ -32,7 +32,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -44,6 +44,7 @@ const ModelPayload = {
   "robot-review": z.object({ candidate: Candidate }).strict(),
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
   "plant-layout": z.object({ layout: PlantLayout, requirements: PlantRequirements.partial().default({}) }).strict(),
+  "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}) }).strict(),
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
@@ -59,6 +60,10 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "plant-layout": "Blender 工厂产线布局（原生生成并用射线实测）。layout 全部 7 个字段必填：stations 3–8 整数、stationPitch 3.5–7、aisleWidth 1.2–4.5、guardSize 2.6–5、rackRows 1–4 整数、cameraHeight 2.4–6.5、agvs 0–4 整数（米）。"
     + "配方几何：厂房 X = stations×stationPitch+12，Y = 10.95+aisleWidth+1.35×rackRows，占地 = X×Y；货架面按参考围栏 3.6 m 排布，所以实测通道净宽 ≈ aisleWidth − (guardSize−3.6)/2 − 0.035；"
     + "围栏安全间距 ≈ guardSize/2 − 0.02 − 1.45（声明的机器人包络）；guardSize 不宜超过 stationPitch。requirements 可只写要改的字段；结论只来自原生检查",
+  "robot-cell": "MuJoCo 机器人工作单元（通用六轴臂，UR5e 级连杆：上臂 0.425 m、前臂 0.392 m，最大伸展约 0.95 m）。cell 全部 8 个字段必填（米，speedFraction 为额定关节速度的比例）："
+    + "pickDistance/placeDistance 0.25–1.1、pickHeight/placeHeight 0.6–1.2、pedestalHeight 0.3–1、guardClearance 0.1–1.5（围栏离最远工位）、speedFraction 0.1–1、jitter 0–0.08（来料偏差）。"
+    + "10 个种子逐一做 IK、五次多项式轨迹与 500 Hz 动力学；检查 reach、collision-free、cycle-time（≤ maxCycleSeconds）、success-rate（≥ minSuccessRate）。经验：参考单元速度 50% 时节拍约 5.9 s，"
+    + "节拍大致与 1/speedFraction 成正比（加上约 0.3 s 稳定时间）；guardClearance < 0.2 m 时肘部会碰到围栏；工位距离 > 0.9 m 时 IK 不可达",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
   "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
   "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
@@ -82,7 +87,8 @@ const ModelOutput = z.object({
 }).passthrough();
 
 type Handle = { kind: string; id: string; label: string };
-export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
+export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
+  lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements> } }; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
   cadCode?: { template: string } }
 export interface ContextOptions { cadCode?: { template: string } }
@@ -110,6 +116,10 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     return { handle: h, at: s.createdAt, state: s.state, verdict: s.verdict, variant: s.request.variant, requirements: s.request.requirements, revision: s.projectRevision,
       failed: s.candidate?.checks.filter(c => !c.passed).map(c => c.id), firstHit: s.rays?.candidate?.firstHit ?? null, recheck: Boolean(s.feedbackId),
       // Plant layouts: the layout and every measured value, so the planner reasons on native numbers rather than guesses.
+      ...(s.request.variant === "robot-cell" ? { cell: s.request.cell,
+        measured: s.candidate?.checks.map(c => ({ id: c.id, passed: c.passed, observed: (c as { observed?: unknown }).observed, required: (c as { required?: unknown }).required })),
+        lostBaselineSeeds: ((s.baseline as { trials?: { seed: number; success: boolean }[] } | undefined)?.trials ?? [])
+          .filter(b => b.success && (s.candidate as { trials?: { seed: number; success: boolean }[] } | undefined)?.trials?.find(t => t.seed === b.seed)?.success === false).map(b => b.seed) } : {}),
       ...(s.request.variant === "plant" ? { layout: s.request.layout,
         measured: s.candidate?.checks.map(c => ({ id: c.id, passed: c.passed, observed: (c as { observed?: unknown }).observed, required: (c as { required?: unknown }).required })),
         derived: (s.candidate as { derived?: unknown } | undefined)?.derived } : {}) };
@@ -146,6 +156,7 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
   return { project, handles, workspace, cadCode: options.cadCode,
     lastScene: store.list<SceneReview>("scene-review").filter((s): s is WorkcellScene => s.projectId === project.id && !isPlant(s)).at(-1),
     lastPlant: store.list<SceneReview>("scene-review").filter((s): s is PlantScene => s.projectId === project.id && isPlant(s)).at(-1),
+    lastRobot: store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id && isRobotCell(s)).at(-1) as AiContext["lastRobot"],
     lastCad: store.list<CadReview>("cad-review").filter(s => s.projectId === project.id).at(-1),
     lastCriteria: store.list<FactoryCriteria>("factory-criteria").filter(s => s.projectId === project.id).at(-1) };
 }
@@ -236,6 +247,20 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       { field: "variant", from: context.lastScene?.request.variant ?? null, to: p.variant, direction: context.lastScene ? (context.lastScene.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `Blender 原生场景：${p.variant === "occluded" ? "带遮挡候选" : "无遮挡布局"}`, route: route("scenes"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "原生 .blend/GLB/PNG、射线与投影检查、EvalArc 对照；逐阶段实时几何" };
+  }
+  if (t === "robot-cell") {
+    const p = parsed as { cell: z.infer<typeof RobotCell>; requirements: Partial<z.infer<typeof RobotRequirements>> };
+    const prev = context.lastRobot?.request;
+    const requirements = RobotRequirements.parse({ ...(prev?.requirements ?? DEFAULT_ROBOT_REQUIREMENTS), ...p.requirements });
+    const payload = { projectRevision: opts.revision, variant: "robot-cell" as const, cell: p.cell, requirements };
+    SceneRequest.parse({ ...payload, requestId: placeholder });
+    const changes: PlanChange[] = [
+      ...Object.keys(p.cell).map(k => { const from = (prev?.cell as Record<string, number> | undefined)?.[k] ?? null, to = (p.cell as Record<string, number>)[k];
+        return { field: `cell.${k}`, from, to, direction: prev ? (from === to ? "same" : "changed") : "new" } as PlanChange; }),
+      compare("maxCycleSeconds", prev?.requirements.maxCycleSeconds, requirements.maxCycleSeconds, "lower"),
+      compare("minSuccessRate", prev?.requirements.minSuccessRate, requirements.minSuccessRate, "higher")];
+    return { ...base, title: opts.title ?? `MuJoCo 工作单元：速度 ${Math.round(p.cell.speedFraction * 100)}% · 围栏 ${p.cell.guardClearance} m`, route: route("scenes"), method: "POST", payload, changes,
+      warnings: [...relaxWarning(changes), ...note], evidence: "MuJoCo 逐种子 IK、动力学与接触；可达、碰撞、节拍、成功率；EvalArc 对照；MJCF 可下载" };
   }
   if (t === "plant-layout") {
     const p = parsed as { layout: z.infer<typeof PlantLayout>; requirements: Partial<z.infer<typeof PlantRequirements>> };

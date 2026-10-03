@@ -54,6 +54,39 @@ Physics changes the decision: the geometry-only optimum is too flexible. Widenin
 
 **AI physical reasoning, scored.** An AI planner can propose `cad-optimize` seeds together with its own first-principles estimate (`expectedDeflectionMm`, `expectedMassG`). The tool description gives the scaling laws and the recipe's edge-distance rules. The solver's result scores each estimate, and the score is shown in the panel and stored in the record. In the native test, a model seed at t 3.8, W 57, H 45 was predicted at 0.055 mm and measured at 0.052 mm, a 6 % error. At 43.2 g it is 11 % lighter than the reference and passes all 9 checks.
 
+## Robot workcell simulation (MuJoCo, scene variant `robot-cell`)
+
+`native/robot_sim.py` generates an MJCF model from eight bounded parameters (no user XML):
+
+- a generic 6-axis arm with UR5e-class link lengths from the public datasheet, on a pedestal;
+- a conveyor pick station and a fixture place station;
+- four guard panels.
+
+The arm runs 10 fixed seeds, each with a seeded jitter on the pick pose. For each seed:
+
+1. Damped least-squares IK on the MuJoCo Jacobian, within joint limits.
+2. A joint-space quintic trajectory at the configured fraction of rated joint speed: approach → pick → lift → transfer → place → retract.
+3. Position actuators driven with full rigid-body dynamics at 500 Hz, with contact detection between arm links and the static scene.
+
+| Check | Measured |
+|---|---|
+| `reach` | TCP error ≤ 2 mm at pick and place, every seed |
+| `collision-free` | No arm-link contact with guards, conveyor frame or fixture during the motion |
+| `cycle-time` | Slowest seed's cycle including settling, ≤ `maxCycleSeconds` |
+| `success-rate` | Share of seeds that reach, stay collision-free and meet the cycle, ≥ `minSuccessRate` |
+
+The baseline is the reference cell. Both cells run the same seeds, and the validate view shows the paired seed table (Robot Reel style: a lost baseline success is flagged). EvalArc compares the four checks. Artefacts: `scene.xml` (the exact MJCF, which opens in MuJoCo viewer or can be converted for Isaac), `robot.json` (per-seed results) and `robot.glb`.
+
+Measured (`npm run test:robot`), with the target raised to a 5 s cycle:
+
+| Cell | Result |
+|---|---|
+| Reference at 50 % speed | 5.90 s, fails the new target |
+| Faster cell (75 %) with guards pulled in to 0.12 m | 4.60 s, but the elbow hits the guard on every seed: rejected |
+| Same speed with guards at 0.30 m | 4.60 s, 10/10 seeds: accepted (22 % faster than the reference) |
+
+Feedback is closed by that recheck. Scope: a rigid-body simulation of a generic arm and controller; the part is attached kinematically. It is not the vendor's controller, a safety assessment, or a grasp-physics model.
+
 ## Scope
 
 Linear static, small deformation, nominal material. Not included: contact, bolt preload, fatigue, thermal effects, tolerances, or test data. Results are simulation evidence, not certification.

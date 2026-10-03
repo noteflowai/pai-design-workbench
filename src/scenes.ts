@@ -37,11 +37,22 @@ export const PlantRequirements = z.object({
 /** Reference line used as the baseline of every plant review; it is measured natively like any candidate. */
 export const PLANT_REFERENCE: z.infer<typeof PlantLayout> = { stations: 4, stationPitch: 5, aisleWidth: 3.2, guardSize: 4.0, rackRows: 2, cameraHeight: 4.5, agvs: 2 };
 export const DEFAULT_PLANT_REQUIREMENTS: z.infer<typeof PlantRequirements> = { maxFootprintArea: 650, minAisleWidth: 2.4, minGuardClearance: 0.5, requireCameraCoverage: true, maxEgressTravel: 25 };
+/** Robot workcell for MuJoCo (generic 6-axis arm, UR5e-class link lengths): bounded parameters only. */
+export const RobotCell = z.object({
+  pickDistance: z.number().min(0.25).max(1.1), placeDistance: z.number().min(0.25).max(1.1), pickHeight: z.number().min(0.6).max(1.2), placeHeight: z.number().min(0.6).max(1.2),
+  pedestalHeight: z.number().min(0.3).max(1.0), guardClearance: z.number().min(0.1).max(1.5), speedFraction: z.number().min(0.1).max(1.0), jitter: z.number().min(0).max(0.08),
+}).strict();
+export const RobotRequirements = z.object({ maxCycleSeconds: z.number().min(1).max(60), minSuccessRate: z.number().min(0).max(1) }).strict();
+export const ROBOT_REFERENCE: z.infer<typeof RobotCell> = { pickDistance: 0.55, placeDistance: 0.55, pickHeight: 0.85, placeHeight: 0.85, pedestalHeight: 0.7, guardClearance: 0.4, speedFraction: 0.5, jitter: 0.03 };
+export const DEFAULT_ROBOT_REQUIREMENTS: z.infer<typeof RobotRequirements> = { maxCycleSeconds: 6, minSuccessRate: 0.9 };
+export const ROBOT_SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const ROBOT_CHECKS = ["reach", "collision-free", "cycle-time", "success-rate"] as const;
 export const PLANT_CHECKS = ["footprint-area", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel"] as const;
 const Common = { requestId: Id, projectRevision: z.number().int().positive(), feedbackId: Id.optional() };
 export const SceneRequest = z.union([
   z.object({ ...Common, variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements }).strict(),
   z.object({ ...Common, variant: z.literal("plant"), layout: PlantLayout, requirements: PlantRequirements }).strict(),
+  z.object({ ...Common, variant: z.literal("robot-cell"), cell: RobotCell, requirements: RobotRequirements }).strict(),
 ]);
 export type SceneRequestValue = z.infer<typeof SceneRequest>;
 export const SceneChecks = z.union([
@@ -56,6 +67,12 @@ export const SceneChecks = z.union([
     checks: z.array(z.object({ id: z.enum(PLANT_CHECKS), passed: z.boolean() }).passthrough()).length(5),
     scope: z.literal("generated-static-geometry"), physicalValidation: z.literal(false),
   }).passthrough(),
+  z.object({
+    schema: z.literal("pai-robot-cell-checks-1"), engine: z.string(), variant: z.literal("robot-cell"), cell: RobotCell,
+    checks: z.array(z.object({ id: z.enum(ROBOT_CHECKS), passed: z.boolean() }).passthrough()).length(4),
+    trials: z.array(z.object({ seed: z.number().int(), success: z.boolean(), reached: z.boolean(), collisionFree: z.boolean(), cycleSeconds: z.number() }).strict()).min(1).max(32),
+    successRate: z.number(), scope: z.literal("rigid-body-simulation"), physicalValidation: z.literal(false),
+  }).passthrough(),
 ]);
 export interface SceneReview {
   id: string; projectId: string; projectRevision: number; request: SceneRequestValue;
@@ -64,7 +81,7 @@ export interface SceneReview {
   baseline?: z.infer<typeof SceneChecks>; candidate?: z.infer<typeof SceneChecks>; diff?: DiffResult;
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>; rays?: Partial<Record<"baseline" | "candidate", SceneRay>>;
-  scope: "generated-static-geometry"; physicalValidation: false;
+  scope: "generated-static-geometry" | "rigid-body-simulation"; physicalValidation: false;
 }
 export type PlantLayoutValue = z.infer<typeof PlantLayout>;
 export type PlantRequirementsValue = z.infer<typeof PlantRequirements>;
@@ -74,7 +91,8 @@ export const isPlant = (s: SceneReview): s is PlantScene => s.request.variant ==
 /** Derived hall size of the native plant recipe (metres); the same formula as native/blender_plant.py. */
 export const plantHall = (l: PlantLayoutValue) => ({ x: l.stations * l.stationPitch + 12, y: 10.95 + l.aisleWidth + 1.35 * l.rackRows });
 /** Identity of a scene candidate: recipe, its layout parameters and the static requirements. */
-export const sceneKey = (r: SceneRequestValue) => `${r.variant}:${canonical(r.variant === "plant" ? r.layout : null)}:${canonical(r.requirements)}`;
+export const sceneKey = (r: SceneRequestValue) => `${r.variant}:${canonical(r.variant === "plant" ? r.layout : r.variant === "robot-cell" ? r.cell : null)}:${canonical(r.requirements)}`;
+export const isRobotCell = (s: SceneReview): s is SceneReview & { request: Extract<SceneRequestValue, { variant: "robot-cell" }> } => s.request.variant === "robot-cell";
 export function sceneCaseText(run: SceneReview) {
   if (run.request.variant === "plant") {
     return `# Blender factory production-line layout review\n\nDecision: ${run.verdict ?? "pending"}; layout: ${canonical(run.request.layout)}.\n`
@@ -90,7 +108,7 @@ export function sceneCaseText(run: SceneReview) {
     + "Scope: generated static geometry from an explicit synthetic recipe; editable .blend and GLB artifacts. No dynamics, joint reachability, measured factory twin, manufacturability or physical validation.\n";
 }
 function checksXml(value: z.infer<typeof SceneChecks>) {
-  const n = value.checks.length, suite = value.variant === "plant" ? "plant.layout" : "workcell.static";
+  const n = value.checks.length, suite = value.variant === "plant" ? "plant.layout" : value.variant === "robot-cell" ? "robot.cell" : "workcell.static";
   if (new Set(value.checks.map(c => c.id)).size !== n) throw new DomainError("SCENE_CHECK_COVERAGE", "Native check IDs must be unique");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="${suite}" tests="${n}">`
     + [...value.checks].sort((a, b) => a.id < b.id ? -1 : 1).map(c =>
@@ -100,7 +118,10 @@ function checksXml(value: z.infer<typeof SceneChecks>) {
 export async function reviewScene(store: Store, config: Config, project: Project, input: unknown, live?: LiveBus): Promise<SceneReview> {
   const request = SceneRequest.parse(input);
   const publish: LiveBus["publish"] = (key, event) => live?.publish(key, event);
-  if (!config.blender) throw new DomainError("BLENDER_NOT_CONFIGURED", "Set PAI_BLENDER to a native Blender executable", 503);
+  if (request.variant === "robot-cell" ? !config.physicsPython : !config.blender) {
+    throw request.variant === "robot-cell" ? new DomainError("PHYSICS_NOT_CONFIGURED", "Robot simulation needs the pinned physics toolchain (npm run setup:physics)", 503)
+      : new DomainError("BLENDER_NOT_CONFIGURED", "Set PAI_BLENDER to a native Blender executable", 503);
+  }
   const record: SceneReview = { id: randomUUID(), projectId: project.id, projectRevision: request.projectRevision,
     request, requirementDigest: sha256(canonical({ projectRequirements: project.requirements, sceneRequirements: request.requirements })),
     state: "running", createdAt: new Date().toISOString(), feedbackId: request.feedbackId,
@@ -121,15 +142,19 @@ export async function reviewScene(store: Store, config: Config, project: Project
       }
     }
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    const plant = request.variant === "plant";
-    const script = join(config.repository, plant ? "native/blender_plant.py" : "native/blender_workcell.py");
+    const plant = request.variant === "plant", robot = request.variant === "robot-cell";
+    const script = join(config.repository, plant ? "native/blender_plant.py" : robot ? "native/robot_sim.py" : "native/blender_workcell.py");
+    const engine = robot ? config.physicsPython! : config.blender!;
     const adapters = new NativeAdapters(config);
     const scriptHash = sha256(await readFile(script));
     const nativeBefore = await adapters.sourceDigests();
-    record.sourceDigests = { ...nativeBefore, [plant ? "blender-plant.py" : "blender-workcell.py"]: scriptHash, "blender-binary": sha256(await readFile(config.blender)) };
-    for (const [name, variant] of [["baseline", plant ? "plant" : "clear"], ["candidate", request.variant]] as const) {
+    const engineKey = robot ? "physics-python" : "blender-binary";
+    record.sourceDigests = { ...nativeBefore, [plant ? "blender-plant.py" : robot ? "robot-sim.py" : "blender-workcell.py"]: scriptHash, [engineKey]: sha256(await readFile(engine)),
+      ...(robot ? { "physics-lock": sha256(await readFile(join(config.repository, "native/physics-requirements.txt"))) } : {}) };
+    const cellOf = (name: "baseline" | "candidate") => name === "baseline" ? ROBOT_REFERENCE : (request as { cell: z.infer<typeof RobotCell> }).cell;
+    for (const [name, variant] of [["baseline", plant ? "plant" : robot ? "robot-cell" : "clear"], ["candidate", request.variant]] as const) {
       const target = join(directory, name);
-      const label = plant ? `Blender ${name === "baseline" ? "参考产线" : "候选产线"}（${(name === "baseline" ? PLANT_REFERENCE : (request as { layout: z.infer<typeof PlantLayout> }).layout).stations} 工位）`
+      const label = robot ? `MuJoCo ${name === "baseline" ? "参考工作单元" : "候选工作单元"}（${ROBOT_SEEDS.length} 个种子 · 速度 ${Math.round(cellOf(name).speedFraction * 100)}%）` : plant ? `Blender ${name === "baseline" ? "参考产线" : "候选产线"}（${(name === "baseline" ? PLANT_REFERENCE : (request as { layout: z.infer<typeof PlantLayout> }).layout).stations} 工位）`
         : `Blender ${name === "baseline" ? "基准" : "候选"}场景（${variant === "occluded" ? "遮挡" : "无遮挡"}）`;
       publish(request.requestId, { kind: "step", id: `blender-${name}`, label, status: "running", which: name });
       let observed = Promise.resolve();
@@ -156,16 +181,19 @@ export async function reviewScene(store: Store, config: Config, project: Project
           }
         }).catch(() => { /* Presentation events never fail the native review. */ });
       };
-      await writePrivate(join(directory, `${name}-input.json`), JSON.stringify(plant
+      await writePrivate(join(directory, `${name}-input.json`), JSON.stringify(robot
+        ? { cell: cellOf(name), requirements: request.requirements, seeds: ROBOT_SEEDS }
+        : plant
         ? { variant, layout: name === "baseline" ? PLANT_REFERENCE : (request as { layout: unknown }).layout, requirements: request.requirements, render: name === "baseline" ? "preview" : "hero" }
         : { variant, requirements: request.requirements }));
-      const args = ["--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "2", "--python", script,
-        "--", "--input", join(directory, `${name}-input.json`), "--output", target];
-      const r = await command(config.blender, args, config.repository, undefined, plant ? 900_000 : 120_000, observe);
+      const args = robot ? ["-I", script, "--input", join(directory, `${name}-input.json`), "--output", target]
+        : ["--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "2", "--python", script,
+          "--", "--input", join(directory, `${name}-input.json`), "--output", target];
+      const r = await command(engine, args, config.repository, undefined, plant ? 900_000 : robot ? 300_000 : 120_000, observe);
       await observed;
       await writePrivate(join(directory, `${name}.stdout.log`), r.stdout);
       await writePrivate(join(directory, `${name}.stderr.log`), r.stderr);
-      record.receipts.push({ adapter: "blender-native", command: ["blender", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt,
+      record.receipts.push({ adapter: robot ? "mujoco-native" : "blender-native", command: [robot ? "python" : "blender", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt,
         exitCode: r.exitCode, stdoutSha256: sha256(r.stdout), sourceDigests: { "script": scriptHash } });
       store.put("scene-review", record);
       publish(request.requestId, { kind: "step", id: `blender-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name,
@@ -177,8 +205,11 @@ export async function reviewScene(store: Store, config: Config, project: Project
       if (plant && (measured.variant !== "plant" || canonical(measured.layout) !== canonical(name === "baseline" ? PLANT_REFERENCE : (request as { layout: unknown }).layout))) {
         throw new DomainError("SCENE_CONTEXT", "Native plant layout differs from the requested layout");
       }
+      if (robot && (measured.variant !== "robot-cell" || canonical(measured.cell) !== canonical(cellOf(name)))) {
+        throw new DomainError("SCENE_CONTEXT", "Native robot cell differs from the requested cell");
+      }
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(record[name]!), { mode: 0o600, flag: "wx" });
-      for (const file of ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
+      for (const file of robot ? ["robot.json", "scene.xml", "robot.glb", "checks.json"] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
         record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       }
       store.put("scene-review", record);
@@ -189,9 +220,10 @@ export async function reviewScene(store: Store, config: Config, project: Project
     const lost = record.baseline!.checks.filter(c => c.passed && !record.candidate!.checks.find(n => n.id === c.id)!.passed).length;
     if (diff.value.blocking_changes !== lost || diff.value.gate_passed !== (lost === 0)) throw new DomainError("SCENE_DIFF_MISMATCH", "Native geometry and independent comparison disagree");
     if (sha256(await readFile(script)) !== scriptHash || canonical(nativeBefore) !== canonical(await adapters.sourceDigests())
-        || record.sourceDigests["blender-binary"] !== sha256(await readFile(config.blender))) throw new DomainError("SOURCE_CHANGED", "Native verifier changed during scene production");
+        || record.sourceDigests[engineKey] !== sha256(await readFile(engine))) throw new DomainError("SOURCE_CHANGED", "Native verifier changed during scene production");
     record.diff = diff.value; record.receipts.push(diff.receipt);
     record.verdict = record.candidate!.checks.every(c => c.passed) ? "accepted-static-scene" : "rejected";
+    if (robot) record.scope = "rigid-body-simulation";
     record.state = "completed";
   } catch (e) { record.state = "failed"; record.error = e instanceof DomainError ? `${e.code}: ${e.message}` : "BLENDER_FAILED: check native configuration and retained local receipts"; }
   record.finishedAt = new Date().toISOString(); store.put("scene-review", record);
