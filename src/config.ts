@@ -6,6 +6,8 @@ export interface Config {
   workspace: string; state: string; web: string;
   robotRoot: string; stressSource: string; evalarcRoot: string; controlRoot: string; radarFile: string;
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
+  /** Pinned physics toolchain (npm run setup:physics): Python with Gmsh/Optuna/scikit-learn/MuJoCo, and CalculiX ccx. */
+  physicsPython?: string; ccx?: string;
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
   /** Amazon Bedrock AgentCore runtimes (infra/agentcore.ts): remote executor and remote CAD sandbox. */
@@ -57,6 +59,7 @@ export function configuration(): Config {
     controllerDatabase: process.env.PAI_CONTROLLER_DATABASE,
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
+    physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX,
     bwrap: process.env.PAI_BWRAP,
     agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
     agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),

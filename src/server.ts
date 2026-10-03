@@ -24,7 +24,7 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
-import { CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
+import { DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
@@ -158,6 +158,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
+      physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
@@ -213,13 +214,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(cad, reply, "cad");
   });
   app.get("/api/cad/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(CAD_FILES) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum([...CAD_FILES, ...FEA_FILES]) }).parse(request.params);
     const cad = store.get<CadReview>("cad-review", p.id);
-    if (!cad || cad.state !== "completed") throw new DomainError("NOT_FOUND", "Completed CAD evidence required", 404);
+    if (!cad || cad.state !== "completed" || !cad.files[`${p.which}/${p.file}`]) throw new DomainError("NOT_FOUND", "Completed CAD evidence required", 404);
     const content = await readFile(join(config.state, "cad", p.id, p.which, p.file));
     if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
     const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
-      "drawing.svg": "image/svg+xml", "checks.json": "application/json" };
+      "drawing.svg": "image/svg+xml", "checks.json": "application/json", "fea.json": "application/json", "fea.glb": "model/gltf-binary",
+      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain" };
     // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);

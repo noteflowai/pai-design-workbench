@@ -92,6 +92,8 @@ function cadRows(checks: { id: string; passed: boolean; observed?: unknown; requ
   const ge = (o: number, r: number) => r ? (o - r) / r : undefined, le = (o: number, r: number) => r ? (r - o) / r : undefined;
   return checks.map(x => {
     const o = num(x.observed), r = num(x.required), title = CAD_CHECK_LABELS[x.id] ?? x.id;
+    if (x.id === "max-deflection") return { id: x.id, title, passed: x.passed, observed: o.toFixed(3), required: `≤ ${r}`, unit: "mm", margin: le(o, r), note: "CalculiX · 电机轴位移（细网格）" };
+    if (x.id === "max-stress") return { id: x.id, title, passed: x.passed, observed: o.toFixed(1), required: `≤ ${r}`, unit: "MPa", margin: le(o, r), note: "CalculiX · 远离约束的峰值 von Mises" };
     if (x.id === "min-wall") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≥ ${r}`, unit: "mm", margin: ge(o, r), note: "板厚与孔间韧带" };
     if (x.id === "hole-edge-distance") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≥ ${r}`, unit: "mm", margin: ge(o, r), note: "1.5×d 经验规则" };
     if (x.id === "mass") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "g", margin: le(o, r), note: "6061 铝名义密度" };

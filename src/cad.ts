@@ -18,7 +18,10 @@ import { invokeRuntime } from "./agentcore.js";
  * mapped to JUnit and compared by EvalArc. Editable STEP plus STL/GLB/SVG are retained by digest.
  * Nominal geometry and DFM rules of thumb only — no FEA, tolerance stack-up or physical test.
  */
-export const CAD_CHECKS = ["solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope"] as const;
+export const GEOMETRY_CHECKS = ["solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope"] as const;
+/** Structural checks from the native FEA (Gmsh + CalculiX); present only when structural requirements are frozen. */
+export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
+export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS] as const;
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
 /** "generated": the candidate solid comes from CadQuery code (AI, external agent or maintainer) run in the OS sandbox. */
 export const CAD_VARIANTS = [...CAD_PRESETS, "parametric", "generated"] as const;
@@ -30,10 +33,19 @@ export type CadParameters = z.infer<typeof CadParameters>;
 export const CadSource = z.object({ language: z.literal("cadquery-2.8"), code: z.string().min(40).max(20_000) }).strict();
 export type CadSource = z.infer<typeof CadSource>;
 export const CAD_FILES = ["part.step", "part.stl", "part.glb", "assembly.glb", "drawing.svg", "checks.json"] as const;
+export const FEA_FILES = ["fea.json", "fea.glb", "bracket-fine.inp", "bracket-fine.frd"] as const;
+/** Belt-driven stepper load case: radial force at the pulley, lever from the mounting face; nominal 6061-T6. */
+export const StructuralRequirements = z.object({
+  forceN: z.number().min(1).max(2000), leverMm: z.number().min(0).max(200),
+  safetyFactor: z.number().min(1).max(10), maxDeflectionMm: z.number().min(0.001).max(10),
+}).strict();
+export type StructuralRequirements = z.infer<typeof StructuralRequirements>;
+export const DEFAULT_STRUCTURAL: StructuralRequirements = { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 };
 const mm = z.number().min(1).max(2000);
 export const CadRequirements = z.object({
   maxMassG: z.number().min(1).max(10000), minWallMm: z.number().min(0.5).max(50),
   edgeDistanceFactor: z.number().min(1).max(4), requireNoInterference: z.boolean(), maxEnvelopeMm: z.tuple([mm, mm, mm]),
+  structural: StructuralRequirements.optional(),
 }).strict();
 export type CadRequirements = z.infer<typeof CadRequirements>;
 export const DEFAULT_CAD_REQUIREMENTS: CadRequirements = { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] };
@@ -49,7 +61,7 @@ export const CadRequest = z.object({
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
-  checks: z.array(z.object({ id: z.enum(CAD_CHECKS), passed: z.boolean() }).passthrough()).length(7),
+  checks: z.array(z.object({ id: z.enum(CAD_CHECKS), passed: z.boolean() }).passthrough()).min(7).max(9),
   scope: z.literal("parametric-part-geometry"), physicalValidation: z.literal(false),
 }).passthrough();
 export type CadChecks = z.infer<typeof CadChecks>;
@@ -58,6 +70,8 @@ export interface CadReview {
   requirementDigest: string; state: "running" | "completed" | "failed" | "interrupted"; error?: string;
   createdAt: string; finishedAt?: string; feedbackId?: string; verdict?: "accepted-cad-part" | "rejected";
   baseline?: CadChecks; candidate?: CadChecks; diff?: DiffResult;
+  /** Native FEA summaries (coarse/fine meshes, convergence) per part, when structural requirements are frozen. */
+  fea?: Partial<Record<"baseline" | "candidate", FeaSummary>>;
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>;
   /** Generated candidate: code digest, isolation layers and the sandbox outcome. */
@@ -67,9 +81,22 @@ export interface CadReview {
   scope: "parametric-part-geometry"; physicalValidation: false;
 }
 
-function checksXml(value: CadChecks) {
-  if (new Set(value.checks.map(c => c.id)).size !== CAD_CHECKS.length) throw new DomainError("CAD_CHECK_COVERAGE", "Native CAD check IDs must be unique and complete");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="bracket.cad" tests="${CAD_CHECKS.length}">`
+const FeaResult = z.object({
+  schema: z.literal("pai-fea-1"), solver: z.string(), mesher: z.string(), element: z.string(), material: z.object({ name: z.string(), E: z.number(), nu: z.number(), yield: z.number() }).passthrough(),
+  load: z.object({ forceN: z.number(), leverMm: z.number() }).passthrough(),
+  meshes: z.record(z.string(), z.object({ nodes: z.number().int(), elements: z.number().int(), axisDisplacementMm: z.number(), peakVonMisesMPa: z.number(), seconds: z.number() }).passthrough()),
+  convergence: z.object({ axisDisplacement: z.number(), peakVonMises: z.number() }), displayScale: z.number(),
+  checks: z.array(z.object({ id: z.enum(FEA_CHECKS), passed: z.boolean(), observed: z.number(), required: z.number() }).passthrough()).length(2),
+  scope: z.literal("linear-static-nominal"), physicalValidation: z.literal(false),
+}).strict();
+export type FeaSummary = Omit<z.infer<typeof FeaResult>, "checks">;
+
+function checksXml(value: CadChecks, expected: readonly string[]) {
+  const ids = new Set(value.checks.map(c => c.id));
+  if (ids.size !== value.checks.length || ids.size !== expected.length || expected.some(id => !ids.has(id as never))) {
+    throw new DomainError("CAD_CHECK_COVERAGE", "Native CAD check IDs must be unique and complete");
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="bracket.cad" tests="${expected.length}">`
     + [...value.checks].sort((a, b) => a.id < b.id ? -1 : 1).map(c =>
       `<testcase classname="bracket.cad" name="${c.id}">${c.passed ? "" : '<failure message="Native CAD geometry check failed"/>'}</testcase>`).join("")
     + "</testsuite>\n";
@@ -190,6 +217,10 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
   const request = CadRequest.parse(input);
   const publish: LiveBus["publish"] = (key, event) => live?.publish(key, event);
   if (!config.cadquery) throw new DomainError("CAD_NOT_CONFIGURED", "Set PAI_CADQUERY_PYTHON to a pinned CadQuery interpreter (npm run setup:cad)", 503);
+  // Fail closed: frozen structural requirements are never silently skipped.
+  if (request.requirements.structural && (!config.physicsPython || !config.ccx)) {
+    throw new DomainError("FEA_NOT_CONFIGURED", "Structural requirements need the pinned FEA toolchain (npm run setup:physics: PAI_PHYSICS_PYTHON, PAI_CCX)", 503);
+  }
   const generated = request.variant === "generated" ? request.source! : undefined;
   if (request.fromSweep && !store.requestRun(request.requestId)) {
     // Provenance must be true: the sweep is this project's, completed, and measured exactly these parameters.
@@ -220,7 +251,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const native = (file: string) => join(config.repository, "native", file);
     const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
-    const used = ["cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : [])];
+    const structural = request.requirements.structural;
+    const used = ["cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+      ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
     const scriptHash = sha256(await readFile(script));
@@ -228,6 +261,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const nativeBefore = await adapters.sourceDigests();
     const codeSha256 = generated ? sha256(generated.code) : undefined;
     record.sourceDigests = { ...nativeBefore, ...scriptsBefore, "cadquery-lock": sha256(await readFile(lock)), "cadquery-python": sha256(await readFile(config.cadquery)),
+      ...(structural ? { "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "ccx": sha256(await readFile(config.ccx!)) } : {}),
       ...(codeSha256 ? { "generated-code": codeSha256 } : {}) };
     const remote = Boolean(generated && config.agentcoreSandboxArn);
     const runtime = generated && !remote ? await sandboxRuntime(config) : undefined;
@@ -278,9 +312,16 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       }
       const checks = CadChecks.parse(JSON.parse(await readFile(join(target, "checks.json"), "utf8")));
       if (checks.variant !== variant) throw new DomainError("CAD_CONTEXT", "Native CAD variant mismatch");
+      if (checks.checks.length !== GEOMETRY_CHECKS.length) throw new DomainError("CAD_CONTEXT", "Native CAD produced unexpected checks");
+      if (structural) {
+        const fea = await runFea(config, publish, record, request.requestId, name, target, checks, structural);
+        checks.checks.push(...fea.checks);
+        const { checks: _measured, ...summary } = fea;
+        record.fea = { ...record.fea, [name]: summary };
+      }
       record[name] = checks;
-      await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks), { mode: 0o600, flag: "wx" });
-      for (const file of CAD_FILES) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
+      await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, structural ? CAD_CHECKS : GEOMETRY_CHECKS), { mode: 0o600, flag: "wx" });
+      for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       store.put("cad-review", record);
     }
     publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选零件", status: "running" });
@@ -299,6 +340,32 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
   record.finishedAt = new Date().toISOString(); store.put("cad-review", record);
   publish(request.requestId, { kind: "done", state: record.state, recordId: record.id, verdict: record.verdict, detail: record.error });
   return record;
+}
+
+/** Native structural analysis of one built part: Gmsh mesh → CalculiX → measured deflection and stress. */
+async function runFea(config: Config, publish: LiveBus["publish"], record: CadReview, requestId: string, name: "baseline" | "candidate",
+  target: string, checks: CadChecks, structural: StructuralRequirements) {
+  const parameters = (checks as { parameters?: Record<string, number> }).parameters
+    ?? (record.sandbox?.motorAxisZ !== undefined ? { motorAxisHeight: record.sandbox.motorAxisZ } : undefined);
+  if (!parameters?.motorAxisHeight) throw new DomainError("FEA_CONTEXT", "The part does not declare its motor axis height; FEA load cannot be placed", 422);
+  const label = `CalculiX 结构分析：${name === "baseline" ? "基准零件" : "候选零件"}（Gmsh C3D10，两级网格）`;
+  publish(requestId, { kind: "step", id: `fea-${name}`, label, status: "running", which: name });
+  const input = join(target, "..", `${name}-fea-input.json`);
+  await writePrivate(input, JSON.stringify({ step: join(target, "part.step"), parameters, ccx: config.ccx, requirements: structural,
+    load: { forceN: structural.forceN, leverMm: structural.leverMm, description: "radial pulley force, statically equivalent on the four M3 bores" } }));
+  const script = join(config.repository, "native/fea_bracket.py");
+  const r = await command(config.physicsPython!, ["-I", script, "--input", input, "--output", target], config.repository, undefined, 900_000);
+  await writePrivate(join(target, "..", `${name}.fea.stdout.log`), r.stdout);
+  await writePrivate(join(target, "..", `${name}.fea.stderr.log`), r.stderr);
+  record.receipts.push({ adapter: "calculix-fea", command: ["python", "fea_bracket.py"], startedAt: r.startedAt, finishedAt: r.finishedAt,
+    exitCode: r.exitCode, stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)), ccx: sha256(await readFile(config.ccx!)) } });
+  publish(requestId, { kind: "step", id: `fea-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: `exit ${r.exitCode}` });
+  if (r.exitCode !== 0) throw new DomainError("FEA_FAILED", "Native FEA failed; retain receipts and inspect the solver log", 422);
+  const fea = FeaResult.parse(JSON.parse(await readFile(join(target, "fea.json"), "utf8")));
+  if (canonical(fea.load) !== canonical({ forceN: structural.forceN, leverMm: structural.leverMm, description: fea.load.description })) {
+    throw new DomainError("FEA_CONTEXT", "FEA load differs from the frozen structural requirements");
+  }
+  return fea;
 }
 
 /** Layer 1 (static policy) as a fast pre-check; never executes the code. Returns the violations. */
