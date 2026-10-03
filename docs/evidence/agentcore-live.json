@@ -1,6 +1,6 @@
 {
   "schema": "pai-agentcore-live-1",
-  "checkedAt": "2026-10-01T17:10:20.043Z",
+  "checkedAt": "2026-10-03T10:41:37.131Z",
   "result": "passed",
   "workbench": "local process; no local executor, ledger or Kiro keys",
   "sandbox": {
@@ -9,14 +9,14 @@
       "bubblewrap": true,
       "internet": false,
       "arch": "aarch64",
-      "version": "28b7da0b11f6727d"
+      "version": "26678490813b82ce"
     },
     "thin": {
       "verdict": "rejected",
       "failed": [
         "min-wall"
       ],
-      "seconds": 13,
+      "seconds": 17,
       "layers": {
         "astPolicy": true,
         "processLockdown": true,
@@ -38,7 +38,7 @@
     "attempts": [
       "kiro-primary:succeeded"
     ],
-    "seconds": 41,
+    "seconds": 36,
     "tools": [
       "cad-code"
     ],
@@ -63,6 +63,12 @@
       "sandbox.arn",
       "agent.arn"
     ],
-    "reason": "Operator resource references removed for public distribution; recorded results unchanged; this is not a new run."
+    "reason": "Operator references remain in the private receipt only."
+  },
+  "agentImage": {
+    "tag": "26678490813b82ce",
+    "kiroCli": "2.27.1",
+    "executorCommit": "95215e6086db8540dda53c24c3e25ed45b37ad02",
+    "probe": "op=probe on both runtimes after deployment"
   }
 }

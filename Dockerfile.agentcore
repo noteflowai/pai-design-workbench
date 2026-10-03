@@ -44,7 +44,7 @@ RUN set -eu; arch=$([ "$TARGETARCH" = "arm64" ] && echo linux-arm64 || echo linu
     tar -xJf /tmp/node.tar.xz -C /opt && mv /opt/node-v$v-$arch /opt/node && rm /tmp/node.tar.xz
 ENV PATH=/opt/node/bin:$PATH
 COPY vendor/executor.tar /tmp/executor.tar
-RUN python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /tmp/executor.tar > /opt/ai/install.json \
+RUN mkdir -p /opt/ai && python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /tmp/executor.tar > /opt/ai/install.json \
     && cd /opt/ai/executor && rm -rf node_modules/typescript node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl /root/.npm \
     && rm -f /tmp/executor.tar
 

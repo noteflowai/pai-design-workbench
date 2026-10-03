@@ -31,7 +31,9 @@ ROLE = os.environ.get("PAI_ROLE", "")
 NATIVE = Path(os.environ.get("PAI_NATIVE", "/opt/pai/native"))
 PYTHON = os.environ.get("PAI_CADQUERY_PYTHON", "/opt/cadquery/bin/python")
 LEDGER_DIR = Path(os.environ.get("PAI_LEDGER_DIR", "/mnt/ledger"))
-EXECUTOR = Path(os.environ.get("PAI_CONTROL_ROOT", "/opt/ai/executor"))
+# Resolved: /opt/ai/executor is a stable link to the versioned install, and the executor's entry-point guard compares
+# its real module path with argv[1] (a link path would make it exit 0 without running).
+EXECUTOR = Path(os.environ.get("PAI_CONTROL_ROOT", "/opt/ai/executor")).resolve()
 POLICY = Path(os.environ.get("PAI_LEDGER_POLICY", "/opt/pai/agentcore-ledger-policy.json"))
 PROFILES = [p for p in os.environ.get("PAI_AI_PROFILES", "kiro-primary,kiro-backup,kiro-backup2").split(",") if p]
 VERSION = os.environ.get("PAI_IMAGE_VERSION", "dev")
@@ -373,8 +375,11 @@ def op_text_proposal(body):
     elif sha(prompt_file.read_bytes()) != sha(prompt.encode()):
         raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt")
     entry = EXECUTOR / ".runtime/compiled/flows/execute.js"
-    r = run(["node", str(entry), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470, cwd=str(EXECUTOR))
+    r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470, cwd=str(EXECUTOR))
     lines = [l for l in r["stdout"].strip().splitlines() if l.strip()]
+    if r["exit"] == 0 and not lines:
+        # Never a silent success: an empty report is surfaced as an executor fault for reconciliation.
+        raise Refused(502, "EXECUTOR_NO_REPORT", "executor exited 0 without a report; nothing was dispatched")
     attempts = []
     for f in sorted((run_dir / "state/runs").glob("*/*.json")) if (run_dir / "state/runs").exists() else []:
         if f.name.endswith((".credential.json", "request.json", "mcp.json", "prompt.acp.json")):
