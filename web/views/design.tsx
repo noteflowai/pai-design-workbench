@@ -7,10 +7,11 @@ import { SweepPanel } from "./sweep";
 import { OptimizePanel } from "./optimize";
 import { PlantLane } from "../plant";
 import { RobotLaneCell } from "../robotcell";
+import { AeroLane } from "../aero";
 import { CAD_DRAFT_KEY, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import type { CandidateId } from "../../src/contracts";
 
-const LANES = [["robot", "机器人记录评审"], ["scene", "Blender 场景"], ["plant", "工厂产线"], ["robotcell", "机器人工作单元"], ["cad", "CAD 零件"], ["factory", "工厂孪生"]] as const;
+const LANES = [["robot", "机器人记录评审"], ["scene", "Blender 场景"], ["plant", "工厂产线"], ["robotcell", "机器人工作单元"], ["cad", "CAD 零件"], ["aero", "车身气动"], ["factory", "工厂孪生"]] as const;
 type Lane = typeof LANES[number][0];
 const CANDIDATE_NOTES: Record<CandidateId, string> = { reference: "固定原始视角与光照", camera: "相机平移 +0.12 m", dim: "光照降为基准的 25%" };
 
@@ -27,7 +28,7 @@ export function Design() {
       <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={lane === id} aria-controls={`lane-${id}`} className={lane === id ? "active" : ""}
         onClick={() => c.navigate("design", { lane: id })}>{label}</button>)}</div>
     <div role="tabpanel" id={`lane-${lane}`} aria-labelledby={`tab-${lane}`}>
-      {lane === "robot" ? <RobotLane /> : lane === "scene" ? <SceneLane /> : lane === "plant" ? (c.data.capabilities.blender ? <PlantLane /> : <SceneLane />) : lane === "robotcell" ? <RobotLaneCell /> : lane === "cad" ? <CadLane /> : <FactoryLane />}
+      {lane === "robot" ? <RobotLane /> : lane === "scene" ? <SceneLane /> : lane === "plant" ? (c.data.capabilities.blender ? <PlantLane /> : <SceneLane />) : lane === "robotcell" ? <RobotLaneCell /> : lane === "cad" ? <CadLane /> : lane === "aero" ? <AeroLane /> : <FactoryLane />}
     </div>
   </>;
 }

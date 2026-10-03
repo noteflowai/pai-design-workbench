@@ -15,7 +15,7 @@ import type { Lifecycle, EvidenceKind } from "./lifecycle.js";
 export type Maturity = "in-review" | "released" | "rejected" | "superseded";
 export const ReleaseRequest = z.object({
   requestId: Id, projectRevision: z.number().int().positive(),
-  evidenceKind: z.enum(["robot-review", "blender-scene", "cad-part", "factory-twin"]), runId: Id,
+  evidenceKind: z.enum(["robot-review", "blender-scene", "cad-part", "factory-twin", "aero-body"]), runId: Id,
   title: z.string().trim().min(2).max(160), notes: z.string().trim().max(2000).default(""),
 }).strict();
 export const ReleaseDecision = z.object({
@@ -32,18 +32,19 @@ export interface Release {
 }
 const PASSING: Record<EvidenceKind, string> = {
   "robot-review": "accepted-in-recorded-panel", "blender-scene": "accepted-static-scene",
-  "cad-part": "accepted-cad-part", "factory-twin": "accepted-illustrative",
+  "cad-part": "accepted-cad-part", "factory-twin": "accepted-illustrative", "aero-body": "accepted-aero-body",
 };
 const VERDICT_LABEL: Record<string, string> = { "accepted-in-recorded-panel": "记录样本内通过", "accepted-static-scene": "静态场景通过",
-  "accepted-cad-part": "零件检查通过", "accepted-illustrative": "演示范围内通过", rejected: "拒绝", "needs-more-evidence": "需要更多证据" };
+  "accepted-cad-part": "零件检查通过", "accepted-aero-body": "气动检查通过", "accepted-illustrative": "演示范围内通过", rejected: "拒绝", "needs-more-evidence": "需要更多证据" };
 const SCOPE: Record<EvidenceKind, string> = {
   "robot-review": "回顾性记录仿真：1 个任务、10 个配对种子",
   "blender-scene": "合成静态几何：射线与投影检查",
   "cad-part": "名义参数化几何：B-Rep 实测与 DFM 经验规则",
   "factory-twin": "演示仿真：参数未按真实工厂校准",
+  "aero-body": "稳态 RANS（k-ω SST）两级网格：设计比较用的阻力系数，不是风洞实测",
 };
 type Run = { id: string; projectId: string; projectRevision: number; state: string; verdict?: string; decision?: { verdict: string } };
-export const KIND_STORE: Record<EvidenceKind, string> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review" };
+export const KIND_STORE: Record<EvidenceKind, string> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review", "aero-body": "aero-review" };
 
 export function admission(store: Store, project: Project, lifecycle: Lifecycle, kind: EvidenceKind, runId: string): AdmissionCheck[] {
   const run = store.get<Run>(KIND_STORE[kind], runId);

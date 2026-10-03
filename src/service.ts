@@ -11,6 +11,7 @@ import { sceneCaseText, type SceneReview } from "./scenes.js";
 import { factoryCaseText, FACTORY_CHECKS, type FactoryReview, type FactoryCheckId } from "./factory.js";
 import type { LiveBus } from "./live.js";
 import { CAD_CHECKS, cadCaseText, type CadReview } from "./cad.js";
+import { AERO_CHECKS, aeroCaseText, type AeroReview } from "./aero.js";
 
 const SCENE_CHECKS = ["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel", "reach", "collision-free", "cycle-time", "success-rate"];
 
@@ -136,7 +137,8 @@ export class Workbench {
           throw new DomainError("NOT_A_FACTORY_FAILURE", "Factory feedback must bind a seed that fails the named frozen check", 422);
         }
       }
-    } else if (parsed.checkId && !(parsed.evidenceKind === "blender-scene" ? SCENE_CHECKS : parsed.evidenceKind === "cad-part" ? CAD_CHECKS as readonly string[] : []).includes(parsed.checkId)) {
+    } else if (parsed.checkId && !(parsed.evidenceKind === "blender-scene" ? SCENE_CHECKS : parsed.evidenceKind === "cad-part" ? CAD_CHECKS as readonly string[]
+        : parsed.evidenceKind === "aero-body" ? AERO_CHECKS as readonly string[] : []).includes(parsed.checkId)) {
       throw new DomainError("CHECK_KIND_MISMATCH", "Check ID does not belong to this evidence kind", 422);
     }
     if (parsed.kind === "regression" && parsed.seed === null) throw new DomainError("MISSING_CASE", "A regression needs a paired seed");
@@ -146,7 +148,12 @@ export class Workbench {
       throw new DomainError("NOT_A_RECORDED_REGRESSION", "The reported seed must lose a recorded baseline success");
     }
     const native = run as SceneReview | CadReview;
-    if (parsed.kind === "design-check" && parsed.evidenceKind !== "factory-twin" && (!parsed.checkId || !["blender-scene", "cad-part"].includes(parsed.evidenceKind)
+    // Aerodynamics: the candidate's failed check is the case (the reference body is a starting point, not a target).
+    if (parsed.kind === "design-check" && parsed.evidenceKind === "aero-body"
+        && (!parsed.checkId || (run as AeroReview).candidate?.checks.find(c => c.id === parsed.checkId)?.passed !== false)) {
+      throw new DomainError("NOT_A_NATIVE_DESIGN_FAILURE", "Aerodynamics feedback must bind a check the candidate failed");
+    }
+    if (parsed.kind === "design-check" && !["factory-twin", "aero-body"].includes(parsed.evidenceKind) && (!parsed.checkId || !["blender-scene", "cad-part"].includes(parsed.evidenceKind)
         || !native.baseline?.checks.find(c => c.id === parsed.checkId)?.passed
         || native.candidate?.checks.find(c => c.id === parsed.checkId)?.passed !== false)) {
       throw new DomainError("NOT_A_NATIVE_DESIGN_FAILURE", "Design feedback must bind a native check losing its baseline pass");
@@ -187,7 +194,7 @@ export class Workbench {
             || outcomes(run.stress, run.candidate).get(old.seed) !== true)) {
         throw new DomainError("ISSUE_NOT_FIXED", "The reported seed still fails; retain the unresolved feedback");
       }
-      if (old.kind === "design-check" && ["blender-scene", "cad-part"].includes(old.evidenceKind) && old.status === "fix-proposed"
+      if (old.kind === "design-check" && ["blender-scene", "cad-part", "aero-body"].includes(old.evidenceKind) && old.status === "fix-proposed"
           && (run as SceneReview | CadReview).candidate?.checks.find(c => c.id === old.checkId)?.passed !== true) {
         throw new DomainError("ISSUE_NOT_FIXED", "The native design check still fails; retain the unresolved feedback");
       }
@@ -204,8 +211,13 @@ export class Workbench {
       history: [...old.history, { status: change.status, reason: change.reason, at: new Date().toISOString(), recheckRunId: change.recheckRunId }] };
     this.store.put("feedback", next, change.expectedRevision); return next;
   }
-  evidence(id: string, kind: Feedback["evidenceKind"]): Review | SceneReview | FactoryReview | CadReview {
+  evidence(id: string, kind: Feedback["evidenceKind"]): Review | SceneReview | FactoryReview | CadReview | AeroReview {
     if (kind === "robot-review") return this.review(id);
+    if (kind === "aero-body") {
+      const aero = this.store.get<AeroReview>("aero-review", id);
+      if (!aero) throw new DomainError("NOT_FOUND", "Aerodynamics review not found", 404);
+      return aero;
+    }
     if (kind === "cad-part") {
       const cad = this.store.get<CadReview>("cad-review", id);
       if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
@@ -228,6 +240,7 @@ export class Workbench {
       text: (parsed.evidenceKind === "blender-scene" ? sceneCaseText(run as SceneReview)
         : parsed.evidenceKind === "factory-twin" ? factoryCaseText(run as FactoryReview)
         : parsed.evidenceKind === "cad-part" ? cadCaseText(run as CadReview)
+        : parsed.evidenceKind === "aero-body" ? aeroCaseText(run as AeroReview)
         : this.caseText(run as Review))
         + "\nInvitation: Try permitted evidence of your own. Report setup failures, unclear evidence or an existing workflow that works better.\nNot sent or published by this workbench.\n" };
     this.store.insert("campaign", campaign); return campaign;

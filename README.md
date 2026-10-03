@@ -59,6 +59,8 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 **CAD → 仿真 → 孪生**：已通过的 CAD 零件可以装到 MuJoCo 机械臂末端，质量和惯量取自已核验 STL 的精确体积，并与 B-Rep 质量交叉核对（差值 ≤ 3 %，否则失败）。每次仿真都导出可移植的 MJCF 和 OpenUSD（UsdPhysics 刚体、质量、转动/固定关节、碰撞体），后者经 OpenUSD 26.8 全部 28 个 UsdValidation 校验器检查，可直接导入 Isaac Sim / Omniverse。
 
+**车身气动（CFD）**：CadQuery 生成 Ahmed 型车身，用固定 digest 的官方 OpenFOAM v2512 镜像跑 snappyHexMesh 两级网格和 simpleFoam（k-ω SST）求阻力系数，检查阻力、网格收敛、迭代收敛和网格质量，同样经 EvalArc 对照、反馈复测和发布准入。12.5° 后斜角在细网格上 Cd 0.230，和 Ahmed 1984 实验值一致；网格依赖和 RANS 的局限照实说明，见 [AERO.md](docs/AERO.md)。
+
 **外部 Agent**：AgentForge 会话可以经治理网关使用工作台：按会话放行工具、审计、限流。托管站点用 OAuth 客户端凭据访问，ALB 先验证一次 JWT，工作台再按 scope 验证一次。见 [integrations/agentforge](integrations/agentforge/README.md)。
 
 不执行新的策略推理，不做公差叠加、疲劳、现场安全认证或自动发布；FEA 是名义材料下的线性静力分析，不是认证。

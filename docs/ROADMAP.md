@@ -33,7 +33,7 @@
 
 | 项 | 需求 | 退出条件 |
 |---|---|---|
-| OpenFOAM 通道 | F19 | 固定版本的 OpenFOAM；snappyHexMesh + simpleFoam；两级网格对照阻力系数；进入准入 |
+| OpenFOAM 通道 | F19 | ✓ 本机完成：官方镜像 v2512 固定 digest，两级网格，4 项检查，接入反馈、准入和 AI 工具 `aero-body`。待做：在 Batch 上跑 OpenFOAM 作业，加边界层网格和更细的网格层级，降低网格依赖 |
 | PhysicsNeMo 代理模型 | F20 | 在 DrivAerML 或自有数据上训练；只排序；前 k 个回到 OpenFOAM 实测 |
 
 ## M5 · 制造与第二个零件族

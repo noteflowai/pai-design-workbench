@@ -42,6 +42,7 @@ flowchart TB
   subgraph Native["原生求解与评估（裁决）"]
     CAD[CadQuery / OCCT：B-Rep 检查]
     FEA[Gmsh + CalculiX：结构 FEA]
+    CFD[OpenFOAM：气动 RANS]
     OPT[GP / NSGA-II · BoTorch：只排序]
     MJ[MuJoCo：动力学、碰撞、节拍]
     BL[Blender：工作单元与产线、射线实测]
@@ -96,6 +97,7 @@ flowchart TB
 |---|---|---|
 | 几何 | CadQuery 2.8 / OCCT 7.9 | 受控配方、B-Rep 检查映射 |
 | 结构求解 | Gmsh 4.15 + CalculiX 2.21 | 载荷与边界条件、两级网格收敛 |
+| 流体求解 | OpenFOAM v2512（OpenCFD 官方镜像，固定 digest） | Ahmed 型车身配方、算例字典、两级网格与收敛检查 |
 | 优化 | Optuna 5（NSGA-II、QMC）、scikit-learn GP、BoTorch 0.18（qLogNEHVI） | 多保真筛查、校准、AI 种子打分 |
 | 动力学 | MuJoCo 3.14 | 工作单元 MJCF、种子配对、CAD 工装装配 |
 | 孪生格式 | OpenUSD 26.8（UsdPhysics、UsdValidation） | MuJoCo → USD 映射 |

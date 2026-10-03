@@ -1,3 +1,4 @@
+import { AeroParameters, AeroRequest, AeroRequirements, DEFAULT_AERO_REQUIREMENTS, type AeroReview } from "./aero.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -32,7 +33,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "aero-body", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -44,6 +45,7 @@ const ModelPayload = {
   "robot-review": z.object({ candidate: Candidate }).strict(),
   "scene-review": z.object({ variant: z.enum(["clear", "occluded"]), requirements: SceneRequirements.partial().default({}) }).strict(),
   "plant-layout": z.object({ layout: PlantLayout, requirements: PlantRequirements.partial().default({}) }).strict(),
+  "aero-body": z.object({ parameters: AeroParameters, requirements: AeroRequirements.partial().default({}) }).strict(),
   "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}),
     tool: z.object({ cad: z.string().regex(/^cad-\d{1,3}$/), payloadKg: z.number().min(0).max(3).optional() }).strict().optional() }).strict(),
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
@@ -62,6 +64,9 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "plant-layout": "Blender 工厂产线布局（原生生成并用射线实测）。layout 全部 7 个字段必填：stations 3–8 整数、stationPitch 3.5–7、aisleWidth 1.2–4.5、guardSize 2.6–5、rackRows 1–4 整数、cameraHeight 2.4–6.5、agvs 0–4 整数（米）。"
     + "配方几何：厂房 X = stations×stationPitch+12，Y = 10.95+aisleWidth+1.35×rackRows，占地 = X×Y；货架面按参考围栏 3.6 m 排布，所以实测通道净宽 ≈ aisleWidth − (guardSize−3.6)/2 − 0.035；"
     + "围栏安全间距 ≈ guardSize/2 − 0.02 − 1.45（声明的机器人包络）；guardSize 不宜超过 stationPitch。requirements 可只写要改的字段；结论只来自原生检查",
+  "aero-body": "OpenFOAM 车身气动（Ahmed 型基准体，CadQuery 建模；snappyHexMesh 两级网格 + simpleFoam k-ω SST，40 m/s，移动地面）。parameters 全部 4 个字段必填："
+    + "slantAngleDeg 0–40（后斜角，度）、noseRadius 0.05–0.15、length 0.8–1.3、height 0.24–0.34（米）。检查 drag-coefficient（细网格 Cd ≤ maxDragCoefficient）、grid-convergence、"
+    + "iterative-convergence、mesh-quality。经验：后斜角约 12.5° 时尾部附着、阻力最低；约 30° 附近是高阻临界区（尾部 C 柱涡强）；更陡时整体分离。结论只来自 OpenFOAM",
   "robot-cell": "MuJoCo 机器人工作单元（通用六轴臂，UR5e 级连杆：上臂 0.425 m、前臂 0.392 m，最大伸展约 0.95 m）。cell 全部 8 个字段必填（米，speedFraction 为额定关节速度的比例）："
     + "pickDistance/placeDistance 0.25–1.1、pickHeight/placeHeight 0.6–1.2、pedestalHeight 0.3–1、guardClearance 0.1–1.5（围栏离最远工位）、speedFraction 0.1–1、jitter 0–0.08（来料偏差）。"
     + "10 个种子逐一做 IK、五次多项式轨迹与 500 Hz 动力学；检查 reach、collision-free、cycle-time（≤ maxCycleSeconds）、success-rate（≥ minSuccessRate）。经验：参考单元速度 50% 时节拍约 5.9 s，"
@@ -110,7 +115,7 @@ const ModelOutput = z.object({
 
 type Handle = { kind: string; id: string; label: string };
 export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
-  lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements>; tool?: z.infer<typeof RobotTool> } }; lastCad?: CadReview; lastCriteria?: FactoryCriteria;
+  lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements>; tool?: z.infer<typeof RobotTool> } }; lastCad?: CadReview; lastAero?: AeroReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
   cadCode?: { template: string } }
 export interface ContextOptions { cadCode?: { template: string } }
@@ -154,6 +159,12 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
       massG: { baseline: c.baseline?.mass, candidate: c.candidate?.mass }, recheck: Boolean(c.feedbackId),
       checks: c.candidate?.checks.map(k => ({ id: k.id, passed: k.passed, observed: (k as { observed?: unknown }).observed, required: (k as { required?: unknown }).required })) };
   });
+  const aeros = mine<AeroReview>("aero-review").map((r, i) => {
+    const h = add("aero", i + 1, "aero-review", r.id, `气动 · 后斜角 ${r.request.parameters.slantAngleDeg}°`); handleOf.set(r.id, h);
+    return { handle: h, at: r.createdAt, state: r.state, verdict: r.verdict, parameters: r.request.parameters, requirements: r.request.requirements, recheck: Boolean(r.feedbackId),
+      measured: r.candidate?.checks.map(k => ({ id: k.id, passed: k.passed, observed: k.observed, required: k.required })),
+      reference: r.baseline?.checks.find(k => k.id === "drag-coefficient")?.observed, levels: r.cfd?.candidate?.levels.map(l => ({ level: l.level, cells: l.cells, cd: l.cd })) };
+  });
   const criteria = mine<FactoryCriteria>("factory-criteria").map((c, i) => {
     const h = add("criteria", i + 1, "factory-criteria", c.id, `工厂标准 ${c.digest.slice(0, 8)}`); handleOf.set(c.id, h);
     return { handle: h, at: c.createdAt, revision: c.projectRevision, criteria: c.criteria, rationale: c.rationale };
@@ -174,7 +185,7 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     versions,
     lifecycle: lifecycle ? { stages: lifecycle.stages.map(s => ({ label: s.label, status: s.status, metric: s.metric })), next: lifecycle.next.label,
       maturity: lifecycle.maturity, failingCases: lifecycle.failingCases.map(c => ({ label: c.label, evidence: handleOf.get(c.runId) ?? null, feedbackStatus: c.feedbackStatus ?? null })) } : undefined,
-    robotReviews: robots, blenderScenes: scenes, cadParts: cads, factoryCriteria: criteria, factoryReviews: factories, feedback, releases,
+    robotReviews: robots, blenderScenes: scenes, cadParts: cads, aeroBodies: aeros, factoryCriteria: criteria, factoryReviews: factories, feedback, releases,
     scope: "记录仿真、合成静态几何、名义参数化几何与演示工厂仿真；没有物理验证、FEA 或现场测量",
   };
   return { project, handles, workspace, cadCode: options.cadCode,
@@ -182,6 +193,7 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     lastPlant: store.list<SceneReview>("scene-review").filter((s): s is PlantScene => s.projectId === project.id && isPlant(s)).at(-1),
     lastRobot: store.list<SceneReview>("scene-review").filter(s => s.projectId === project.id && isRobotCell(s)).at(-1) as AiContext["lastRobot"],
     lastCad: store.list<CadReview>("cad-review").filter(s => s.projectId === project.id).at(-1),
+    lastAero: store.list<AeroReview>("aero-review").filter(s => s.projectId === project.id).at(-1),
     lastCriteria: store.list<FactoryCriteria>("factory-criteria").filter(s => s.projectId === project.id).at(-1) };
 }
 
@@ -292,6 +304,21 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       { field: "variant", from: context.lastScene?.request.variant ?? null, to: p.variant, direction: context.lastScene ? (context.lastScene.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `Blender 原生场景：${p.variant === "occluded" ? "带遮挡候选" : "无遮挡布局"}`, route: route("scenes"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "原生 .blend/GLB/PNG、射线与投影检查、EvalArc 对照；逐阶段实时几何" };
+  }
+  if (t === "aero-body") {
+    const p = parsed as { parameters: z.infer<typeof AeroParameters>; requirements: Partial<z.infer<typeof AeroRequirements>> };
+    const prev = context.lastAero?.request;
+    const requirements = AeroRequirements.parse({ ...(prev?.requirements ?? DEFAULT_AERO_REQUIREMENTS), ...p.requirements });
+    const payload = { projectRevision: opts.revision, parameters: p.parameters, requirements };
+    AeroRequest.parse({ ...payload, requestId: placeholder });
+    const changes: PlanChange[] = [
+      ...Object.keys(p.parameters).map(k => { const from = (prev?.parameters as Record<string, number> | undefined)?.[k] ?? null, to = (p.parameters as Record<string, number>)[k];
+        return { field: `parameters.${k}`, from, to, direction: prev ? (from === to ? "same" : "changed") : "new" } as PlanChange; }),
+      compare("maxDragCoefficient", prev?.requirements.maxDragCoefficient, requirements.maxDragCoefficient, "lower"),
+      compare("maxGridChange", prev?.requirements.maxGridChange, requirements.maxGridChange, "lower")];
+    return { ...base, title: opts.title ?? `OpenFOAM 车身：后斜角 ${p.parameters.slantAngleDeg}°`, route: route("aero"), method: "POST", payload, changes,
+      warnings: [...relaxWarning(changes), "约 15–25 分钟：参考与候选各两级网格；稳态 RANS 用于设计比较。", ...note],
+      evidence: "CadQuery 车身 STEP；OpenFOAM 两级网格 Cd/Cl 历史、checkMesh；EvalArc 对照" };
   }
   if (t === "robot-cell") {
     const p = parsed as { cell: z.infer<typeof RobotCell>; requirements: Partial<z.infer<typeof RobotRequirements>> };

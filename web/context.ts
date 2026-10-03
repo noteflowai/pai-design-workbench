@@ -1,3 +1,4 @@
+import type { AeroReview, AeroParameters, AeroRequirementsValue } from "../src/aero";
 import type { CadOptimization } from "../src/optimize";
 import { createContext, useContext } from "react";
 import type { Campaign, Feedback, Project, Review } from "../src/contracts";
@@ -15,11 +16,11 @@ import type { LiveSession, LiveTrack } from "./studio";
 export type RunKind = EvidenceKind;
 export type ViewId = "overview" | StageId;
 export type State = {
-  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; cadSweeps?: CadSweep[]; cadOptimizations?: CadOptimization[];
+  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; aeros?: AeroReview[]; cadSweeps?: CadSweep[]; cadOptimizations?: CadOptimization[];
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
+  capabilities: { aero?: false | { engine: string; reference: AeroParameters; defaultRequirements: AeroRequirementsValue }; modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
     generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
     signing?: { kms: boolean; keyId: string; algorithm: string };
     physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number; strategies?: string[]; botorch?: string | null } };
@@ -76,4 +77,4 @@ export const FEEDBACK_STATUS: Record<string, string> = {
   received: "已收到", "needs-context": "待补充", reproducible: "已复现", assigned: "已分配",
   "fix-proposed": "方案已提出", "no-change-with-reason": "保留并说明", rechecked: "已复测", closed: "已关闭",
 };
-export const KIND_LABEL: Record<RunKind, string> = { "robot-review": "机器人记录", "blender-scene": "Blender 场景", "factory-twin": "工厂孪生", "cad-part": "CAD 零件" };
+export const KIND_LABEL: Record<RunKind, string> = { "robot-review": "机器人记录", "blender-scene": "Blender 场景", "factory-twin": "工厂孪生", "cad-part": "CAD 零件", "aero-body": "气动 CFD" };

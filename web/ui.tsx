@@ -64,6 +64,8 @@ export function projectRuns(data: State, projectId?: string): RunItem[] {
       verdict: r.verdict, title: r.request.variant === "robot-cell" ? `MuJoCo 工作单元 · 速度 ${Math.round(r.request.cell.speedFraction * 100)}% · 围栏 ${r.request.cell.guardClearance} m` : r.request.variant === "plant" ? `工厂产线 · ${r.request.layout.stations} 工位 · 通道 ${r.request.layout.aisleWidth} m` : r.request.variant === "occluded" ? "带遮挡候选布局" : "无遮挡布局", revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.cads ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "cad-part" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: `NEMA 17 支架 · ${CAD_VARIANTS[r.request.variant][0]}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
+    ...(data.aeros ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "aero-body" as const, id: r.id, createdAt: r.createdAt, state: r.state,
+      verdict: r.verdict, title: `Ahmed 车身 · 后斜角 ${r.request.parameters.slantAngleDeg}°`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.factoryReviews ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "factory-twin" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: `维护/能源方案 · 标准 ${r.criteriaDigest.slice(0, 6)}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -73,6 +75,7 @@ const VERDICTS: Record<RunKind, Record<string, [string, Tone]>> = {
   "blender-scene": { "accepted-static-scene": ["静态场景检查通过", "ok"], rejected: ["场景检查拒绝", "bad"] },
   "cad-part": { "accepted-cad-part": ["零件检查通过", "ok"], rejected: ["零件检查拒绝", "bad"] },
   "factory-twin": { "accepted-illustrative": ["演示仿真范围内通过", "ok"], rejected: ["维护方案拒绝", "bad"] },
+  "aero-body": { "accepted-aero-body": ["气动检查通过", "ok"], rejected: ["气动检查拒绝", "bad"] },
 };
 export function verdictOf(kind: RunKind, verdict: string | undefined, state: string): { label: string; tone: Tone } {
   if (state === "running") return { label: "运行中", tone: "live" };

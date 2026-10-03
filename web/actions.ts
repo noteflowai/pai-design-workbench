@@ -1,3 +1,4 @@
+import type { AeroReview } from "../src/aero";
 import { api, requestIdFor } from "./api";
 import { CANDIDATES, type Ctx } from "./context";
 import type { CandidateId, Feedback, Review } from "../src/contracts";
@@ -141,6 +142,14 @@ export function advanceFeedback(c: Ctx, f: Feedback, reason: string) {
       r = await c.track(requestId, "CAD 反馈复测", "cad-part", () => api<CadReview>(`/projects/${p.id}/cad`, fix
         ? { ...base, requestId, projectRevision: p.revision, feedbackId: f.id }
         : { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "reference", requirements: original.request.requirements, feedbackId: f.id }));
+    } else if (f.evidenceKind === "aero-body") {
+      // The fix is the accepted body of the same requirements created after the failure (e.g. the AI-proposed slant).
+      const original = (c.data.aeros ?? []).find(x => x.id === f.runId)!;
+      const fix = keep ? undefined : acceptedFix(c.data.aeros ?? [], original, () => true);
+      if (!keep && !fix) throw new Error("先提交并通过一个修正方案（可在失败的检查上“问 AI”），再复测这条反馈。");
+      const params = (fix ?? original).request.parameters;
+      r = await c.track(requestId, "OpenFOAM 反馈复测", "aero-body", () => api<AeroReview>(`/projects/${p.id}/aero`,
+        { requestId, projectRevision: p.revision, parameters: params, requirements: original.request.requirements, feedbackId: f.id }));
     } else if (f.evidenceKind === "factory-twin") {
       const original = (c.data.factoryReviews ?? []).find(x => x.id === f.runId)!;
       r = await c.track(requestId, "工厂孪生反馈复测", "factory-twin", () => api<FactoryReview>(`/projects/${p.id}/factory-reviews`,

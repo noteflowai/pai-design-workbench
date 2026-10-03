@@ -13,6 +13,7 @@ import { CheckTable, type MeasuredCheck } from "../ui";
 import { CompareCandidates } from "./compare";
 import { isPlantScene, PlantDetail } from "../plant";
 import { isRobotScene, RobotDetail } from "../robotcell";
+import { AeroDetail } from "../aero";
 
 const Viewport = lazy(() => import("../viewport"));
 
@@ -184,8 +185,9 @@ export function Validate() {
           return plant ? <PlantDetail scene={isPlantScene(scene) ? scene : undefined} Receipts={Receipts} /> : <SceneDetail scene={scene} />;
         })()}
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
+        {detailKind === "aero-body" && <AeroDetail run={selected ? (c.data.aeros ?? []).find(s => s.id === selected.id) : undefined} />}
         {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
-        {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
+        {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && liveKind !== "aero-body" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
         {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.kind !== "cad-optimize" && !session.running && session.recordId === selected?.id &&
           <details className="card run-log"><summary>本次执行记录 · {session.steps.length} 步</summary><LiveSteps session={session} /></details>}
         {selected && selected.state === "completed" && <>

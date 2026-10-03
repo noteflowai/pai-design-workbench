@@ -37,7 +37,7 @@
 | F16 | 外部 Agent 经 AgentForge 网关读取和提议；托管站点用客户端凭据 | 网关策略测试；托管 401/404 检查 | 已验证 |
 | F17 | PAI 技能经底座的技能分发机制提供并锁定摘要；用 `eval/` 度量模型的物理估算 | `examples/pai-workbench/skill.test.mjs`；分发器手工核验 | 部分（技能分发和评测框架已完成，CodeBuild 通过；真实模型的分数待测） |
 | F18 | FEA 批量扩展到 AWS Batch，每个点一个作业，结果同样经摘要核验 | 托管寻优：5 个 Batch 作业，摘要与版本核对；单点与本机结果一致（0.0478 mm），见 [solver-batch.json](evidence/solver-batch.json) | 已验证 |
-| F19 | 流体通道：OpenFOAM（snappyHexMesh + simpleFoam），网格无关性检查 | 原生 e2e | 待做 |
+| F19 | 流体通道：OpenFOAM v2512（固定 digest 的官方 OpenCFD 镜像）+ CadQuery 生成 Ahmed 型车身；snappyHexMesh 两级网格 + simpleFoam k-ω SST；检查阻力、网格收敛、迭代收敛、网格质量 | `npm run test:aero`；角度扫描与 Ahmed 1984 实验对照，见 [AERO.md](AERO.md) | 已验证（本机；托管站点上还需在 Batch 上跑 OpenFOAM 作业） |
 | F20 | 物理 AI 代理模型 PhysicsNeMo：用自己积累的求解数据训练，只负责排序 | 留出集误差 + 实测复核 | 待做 |
 | F21 | 可制造性：CAM 或切片 CLI 检查，加工时间和成本 | 原生 e2e | 待做 |
 | F22 | 第二个零件族，以及 FreeCAD / build123d 文档 | 原生 e2e | 待做 |

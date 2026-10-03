@@ -5,6 +5,7 @@ import { sceneKey, type SceneReview } from "./scenes.js";
 import type { AssistantPlan } from "./assistant.js";
 import type { Proposal } from "./proposals.js";
 import type { CadReview } from "./cad.js";
+import type { AeroReview } from "./aero.js";
 import type { Release } from "./release.js";
 
 /**
@@ -14,7 +15,7 @@ import type { Release } from "./release.js";
  */
 export type StageId = "requirements" | "design" | "validate" | "evidence" | "feedback" | "deliver";
 export type StageStatus = "pending" | "active" | "attention" | "done";
-export type EvidenceKind = "robot-review" | "blender-scene" | "factory-twin" | "cad-part";
+export type EvidenceKind = "robot-review" | "blender-scene" | "factory-twin" | "cad-part" | "aero-body";
 export interface StageState { id: StageId; index: number; label: string; status: StageStatus; metric: string; detail: string }
 export interface FailingCase { kind: EvidenceKind; runId: string; seed: number | null; checkId?: string; label: string; feedbackId?: string; feedbackStatus?: string }
 export interface Activity { at: string; stage: StageId; label: string; detail?: string; ref?: { kind: EvidenceKind | "feedback" | "campaign" | "plan" | "release"; id: string } }
@@ -26,7 +27,7 @@ export interface Lifecycle {
   counts: { runs: number; running: number; rejected: number; accepted: number; openFeedback: number; closedFeedback: number; drafts: number; observations: number };
 }
 export interface LifecycleSnapshot {
-  project: Project; reviews: Review[]; scenes: SceneReview[]; cads?: CadReview[]; releases?: Release[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
+  project: Project; reviews: Review[]; scenes: SceneReview[]; cads?: CadReview[]; aeros?: AeroReview[]; releases?: Release[]; factoryCriteria: FactoryCriteria[]; factoryReviews: FactoryReview[];
   feedback: Feedback[]; campaigns: Campaign[]; events: { campaignId: string; kind: string; actorKind: string; at: string; participantId: string }[];
   plans: AssistantPlan[]; proposals: Proposal[];
 }
@@ -36,7 +37,7 @@ const STATUS: Record<string, string> = { received: "已收到", "needs-context":
 const NEXT_FEEDBACK: Record<string, string> = { received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
   assigned: "提出处理方案", "fix-proposed": "按方案复测", "no-change-with-reason": "按保留说明复测", rechecked: "关闭已复测反馈" };
 const VERDICT: Record<string, string> = { "accepted-in-recorded-panel": "记录样本内通过", rejected: "拒绝", "needs-more-evidence": "需要更多证据",
-  "accepted-static-scene": "静态场景通过", "accepted-illustrative": "演示范围内通过", "accepted-cad-part": "零件检查通过" };
+  "accepted-static-scene": "静态场景通过", "accepted-illustrative": "演示范围内通过", "accepted-cad-part": "零件检查通过", "accepted-aero-body": "气动检查通过" };
 const FACTORY_CHECK: Record<string, string> = { "output-per-seed": "单种子产出", "demand-intervals": "需量超限", "hall-comfort": "车间舒适度",
   "ev-service": "EV 充电服务", "closed-failures": "闭环故障" };
 const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "相机可见性",
@@ -83,6 +84,15 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
       }
     }
   }
+  const AERO_CHECK: Record<string, string> = { "drag-coefficient": "阻力系数", "grid-convergence": "网格收敛", "iterative-convergence": "迭代收敛", "mesh-quality": "网格质量" };
+  for (const aero of latestBy((s.aeros ?? []).filter(x => x.state === "completed" && !x.feedbackId), x => `${canonical(x.request.parameters)}:${canonical(x.request.requirements)}`)) {
+    // Aerodynamics: a failing check of the candidate is a retained case even when the reference body fails it too
+    // (the reference is the starting point, not the target).
+    for (const check of aero.candidate?.checks ?? []) {
+      if (!check.passed) cases.push(bind({ kind: "aero-body", runId: aero.id, seed: null, checkId: check.id,
+        label: `气动 ${AERO_CHECK[check.id] ?? check.id}：后斜角 ${aero.request.parameters.slantAngleDeg}° 实测 ${check.observed}，要求 ${check.required}` }));
+    }
+  }
   for (const f of latestBy(s.factoryReviews.filter(x => !x.feedbackId), x => x.criteriaId)) {
     for (const [checkId, seeds] of Object.entries(f.aggregate.failingSeeds)) for (const seed of seeds) {
       cases.push(bind({ kind: "factory-twin", runId: f.id, seed, checkId, label: `工厂 seed ${seed}：${FACTORY_CHECK[checkId] ?? checkId}未满足冻结标准` }));
@@ -97,6 +107,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
     ...s.reviews.map(r => ({ kind: "robot-review" as const, id: r.id, state: r.state, verdict: r.decision?.verdict, createdAt: r.createdAt, key: `robot:${r.candidate}` })),
     ...s.scenes.map(r => ({ kind: "blender-scene" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `scene:${sceneKey(r.request)}` })),
     ...(s.cads ?? []).map(r => ({ kind: "cad-part" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `cad:${cadKey(r)}` })),
+    ...(s.aeros ?? []).map(r => ({ kind: "aero-body" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `aero:${canonical(r.request.parameters)}:${canonical(r.request.requirements)}` })),
     ...s.factoryReviews.map(r => ({ kind: "factory-twin" as const, id: r.id, state: r.state, verdict: r.verdict, createdAt: r.createdAt, key: `factory:${r.criteriaId}` })),
   ];
   const completed = runs.filter(r => r.state === "completed"), running = runs.filter(r => r.state === "running");
@@ -108,7 +119,7 @@ export function computeLifecycle(s: LifecycleSnapshot): Lifecycle {
   const candidates = new Set(runs.map(r => r.key)).size;
   const releases = s.releases ?? [];
   const current = releases.find(r => r.maturity === "released"), pendingRelease = releases.find(r => r.maturity === "in-review");
-  const passing = completed.filter(r => r.verdict && ["accepted-in-recorded-panel", "accepted-static-scene", "accepted-cad-part", "accepted-illustrative"].includes(r.verdict));
+  const passing = completed.filter(r => r.verdict && ["accepted-in-recorded-panel", "accepted-static-scene", "accepted-cad-part", "accepted-aero-body", "accepted-illustrative"].includes(r.verdict));
   const stages: StageState[] = [
     { id: "requirements", index: 1, label: "需求冻结", status: "done", metric: `需求 v${project.revision}`,
       detail: `${s.factoryCriteria.length} 个工厂标准版本；后续检查绑定需求哈希` },

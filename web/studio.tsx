@@ -1,3 +1,4 @@
+import type { AeroReview } from "../src/aero";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, openLive, requestIdFor, type LiveEvent } from "./api";
 import { CAD_DRAFT_KEY, useApp, type RunKind } from "./context";
@@ -51,10 +52,11 @@ export function useLiveSession() {
   return { session, track };
 }
 
-export function viewportModel(session: LiveSession | undefined, scene: SceneReview | CadReview | undefined, which: Which,
-  kind: "blender-scene" | "cad-part" = "blender-scene"): ViewportModel | undefined {
-  const base = kind === "cad-part" ? "/api/cad" : "/api/scenes", finalFile = kind === "cad-part" ? "assembly.glb" : "scene.glb", units = kind === "cad-part" ? "mm" as const : "m" as const;
-  const rays = (r?: SceneReview | CadReview) => (r as SceneReview | undefined)?.rays;
+export function viewportModel(session: LiveSession | undefined, scene: SceneReview | CadReview | AeroReview | undefined, which: Which,
+  kind: "blender-scene" | "cad-part" | "aero-body" = "blender-scene"): ViewportModel | undefined {
+  const base = kind === "cad-part" ? "/api/cad" : kind === "aero-body" ? "/api/aero" : "/api/scenes";
+  const finalFile = kind === "cad-part" ? "assembly.glb" : kind === "aero-body" ? "aero.glb" : "scene.glb", units = kind === "cad-part" ? "mm" as const : "m" as const;
+  const rays = (r?: SceneReview | CadReview | AeroReview) => (r as SceneReview | undefined)?.rays;
   const live = session?.kind === kind && (session.running || session.recordId === scene?.id || !scene) ? session : undefined;
   if (live && (live.stages.baseline.length || live.stages.candidate.length || live.running)) {
     const w = live.running ? live.current ?? "baseline" : which;
@@ -65,7 +67,7 @@ export function viewportModel(session: LiveSession | undefined, scene: SceneRevi
   if (!scene) return undefined;
   const stages = (scene.stages?.[which] ?? []).map(s => ({ index: s.index, label: s.label, objects: s.objects, url: `${base}/${scene.id}/stages/${which}/${s.index}` }));
   return { key: scene.id, which, stages, ray: rays(scene)?.[which], running: scene.state === "running", units,
-    title: `${kind === "cad-part" ? "零件" : "场景"} ${scene.id.slice(0, 8)}`,
+    title: `${kind === "cad-part" ? "零件" : kind === "aero-body" ? "车身" : "场景"} ${scene.id.slice(0, 8)}`,
     finalUrl: scene.state === "completed" ? `${base}/${scene.id}/files/${which}/${finalFile}` : undefined };
 }
 
@@ -81,8 +83,8 @@ const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-pr
   "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型", "cad-code": "CadQuery 代码", "cad-sweep": "参数扫描", "cad-optimize": "物理寻优" };
 const directionLabel: Record<string, string> = { new: "新", same: "不变", tightened: "收紧", relaxed: "放宽", changed: "变更" };
 const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-cell": "scene-review", "robot-review": "review",
-  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review", "cad-sweep": "cad-sweep", "cad-optimize": "cad-optimize" };
-const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "plant-layout": "blender-scene", "robot-cell": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part" };
+  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review", "cad-sweep": "cad-sweep", "cad-optimize": "cad-optimize", "aero-body": "aero-review" };
+const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "plant-layout": "blender-scene", "robot-cell": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part", "aero-body": "aero-body" };
 const SUGGESTIONS = [
   "生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m",
   "评审工厂维护与能源方案：产出不能下降，EV 充电不低于 80%，车间不超过 25 °C",
@@ -94,7 +96,7 @@ const PROFILE_NAME: Record<string, string> = { "kiro-primary": "Kiro 主账号",
 const ERR: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时", invalid_output: "协议校验未通过" };
 const STATE_CHIP: Record<string, [string, string]> = { done: ["已完成", "ok"], reconcile: ["待核对", "warn"], interrupted: ["已中断 · 待核对", "warn"],
   deferred: ["达到尝试上限", "muted"], blocked: ["执行器拒绝", "bad"], "invalid-output": ["输出无效", "bad"], running: ["运行中", "live"] };
-const CITE_VIEW: Record<string, [string, string?]> = { review: ["validate", "robot-review"], "scene-review": ["validate", "blender-scene"], "cad-review": ["validate", "cad-part"],
+const CITE_VIEW: Record<string, [string, string?]> = { review: ["validate", "robot-review"], "scene-review": ["validate", "blender-scene"], "cad-review": ["validate", "cad-part"], "aero-review": ["validate", "aero-body"],
   "factory-review": ["validate", "factory-twin"], feedback: ["feedback"], release: ["deliver"], project: ["overview"], "project-version": ["requirements"], "factory-criteria": ["requirements"] };
 function openCitation(c: ReturnType<typeof useApp>, x: { kind: string; id: string }) {
   const [view, kind] = CITE_VIEW[x.kind] ?? ["overview"];
@@ -259,7 +261,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
         </div>
       </div>)}
       {session && (session.running || session.steps.length > 0) && <div className="bubble tool"><LiveSteps session={session} />
-        {(session.kind === "blender-scene" || session.kind === "cad-part") && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: session.kind, ...(session.recordId ? { id: session.recordId } : {}) })}>在三维视口查看 →</button>}</div>}
+        {(session.kind === "blender-scene" || session.kind === "cad-part" || session.kind === "aero-body") && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: session.kind, ...(session.recordId ? { id: session.recordId } : {}) })}>在三维视口查看 →</button>}</div>}
       {thinking && <div className="bubble reply typing" aria-label="解析中"><i /><i /><i /></div>}
     </div>
     <form className="composer" onSubmit={e => void send(e)}>

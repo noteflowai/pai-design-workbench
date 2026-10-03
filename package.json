@@ -39,7 +39,8 @@
     "test:agentcore-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/agentcore-live.ts",
     "desktop:stage": "npm run build && node tools/make_icon.mjs && node tools/package_desktop.mjs",
     "desktop:linux": "npm run desktop:stage && cd desktop && npm ci --no-audit --no-fund && npm run dist:linux",
-    "test:desktop": "node --env-file-if-exists=.state/demo.env --import tsx scripts/desktop-e2e.ts"
+    "test:desktop": "node --env-file-if-exists=.state/demo.env --import tsx scripts/desktop-e2e.ts",
+    "test:aero": "node --env-file-if-exists=.state/demo.env --import tsx scripts/aero-e2e.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agentcore": "3.1146.0",

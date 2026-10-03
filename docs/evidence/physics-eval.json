@@ -1,0 +1,61 @@
+{
+  "schema": "pai-physics-eval-1",
+  "checkedAt": "2026-10-03T17:35:00Z",
+  "task": "agentforge examples/pai-workbench/eval/tasks/estimate-bracket-deflection (merged in 9594430)",
+  "engine": {
+    "profile": "kiro-primary",
+    "provider": "kiro",
+    "model": "claude-opus-5.5",
+    "engineVersion": "2.27.1",
+    "modelEvidence": "acp_advertised"
+  },
+  "path": "scripts/eval-physics-solver.ts → NoteFlow bounded executor (shared ledger, 1 attempt, no retry); the model returns exponents as JSON, no code is executed",
+  "modelAnswer": {
+    "thicknessExponent": -2.6,
+    "widthExponent": 1.2,
+    "heightExponent": 0.8,
+    "rationale": "The 50 mm lever turns 60 N into about 3 N·m at the face, which is more than the direct shear and bending about the base (about 1.4 N·m at roughly H/2). The load enters at the centre through the fixed 31 mm bolt pattern, so the plate bends locally between the edge ribs. Plate stiffness D scales with t^3, so a is near -3; ribs of the same thickness scale more like t, so a ≈ -2.6. Wider W lengthens the unsupported span between the ribs, so b ≈ +1.2. Taller H raises the axis and the moment arm to the base, partly offset by deeper triangular ribs, so c ≈ +0.8."
+  },
+  "score": {
+    "median": 0.114,
+    "worst": 0.321,
+    "spearman": 0.95,
+    "passed": true,
+    "thresholds": {
+      "median": 0.15,
+      "worst": 0.35,
+      "spearman": 0.9
+    }
+  },
+  "baselines": {
+    "fixtureSolution": {
+      "exponents": {
+        "t": -2.5,
+        "W": 0.7,
+        "H": 0
+      },
+      "median": 0.011,
+      "worst": 0.192,
+      "spearman": 1.0
+    },
+    "pureThinPlate": {
+      "exponents": {
+        "t": -3,
+        "W": 0,
+        "H": 0
+      },
+      "median": 0.145,
+      "worst": 0.354,
+      "passed": false
+    },
+    "leastSquaresOnHeldOut": {
+      "exponents": {
+        "t": -2.35,
+        "W": 0.72,
+        "H": -0.37
+      },
+      "note": "fit to the held-out data itself: an upper bound, not a fair solver"
+    }
+  },
+  "reading": "The model got the thickness and width trends right (t^-2.6, W^+1.2, larger than the measured +0.72) but the height trend wrong in sign (+0.8 vs the measured -0.37): taller plates with deeper ribs are stiffer at the axis here. It passes the bar, and the solver still decides."
+}

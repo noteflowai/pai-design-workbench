@@ -12,6 +12,7 @@ import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
+import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, reviewAero, type AeroReview } from "./aero.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -125,7 +126,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const mine = <T extends { projectId?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id);
     const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
     const releases = mine<Release>("release");
-    const snapshot: LifecycleSnapshot = { project, releases, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"),
+    const snapshot: LifecycleSnapshot = { project, releases, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"), aeros: mine<AeroReview>("aero-review"),
       factoryCriteria: mine<FactoryCriteria>("factory-criteria"), factoryReviews: mine<FactoryReview>("factory-review"),
       feedback: mine<Feedback>("feedback"), campaigns,
       events: store.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
@@ -151,7 +152,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return decideRelease(store, p, lifecycle(p), paramId(request.params, "releaseId"), request.body, actor(request.headers));
   });
   // Signed, self-contained release package: record + digest-checked native files + release decision.
-  const DIRS: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad" };
+  const DIRS: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad", "aero-review": "aero" };
   // A release is sealed once: signed, optionally time-stamped (RFC 3161) and archived write-once (S3 Object Lock).
   // Later downloads return the same bytes, so the archived copy, the time-stamp and every download agree.
   const sealing = new Map<string, Promise<Buffer>>();
@@ -210,7 +211,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     releases: store.list("release"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
-    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
+    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), aeros: store.list("aero-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
     factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
     assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
@@ -221,6 +222,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
         optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS,
           strategies: (await botorchVersion(config)) ? ["gp-nsga2", "botorch-qlognehvi"] : ["gp-nsga2"], botorch: await botorchVersion(config) } } : false,
+      aero: aeroConfigured(config) ? { engine: "OpenFOAM v2512 (OpenCFD image) · snappyHexMesh + simpleFoam k-ω SST · two mesh levels", reference: AERO_REFERENCE,
+        defaultRequirements: DEFAULT_AERO_REQUIREMENTS } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
@@ -277,6 +280,11 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const violations = await checkCadCode(config, code);
     return { ok: violations.length === 0, violations };
   });
+  app.get("/api/aero/:id", async (request, reply) => {
+    const run = store.get<AeroReview>("aero-review", paramId(request.params));
+    if (!run) throw new DomainError("NOT_FOUND", "Aerodynamics review not found", 404);
+    return nativeResponse(run, reply, "aero");
+  });
   app.get("/api/cad/:id", async (request, reply) => {
     const cad = store.get<CadReview>("cad-review", paramId(request.params));
     if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
@@ -295,6 +303,27 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
     return reply.type(types[p.file]).send(content);
+  });
+  app.post("/api/projects/:id/aero", async (request, reply) =>
+    executeNative(reply, request.body, "aero-review", "aero", () => reviewAero(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.get("/api/aero/:id/files/:which/:file", async (request, reply) => {
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(AERO_FILES) }).parse(request.params);
+    const run = store.get<AeroReview>("aero-review", p.id);
+    if (!run || run.state !== "completed" || !run.files[`${p.which}/${p.file}`]) throw new DomainError("NOT_FOUND", "Completed aerodynamics evidence required", 404);
+    const content = await readFile(join(config.state, "aero", p.id, p.which, p.file));
+    if (sha256(content) !== run.files[`${p.which}/${p.file}`]) throw new DomainError("AERO_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
+    if (!p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
+    const type = p.file.endsWith(".glb") ? "model/gltf-binary" : p.file.endsWith(".json") ? "application/json" : p.file.endsWith(".step") ? "application/step" : p.file.endsWith(".stl") ? "model/stl" : "text/plain";
+    return reply.type(type).send(content);
+  });
+  app.get("/api/aero/:id/stages/:which/:index", async (request, reply) => {
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), index: z.coerce.number().int().min(1).max(16) }).parse(request.params);
+    const run = store.get<AeroReview>("aero-review", p.id);
+    const stage = run?.stages?.[p.which]?.find(s => s.index === p.index);
+    if (!run || !stage || !/^stages\/\d{2}-[a-z-]{1,24}\.glb$/.test(stage.file)) throw new DomainError("NOT_FOUND", "Stage not recorded", 404);
+    const content = await readFile(join(config.state, "aero", p.id, p.which, stage.file));
+    if (sha256(content) !== stage.sha256) throw new DomainError("AERO_FILE_CHANGED", "Stage geometry differs from its recorded digest", 422);
+    return reply.type("model/gltf-binary").header("X-PAI-Evidence", "presentation-stage").send(content);
   });
   app.get("/api/cad/:id/stages/:which/:index", async (request, reply) => {
     const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), index: z.coerce.number().int().min(1).max(16) }).parse(request.params);
