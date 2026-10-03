@@ -17,6 +17,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          # Public repository: do not leave the job token in .git/config for later steps.
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.21.0"
@@ -35,6 +38,9 @@ jobs:
       PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          # Public repository: do not leave the job token in .git/config for later steps.
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: ${{ matrix.node }}

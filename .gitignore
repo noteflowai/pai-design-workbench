@@ -3,6 +3,11 @@ dist/
 web-dist/
 .state/
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
 playwright-report/
 test-results/
 *.sqlite*
