@@ -2,6 +2,16 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## OpenFOAM 上 Batch、DFM、求解数据集（2026-10-04 晨）
+
+| 检查 | 实际结果 |
+|---|---|
+| 托管站点 OpenFOAM（AWS Batch） | pai.oneai.host 上 12.5° 车身评审：4 个 16 vCPU 作业，9 分钟（本机 8 核要 94 分钟）；参考件 Cd 0.23406，与本机一致；候选 Cd 0.22926（本机 0.22945）；通过，EvalArc 阻断 0 项。见 [aero-batch.json](evidence/aero-batch.json) |
+| 部署中发现的问题 | 修改 Fargate 计算环境的 maxvCpus 会触发不可更新参数错误，栈进入 UPDATE_ROLLBACK_FAILED；用 `cdk rollback --orphan` 恢复，并保持 maxvCpus 32 不变（两个 16 vCPU 作业刚好放得下） |
+| DFM | `npm run test:cad`：紧凑型支架 2 次装夹（+Y、+Z），孔深径比 ≤ 1.18；参考件 17.22 EUR 超出 16 EUR 目标，紧凑型 14.69 EUR 达标。车间参数在 `native/dfm-shop.json`，结果是估算，不是报价 |
+| 求解数据集 | 单元测试：只有求解过的点进入数据集，几何筛查点不进入；托管站点 `GET /api/dataset/solver` 返回 77 行，带摘要 `619fe0e2…` |
+| 回归 | 本机 19 个浏览器测试全部通过；`npm run check`（78 个单元测试）通过 |
+
 ## 气动通道与物理推理评测（2026-10-04）
 
 | 检查 | 实际结果 |

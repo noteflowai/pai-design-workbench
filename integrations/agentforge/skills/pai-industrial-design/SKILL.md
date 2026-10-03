@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.1.0"
+version: "1.2.0"
 ---
 
 # PAI industrial design
@@ -38,6 +38,11 @@ trials, and EvalArc compares a candidate against its baseline. You **propose**; 
   the workspace capabilities list it.
 - `robot-cell`: `tool: { cad: "cad-N" }` mounts an accepted CAD part on the gripper. Its mass and inertia come
   from the exact mesh and are cross-checked against the B-Rep. Each run exports MJCF and validated OpenUSD.
+- `aero-body`: an Ahmed-type body solved by OpenFOAM v2512 on two meshes (on AWS Batch when hosted). Reason about
+  slant-angle separation before proposing. Steady RANS under-predicts drag at 25–35°, so trust the solver's ranking,
+  not absolute values.
+- `requirements.dfm` on a CAD review: 3-axis milling setups, hole drillability and a unit-cost estimate measured on
+  the B-Rep. It is an estimate, not a quote.
 - A released package is signed (KMS) and time-stamped (RFC 3161). Cite its release number. Never describe it as
   physical validation.
 
