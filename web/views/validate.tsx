@@ -117,10 +117,18 @@ function CadDetail({ cad }: { cad?: CadReview }) {
   const model = viewportModel(c.session, cad, live ? c.session!.current ?? which : which, "cad-part");
   const v = cad ? verdictOf("cad-part", cad.verdict, cad.state) : { label: "CadQuery 原生建模中", tone: "live" as const };
   const shown = which === "baseline" ? cad?.baseline : cad?.candidate;
+  const fea = cad?.state === "completed" ? cad.fea?.[which] : undefined;
+  const [stressView, setStressView] = useState(true);
+  const shownModel = model && fea && stressView ? { ...model, stages: [], finalUrl: `/api/cad/${cad!.id}/files/${which}/fea.glb`, title: `${model.title} · von Mises` } : model;
   return <>
     <Verdict tone={v.tone} eyebrow={`参数化 CAD · NEMA 17 电机支架${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
       detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何，不含 FEA 或实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
-    <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={model} /></Suspense>
+    <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={shownModel} /></Suspense>
+    {fea && <div className="fea-bar" role="group" aria-label="FEA 结果">
+      <label className="check"><input type="checkbox" checked={stressView} onChange={e => setStressView(e.target.checked)} />显示 von Mises 应力云图（变形放大 {fea.displayScale}×）</label>
+      <span className="fea-scale" aria-hidden="true"><i /></span><small>0 → {fea.colorScaleMaxMPa} MPa</small>
+      <small>{fea.solver} · {fea.mesher} · {fea.element} · 细网格 {fea.meshes.fine?.elements} 单元 · 两级网格挠度差 {(fea.convergence.axisDisplacement * 100).toFixed(1)}%、峰值应力差 {(fea.convergence.peakVonMises * 100).toFixed(1)}%</small>
+    </div>}
     <div className="segmented" role="group" aria-label="零件">{(["baseline", "candidate"] as const).map(w =>
       <button key={w} type="button" aria-pressed={which === w} className={which === w ? "active" : ""} onClick={() => setWhich(w)}>{w === "baseline" ? "基准零件" : "候选零件"}</button>)}</div>
     {cad?.sandbox && <details className="code-source" open={cad.state === "failed"}>
@@ -145,7 +153,7 @@ export function Validate() {
   const { project, route, session } = c;
   const runs = projectRuns(c.data, project?.id);
   const kind = route.params.get("kind") as RunKind | null, id = route.params.get("id");
-  const live = session?.running && session.kind !== "assistant" && session.kind !== "cad-sweep" ? { ...session, kind: session.kind as RunKind } : undefined;
+  const live = session?.running && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.kind !== "cad-optimize" ? { ...session, kind: session.kind as RunKind } : undefined;
   const selected: RunItem | undefined = runs.find(r => r.id === id) ?? (live && !id ? undefined : runs.find(r => !kind || r.kind === kind));
   const liveKind = live && !selected ? live.kind : undefined;
   // Keep the selected record visible in the list or strip (it may be off-screen after navigation).
@@ -166,7 +174,7 @@ export function Validate() {
           <small>{time(r.createdAt)} · 需求 v{r.revision} · {r.id.slice(0, 8)}</small></button>; })}
       </nav>
       <div className="detail">
-        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.running && <Card><LiveSteps session={session} /></Card>}
+        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.kind !== "cad-optimize" && session.running && <Card><LiveSteps session={session} /></Card>}
         {detailKind === "robot-review" && selected && <ReviewDetail run={c.data.reviews.find(r => r.id === selected.id)!} />}
         {detailKind === "blender-scene" && (() => {
           const scene = selected ? c.data.scenes.find(s => s.id === selected.id) : undefined;
@@ -176,7 +184,7 @@ export function Validate() {
         {detailKind === "cad-part" && <CadDetail cad={selected ? (c.data.cads ?? []).find(s => s.id === selected.id) : undefined} />}
         {detailKind === "factory-twin" && selected && <FactoryResult review={(c.data.factoryReviews ?? []).find(r => r.id === selected.id)!} />}
         {liveKind && liveKind !== "blender-scene" && liveKind !== "cad-part" && <Empty title="正在执行原生任务">完成后显示结论与检查项。</Empty>}
-        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && !session.running && session.recordId === selected?.id &&
+        {session && session.kind !== "assistant" && session.kind !== "cad-sweep" && session.kind !== "cad-optimize" && !session.running && session.recordId === selected?.id &&
           <details className="card run-log"><summary>本次执行记录 · {session.steps.length} 步</summary><LiveSteps session={session} /></details>}
         {selected && selected.state === "completed" && <>
           <CaseList runId={selected.id} />

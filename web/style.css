@@ -696,3 +696,7 @@ h1 { font-size: 22px; }
 }
 .run-log summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .run-log[open] summary { margin-bottom: 8px; }
+
+.fea-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12px; color: var(--ink-2); margin: 8px 0; }
+.fea-scale i { display: inline-block; width: 120px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, #0000ff, #00ff00, #ff0000); vertical-align: middle; }
+.sweep-plot .pt.exploit { stroke: var(--brand); stroke-width: 2; } .sweep-plot .pt.explore { stroke-dasharray: 2 2; stroke: var(--ink-2); stroke-width: 1.5; }

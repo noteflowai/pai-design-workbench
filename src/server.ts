@@ -27,6 +27,7 @@ import { toolCatalog } from "./tool-catalog.js";
 import { DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
+import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, optimizeCad, type CadOptimization } from "./optimize.js";
 import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
@@ -151,14 +152,15 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     releases: store.list("release"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
-    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), cadSweeps: store.list("cad-sweep"),
+    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
     factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
     assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
-      physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL } : false,
+      physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
+        optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS } } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
@@ -196,6 +198,13 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   app.post("/api/projects/:id/cad-sweeps", async (request, reply) =>
     executeNative(reply, request.body, "cad-sweep", "cad-sweeps", () => sweepCad(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.post("/api/projects/:id/cad-optimizations", async (request, reply) =>
+    executeNative(reply, request.body, "cad-optimize", "cad-optimizations", () => optimizeCad(store, config, workbench.project(paramId(request.params)), request.body, live)));
+  app.get("/api/cad-optimizations/:id", async (request, reply) => {
+    const run = store.get<CadOptimization>("cad-optimize", paramId(request.params));
+    if (!run) throw new DomainError("NOT_FOUND", "Optimisation not found", 404);
+    return nativeResponse(run, reply, "cad-optimizations");
+  });
   app.get("/api/cad-sweeps/:id", async (request, reply) => {
     const sweep = store.get<CadSweep>("cad-sweep", paramId(request.params));
     if (!sweep) throw new DomainError("NOT_FOUND", "CAD sweep not found", 404);

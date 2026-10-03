@@ -9,7 +9,7 @@ import type { CadReview } from "../src/cad";
 
 type Which = "baseline" | "candidate";
 /** Assistant runs and design-space sweeps are not validation records; views that list reviews ignore them. */
-export type SessionKind = RunKind | "assistant" | "cad-sweep";
+export type SessionKind = RunKind | "assistant" | "cad-sweep" | "cad-optimize";
 type CadRequirementsLike = { maxMassG: number; minWallMm: number; edgeDistanceFactor: number };
 export interface LiveSession {
   requestId: string; title: string; kind: SessionKind; running: boolean; recordId?: string; verdict?: string; state?: string;
@@ -78,10 +78,10 @@ export function LiveSteps({ session }: { session: LiveSession }) {
 }
 
 const toolLabel: Record<string, string> = { "cad-review": "CadQuery", "create-project": "任务", "update-requirements": "需求修订", "scene-review": "Blender", "plant-layout": "Blender 产线", "robot-review": "Robot Reel",
-  "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型", "cad-code": "CadQuery 代码", "cad-sweep": "参数扫描" };
+  "factory-criteria": "冻结标准", "factory-review": "工厂孪生", "model-proposal": "受控模型", "cad-code": "CadQuery 代码", "cad-sweep": "参数扫描", "cad-optimize": "物理寻优" };
 const directionLabel: Record<string, string> = { new: "新", same: "不变", tightened: "收紧", relaxed: "放宽", changed: "变更" };
 const recordKind: Record<string, string> = { "cad-review": "cad-review", "create-project": "project", "update-requirements": "project", "scene-review": "scene-review", "plant-layout": "scene-review", "robot-review": "review",
-  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review", "cad-sweep": "cad-sweep" };
+  "factory-criteria": "factory-criteria", "factory-review": "factory-review", "model-proposal": "proposal", "cad-code": "cad-review", "cad-sweep": "cad-sweep", "cad-optimize": "cad-optimize" };
 const nativeKind: Record<string, RunKind> = { "cad-review": "cad-part", "scene-review": "blender-scene", "plant-layout": "blender-scene", "robot-review": "robot-review", "factory-review": "factory-twin", "cad-code": "cad-part" };
 const SUGGESTIONS = [
   "生成带遮挡的 Blender 工作单元，占地不超过 12 平方米，包络半径 1.4 m",
@@ -185,9 +185,9 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       const run = () => api<{ id: string; state?: string }>(route, body, step.method);
       const kind = nativeKind[step.tool];
       if (kind) { c.navigate("validate", { kind }); if (window.innerWidth < 1024) onClose(); }
-      if (step.tool === "cad-sweep") { c.navigate("design", { lane: "cad" }); if (window.innerWidth < 1024) onClose(); }
+      if (step.tool === "cad-sweep" || step.tool === "cad-optimize") { c.navigate("design", { lane: "cad" }); if (window.innerWidth < 1024) onClose(); }
       const record = kind ? await c.track(body.requestId, step.title, kind, run)
-        : step.tool === "cad-sweep" ? await c.track(body.requestId, step.title, "cad-sweep", run) : await run();
+        : step.tool === "cad-sweep" || step.tool === "cad-optimize" ? await c.track(body.requestId, step.title, step.tool, run) : await run();
       await api(`/assistant/plans/${plan.id}/confirmations`, { planId: step.id, recordKind: recordKind[step.tool], recordId: record.id });
       if (step.tool === "create-project") { c.selectProject(record.id); c.navigate("overview"); }
       if (kind) c.navigate("validate", { kind, id: record.id });

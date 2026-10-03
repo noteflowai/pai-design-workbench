@@ -3,10 +3,10 @@ export async function api<T>(path: string, body?: unknown, method = "POST"): Pro
   let r = await fetch(`/api${path}`, body === undefined ? {} : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   let data = await r.json();
   // Sweeps run up to 36 native builds; other native work stays within the 6-minute budget.
-  const deadline = Date.now() + (path.endsWith("/cad-sweeps") ? 1_200_000 : 360_000);
+  const deadline = Date.now() + (path.endsWith("/cad-sweeps") || path.endsWith("/cad-optimizations") ? 2_400_000 : path.endsWith("/cad") ? 900_000 : 360_000);
   while (r.status === 202) {
     const location = r.headers.get("Location");
-    if (!location || !/^\/api\/(runs|scenes|cad|cad-sweeps|assistant\/plans)\/[a-f0-9-]+$/.test(location)) throw new Error("检查任务未提供可核验状态地址");
+    if (!location || !/^\/api\/(runs|scenes|cad|cad-sweeps|cad-optimizations|assistant\/plans)\/[a-f0-9-]+$/.test(location)) throw new Error("检查任务未提供可核验状态地址");
     if (Date.now() >= deadline) throw new Error("检查仍在运行；请刷新查看原请求回执。不要以新请求重复执行。");
     await new Promise(resolve => setTimeout(resolve, 2_000));
     r = await fetch(location);

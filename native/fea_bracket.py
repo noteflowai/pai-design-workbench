@@ -185,11 +185,13 @@ def run_mesh(label: str, size: float):
 
 
 coarse_size = max(1.2, t * 0.9)
-coarse, _ = run_mesh("coarse", coarse_size)
+# Formal reviews solve two meshes for a convergence ratio; the optimiser screens with the fine mesh only.
+single = spec.get("meshes") == "fine-only"
+coarse = None if single else run_mesh("coarse", coarse_size)[0]
 fine, field = run_mesh("fine", coarse_size / 1.6)
 change = lambda a, b: abs(a - b) / max(abs(b), 1e-12)
-convergence = {"axisDisplacement": round(change(coarse["axisDisplacementMm"], fine["axisDisplacementMm"]), 4),
-               "peakVonMises": round(change(coarse["peakVonMisesMPa"], fine["peakVonMisesMPa"]), 4)}
+convergence = None if single else {"axisDisplacement": round(change(coarse["axisDisplacementMm"], fine["axisDisplacementMm"]), 4),
+                                   "peakVonMises": round(change(coarse["peakVonMisesMPa"], fine["peakVonMisesMPa"]), 4)}
 allowable = ALUMINIUM_6061_T6["yield"] / float(req["safetyFactor"])
 checks = [
     {"id": "max-deflection", "passed": fine["axisDisplacementMm"] <= float(req["maxDeflectionMm"]) + 1e-12,
@@ -202,7 +204,7 @@ checks = [
 
 
 def write_glb(path: Path, xyz, faces, disp, stress, elements, scale):
-    """Surface mesh, deformed by `scale`, vertex-coloured by nodal (max adjacent element) von Mises."""
+    """Surface mesh, deformed by `scale`, vertex-coloured by nodal (max adjacent element) von Mises; also writes the colour scale."""
     nodal = {}
     for e, nd in elements:
         for n in nd[:4]:
@@ -213,14 +215,14 @@ def write_glb(path: Path, xyz, faces, disp, stress, elements, scale):
     pos, col = [], []
     for n in used:
         c = xyz[n] + scale * disp.get(n, np.zeros(3))
-        pos += [c[0] / 1000, c[2] / 1000, -c[1] / 1000]  # mm, Z-up → metres, glTF Y-up
+        pos += [float(c[0]), float(c[1]), float(c[2])]  # millimetres, Z-up like the CAD GLBs (node rotation makes it Y-up)
         v = min(1.0, nodal.get(n, 0.0) / hi)
         col += [min(1.0, 2 * v), min(1.0, 2 * (1 - abs(v - 0.5))), max(0.0, 1 - 2 * v), 1.0]  # blue → green → red
     idx = [index[n] for f in faces for n in f]
     pos_b, col_b, idx_b = struct.pack(f"<{len(pos)}f", *pos), struct.pack(f"<{len(col)}f", *col), struct.pack(f"<{len(idx)}I", *idx)
     p = np.array(pos).reshape(-1, 3)
     gltf = {"asset": {"version": "2.0", "generator": "pai-fea"}, "scene": 0, "scenes": [{"nodes": [0]}],
-            "nodes": [{"mesh": 0, "name": "FEA von Mises"}],
+            "nodes": [{"mesh": 0, "name": "FEA von Mises", "rotation": [-0.7071067811865475, 0.0, 0.0, 0.7071067811865475]}],
             "meshes": [{"name": "FEA von Mises", "primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 0}]}],
             "materials": [{"name": "Von Mises", "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0.1, "roughnessFactor": 0.6}, "doubleSided": True}],
             "buffers": [{"byteLength": len(pos_b) + len(col_b) + len(idx_b)}],
@@ -235,14 +237,17 @@ def write_glb(path: Path, xyz, faces, disp, stress, elements, scale):
     binary += b"\0" * (-len(binary) % 4)
     path.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(binary)) + struct.pack("<II", len(js), 0x4E4F534A) + js
                      + struct.pack("<II", len(binary), 0x004E4942) + binary)
+    return hi
 
 
 xyz, elements, faces, disp, stress = field
+if single:  # screening run: keep the measured numbers, not the field
+    (out / "bracket-fine.frd").unlink(missing_ok=True)
 scale = 2.0 / max(fine["maxDisplacementMm"], 1e-9)  # make the largest displacement 2 mm on screen
-write_glb(out / "fea.glb", xyz, faces, disp, stress, elements, scale)
+color_max = write_glb(out / "fea.glb", xyz, faces, disp, stress, elements, scale)
 result = {"schema": "pai-fea-1", "solver": "CalculiX ccx 2.21", "mesher": f"Gmsh {gmsh.__version__}", "element": "C3D10 (quadratic tetrahedron)",
           "material": ALUMINIUM_6061_T6, "load": {"forceN": F, "leverMm": lever, "description": load.get("description", "")},
-          "meshes": {"coarse": coarse, "fine": fine}, "convergence": convergence, "displayScale": round(scale, 1),
+          "meshes": {"fine": fine} if single else {"coarse": coarse, "fine": fine}, "convergence": convergence, "displayScale": round(scale, 1), "colorScaleMaxMPa": round(color_max, 1),
           "checks": checks, "scope": "linear-static-nominal", "physicalValidation": False}
 (out / "fea.json").write_text(json.dumps(result, indent=2) + "\n")
 print(json.dumps({"checks": [(c["id"], c["passed"], c["observed"]) for c in checks], "convergence": convergence}), file=sys.stderr)

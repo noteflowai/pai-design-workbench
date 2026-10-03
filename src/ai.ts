@@ -10,9 +10,10 @@ import type { LiveBus } from "./live.js";
 import { compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { DEFAULT_PLANT_REQUIREMENTS, isPlant, PlantLayout, PlantRequirements, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
-import { CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
+import { DEFAULT_OPTIMIZE_BUDGET, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
@@ -31,7 +32,7 @@ export const AiInput = z.object({
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "cad-review", "cad-code", "cad-sweep", "factory-criteria", "factory-review"] as const;
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -46,6 +47,7 @@ const ModelPayload = {
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]) }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
   "factory-review": z.object({ criteria: z.string().min(1).max(40) }).strict(),
 } as const;
@@ -59,6 +61,10 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "围栏安全间距 ≈ guardSize/2 − 0.02 − 1.45（声明的机器人包络）；guardSize 不宜超过 stationPitch。requirements 可只写要改的字段；结论只来自原生检查",
   "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
   "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
+  "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
+    + "（forceN、leverMm、safetyFactor、maxDeflectionMm；缺省 60 N、50 mm、2、0.06 mm）。可以提供最多 4 个 seeds（thickness 2–8、width 46–80、plateHeight 40–60），"
+    + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
+    + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4",
   "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
     + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 MOTOR_AXIS_Z（电机轴高度 mm）赋值。坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
     + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
@@ -266,6 +272,23 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     return { ...base, title: opts.title ?? `设计空间扫描：${points} 个点`, route: route("cad-sweeps"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), `约 ${Math.ceil(points * 6 / 60)} 分钟；只比较网格上实测过的点，不作验收结论。`, ...note],
       evidence: "每个点的原生 B-Rep 建模与 7 项检查；最轻可行点与帕累托前沿" };
+  }
+  if (t === "cad-optimize") {
+    const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[] };
+    const prev = context.lastCad?.request.requirements;
+    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), structural: prev?.structural ?? DEFAULT_STRUCTURAL, ...p.requirements });
+    const budget = p.budget ?? DEFAULT_OPTIMIZE_BUDGET;
+    const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds };
+    OptimizeRequest.parse({ ...payload, requestId: placeholder });
+    const s0 = prev?.structural, s1 = requirements.structural!;
+    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"), compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
+      compare("structural.forceN", s0?.forceN, s1.forceN, "higher"), compare("structural.safetyFactor", s0?.safetyFactor, s1.safetyFactor, "higher"),
+      compare("structural.maxDeflectionMm", s0?.maxDeflectionMm, s1.maxDeflectionMm, "lower"),
+      { field: "seeds", from: null, to: `${p.seeds.length} 个 AI 种子`, direction: "new" }];
+    const evaluations = budget.initial + 1 + budget.rounds * budget.perRound;
+    return { ...base, title: opts.title ?? `物理寻优：约 ${evaluations} 次 FEA`, route: route("cad-optimizations"), method: "POST", payload, changes,
+      warnings: [...relaxWarning(changes), `约 ${Math.ceil(evaluations * 0.5)} 分钟；代理模型只排序，结论只来自实测点，选中的点还要走正式复核。`, ...note],
+      evidence: "每个点的 CadQuery B-Rep 检查与 CalculiX 挠度/应力；代理模型校准误差；AI 种子估算误差" };
   }
   if (t === "cad-code") {
     if (!context.cadCode) throw new Error("生成代码通道不可用（沙箱未就绪）");

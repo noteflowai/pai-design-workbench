@@ -1,10 +1,11 @@
+import type { CadOptimization } from "../src/optimize";
 import { createContext, useContext } from "react";
 import type { Campaign, Feedback, Project, Review } from "../src/contracts";
 import type { Proposal } from "../src/proposals";
 import type { SceneReview } from "../src/scenes";
 import type { FactoryCriteria, FactoryCriteriaValues, FactoryReview } from "../src/factory";
 import type { AssistantPlan } from "../src/assistant";
-import type { CadReview, CadRequirements } from "../src/cad";
+import type { StructuralRequirements, CadReview, CadRequirements } from "../src/cad";
 import type { CadSweep, SweepGrid } from "../src/sweep";
 import type { Release } from "../src/release";
 import type { ProjectVersion } from "../src/contracts";
@@ -14,12 +15,14 @@ import type { LiveSession, LiveTrack } from "./studio";
 export type RunKind = EvidenceKind;
 export type ViewId = "overview" | StageId;
 export type State = {
-  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; cadSweeps?: CadSweep[];
+  projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; cadSweeps?: CadSweep[]; cadOptimizations?: CadOptimization[];
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
   capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
-    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean; factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
+    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
+    physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number } };
+    factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
 export const VIEWS: { id: ViewId; label: string; short: string; index?: number }[] = [
   { id: "overview", label: "项目总览", short: "总览" },

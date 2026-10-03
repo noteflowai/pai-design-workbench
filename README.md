@@ -41,7 +41,13 @@ AWS 入口：[pai.oneai.host](https://pai.oneai.host)（管理员登录）。复
 
 界面支持浅色和深色主题，顶栏的命令框可以搜索命令，也可以直接向 AI 提问；每个未通过的检查旁都有“问 AI”。CAD 检查结果以带余量条的实测表格展示。全部页面通过 WCAG 2.1 AA 自动检查。桌面版基于 Electron，提供 AppImage、deb，以及由 CI 构建的 Windows 和 macOS 安装包。Linux x64 支持一键安装原生工具；Windows/macOS 可手动选择已有工具，见 [DESKTOP.md](docs/DESKTOP.md)。
 
-不执行新的策略推理，不做 FEA、公差叠加、现场安全认证或自动发布。
+**物理层**：冻结结构要求后，CAD 评审会用 Gmsh 划分二次四面体网格，再用 CalculiX 计算电机轴挠度和峰值应力。基准件与候选件都要算，各用两级网格并给出收敛对照，结果同样经 EvalArc 对照、进入发布准入。
+
+**物理寻优**：先实测参考件、AI 种子和 Sobol 点；再用高斯过程代理模型与 NSGA-II 排序候选，先做几何筛查，再交给 CalculiX 求解。代理模型只负责排序，推荐的是实测最轻的可行点，选中后还要经过正式复核。AI 提出种子时要附上自己的物理估算，系统用求解器结果给它打分。见 [PHYSICS.md](docs/PHYSICS.md)。
+
+**外部 Agent**：AgentForge 会话可以经治理网关使用工作台：按会话放行工具、审计、限流。托管站点用 OAuth 客户端凭据访问，ALB 先验证一次 JWT，工作台再按 scope 验证一次。见 [integrations/agentforge](integrations/agentforge/README.md)。
+
+不执行新的策略推理，不做公差叠加、疲劳、现场安全认证或自动发布；FEA 是名义材料下的线性静力分析，不是认证。
 
 ## 快速启动
 
@@ -57,6 +63,9 @@ npm run test:native
 npm run test:blender
 npm run test:cad
 npm run test:plant   # 工厂产线：拒绝 → 反馈 → 修正复测 → 关闭
+npm run setup:physics # Gmsh / CalculiX（签名 Ubuntu 源）/ Optuna / scikit-learn / MuJoCo
+npm run test:fea      # 结构 FEA：t=3 mm 几何检查通过，但挠度超限
+npm run test:optimize # 物理寻优：AI 种子 + 代理模型 + 正式复核
 npm run test:suite   # 典型工业设计用例（默认 25 个）
 npm run start        # http://127.0.0.1:4317
 ```

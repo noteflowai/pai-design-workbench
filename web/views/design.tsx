@@ -4,6 +4,7 @@ import { CANDIDATES, useApp } from "../context";
 import { Card, Chip, Empty, ViewHeader, time } from "../ui";
 import { runCad, runFactory, runReview, runScene } from "../actions";
 import { SweepPanel } from "./sweep";
+import { OptimizePanel } from "./optimize";
 import { PlantLane } from "../plant";
 import { CAD_DRAFT_KEY, CAD_VARIANTS, ISOLATION_LABEL } from "../context";
 import type { CandidateId } from "../../src/contracts";
@@ -109,6 +110,12 @@ function CadLane() {
   const [wall, setWall] = useState(Number(q.get("wall") ?? defaults.minWallMm));
   const [edge, setEdge] = useState(Number(q.get("edge") ?? defaults.edgeDistanceFactor));
   const [fit, setFit] = useState(defaults.requireNoInterference);
+  const physics = c.data.capabilities.physics;
+  const [fea, setFea] = useState(Boolean(physics) && q.get("fea") !== "false");
+  const [load, setLoad] = useState(Number(q.get("forceN") ?? (physics ? physics.defaultStructural.forceN : 60)));
+  const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? (physics ? physics.defaultStructural.maxDeflectionMm : 0.06)));
+  const structural = fea && physics ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
+  const formRequirements = { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm, ...(structural ? { structural } : {}) };
   const sandbox = cap ? cap.generatedCode : undefined;
   const [code, setCode] = useState(() => sessionStorage.getItem(CAD_DRAFT_KEY) ?? sandbox?.template ?? "");
   const [codeCheck, setCodeCheck] = useState<{ ok: boolean; violations: string[] }>();
@@ -142,14 +149,21 @@ function CadLane() {
       <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} disabled={Boolean(feedback)} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
       <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>
     </div>
-    <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则，不含 FEA、公差叠加或实物测试。</p>
+    {physics && <fieldset className="field-grid"><legend>结构要求（Gmsh + CalculiX 线性静力 FEA）</legend>
+      <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fea} onChange={e => setFea(e.target.checked)} />冻结结构要求并做 FEA</label>
+      <label>皮带径向载荷<span className="unit-input"><input type="number" aria-label="皮带径向载荷" min={1} max={2000} step={1} disabled={!fea || Boolean(feedback)} value={load} onChange={e => setLoad(Number(e.target.value))} /><em>N</em></span></label>
+      <label>电机轴挠度上限<span className="unit-input"><input type="number" aria-label="电机轴挠度上限" min={0.001} max={10} step={0.005} disabled={!fea || Boolean(feedback)} value={deflection} onChange={e => setDeflection(Number(e.target.value))} /><em>mm</em></span></label>
+      <small className="muted">力臂 {physics.defaultStructural.leverMm} mm · 安全系数 {physics.defaultStructural.safetyFactor}（6061-T6 屈服 276 MPa）· 两级网格收敛对照</small>
+    </fieldset>}
+    <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {
         const original = feedback ? (c.data.cads ?? []).find(x => x.id === feedback.runId) : undefined;
-        const requirements = original?.request.requirements ?? { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm };
+        const requirements = original?.request.requirements ?? formRequirements;
         void runCad(c, variant, requirements, generated ? code : undefined, feedback);
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
+  {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
   {!feedback && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
   </>;
 }

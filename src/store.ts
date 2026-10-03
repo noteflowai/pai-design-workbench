@@ -55,7 +55,7 @@ export class Store {
     return row?.run_id;
   }
   interruptPending(): void {
-    for (const kind of ["review", "proposal", "scene-review", "cad-review", "cad-sweep", "assistant-plan"]) for (const record of this.list<{ id: string; state: string; error?: string }>(kind)) {
+    for (const kind of ["review", "proposal", "scene-review", "cad-review", "cad-sweep", "cad-optimize", "assistant-plan"]) for (const record of this.list<{ id: string; state: string; error?: string }>(kind)) {
       if (record.state === "running") {
         record.state = "interrupted"; record.error = "Process restarted. Retained identity; no automatic command replay.";
         this.put(kind, record);

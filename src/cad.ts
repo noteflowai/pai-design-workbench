@@ -54,10 +54,13 @@ export const CadRequest = z.object({
   requirements: CadRequirements, feedbackId: Id.optional(), source: CadSource.optional(), parameters: CadParameters.optional(),
   /** Provenance only: the sweep and point a parametric candidate was chosen from. */
   fromSweep: z.object({ sweepId: Id, point: z.number().int().min(1).max(36) }).strict().optional(),
+  /** Provenance only: the physics optimisation and solved point a parametric candidate was chosen from. */
+  fromOptimize: z.object({ optimizeId: Id, point: z.number().int().min(1).max(80) }).strict().optional(),
 }).strict()
   .refine(r => (r.variant === "generated") === Boolean(r.source), { message: "variant generated requires source code, and only generated takes source", path: ["source"] })
   .refine(r => (r.variant === "parametric") === Boolean(r.parameters), { message: "variant parametric requires parameters, and only parametric takes them", path: ["parameters"] })
-  .refine(r => !r.fromSweep || r.variant === "parametric", { message: "fromSweep only applies to parametric candidates", path: ["fromSweep"] });
+  .refine(r => !r.fromSweep || r.variant === "parametric", { message: "fromSweep only applies to parametric candidates", path: ["fromSweep"] })
+  .refine(r => !r.fromOptimize || (r.variant === "parametric" && !r.fromSweep), { message: "fromOptimize only applies to parametric candidates", path: ["fromOptimize"] });
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
@@ -85,7 +88,7 @@ const FeaResult = z.object({
   schema: z.literal("pai-fea-1"), solver: z.string(), mesher: z.string(), element: z.string(), material: z.object({ name: z.string(), E: z.number(), nu: z.number(), yield: z.number() }).passthrough(),
   load: z.object({ forceN: z.number(), leverMm: z.number() }).passthrough(),
   meshes: z.record(z.string(), z.object({ nodes: z.number().int(), elements: z.number().int(), axisDisplacementMm: z.number(), peakVonMisesMPa: z.number(), seconds: z.number() }).passthrough()),
-  convergence: z.object({ axisDisplacement: z.number(), peakVonMises: z.number() }), displayScale: z.number(),
+  convergence: z.object({ axisDisplacement: z.number(), peakVonMises: z.number() }), displayScale: z.number(), colorScaleMaxMPa: z.number(),
   checks: z.array(z.object({ id: z.enum(FEA_CHECKS), passed: z.boolean(), observed: z.number(), required: z.number() }).passthrough()).length(2),
   scope: z.literal("linear-static-nominal"), physicalValidation: z.literal(false),
 }).strict();
@@ -228,6 +231,14 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const point = sweep?.result?.points.find(p => p.index === request.fromSweep!.point);
     if (!sweep || sweep.projectId !== project.id || sweep.state !== "completed" || !point || canonical(point.parameters) !== canonical(request.parameters)) {
       throw new DomainError("INVALID_SWEEP_POINT", "fromSweep must reference a measured point of a completed sweep of this project with identical parameters", 422);
+    }
+  }
+  if (request.fromOptimize && !store.requestRun(request.requestId)) {
+    const run = store.get<{ projectId: string; state: string; request: { requirements: unknown }; result?: { points: { index: number; fidelity: string; parameters: unknown }[] } }>("cad-optimize", request.fromOptimize.optimizeId);
+    const point = run?.result?.points.find(p => p.index === request.fromOptimize!.point);
+    if (!run || run.projectId !== project.id || run.state !== "completed" || !point || point.fidelity !== "fea"
+        || canonical(point.parameters) !== canonical(request.parameters) || canonical(run.request.requirements) !== canonical(request.requirements)) {
+      throw new DomainError("INVALID_OPTIMIZE_POINT", "fromOptimize must reference a solved point of a completed optimisation of this project with identical parameters and requirements", 422);
     }
   }
   const record: CadReview = { id: randomUUID(), projectId: project.id, projectRevision: request.projectRevision, request,
