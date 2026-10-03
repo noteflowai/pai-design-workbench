@@ -26,6 +26,15 @@ export function ReleasePanel() {
     return () => { live = false; };
   }, [run?.id, p.id, p.revision, c.data.feedback.length, c.data.feedback.map(f => f.status).join()]);
   const admissible = Boolean(checks?.length && checks.every(x => x.passed));
+  const [verified, setVerified] = useState<Record<string, { ok: boolean; text: string }>>({});
+  // Fetch the package as a third party would and verify it against the separately published public key.
+  const verifyRelease = async (id: string) => {
+    try {
+      const [pkg, key] = await Promise.all([fetch(`/api/releases/${id}/package`).then(r => r.json()), api<{ publicKeyPem: string }>("/signing/public-key")]);
+      const v = await api<{ files: number; signer: { trusted: boolean; algorithm: string; keyId: string } }>("/packages/verify", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
+      setVerified(x => ({ ...x, [id]: { ok: v.signer.trusted, text: `签名有效 · ${v.signer.algorithm === "ECDSA_P256_SHA256" ? "AWS KMS ECDSA P-256" : "本机 Ed25519"} · ${v.files} 个原生文件摘要一致 · 签名者已固定` } }));
+    } catch (e) { setVerified(x => ({ ...x, [id]: { ok: false, text: `核验失败：${e instanceof Error ? e.message : String(e)}` } })); }
+  };
   const decide = (r: Release, decision: "approve" | "reject") => c.perform(() => api(`/projects/${p.id}/releases/${r.id}`,
     { expectedRevision: r.revision, decision, reason }, "PATCH"), decision === "approve" ? `${r.number} 已批准发布。` : `${r.number} 已驳回。`);
 
@@ -61,7 +70,9 @@ export function ReleasePanel() {
       <tbody>{releases.map(r => { const [label, tone] = MATURITY[r.maturity]; const last = r.history.at(-1)!;
         return <tr key={r.id}><td><strong>{r.number}</strong></td><td>{r.title}<small>{KIND_LABEL[r.evidenceKind as RunKind]}</small></td><td><Chip tone={tone}>{label}</Chip></td>
           <td>v{r.projectRevision}</td><td>{time(last.at)}<small>{last.reason}</small>
-          {r.maturity === "released" && <a className="button secondary compact" href={`/api/releases/${r.id}/package`} download>下载签名发布包</a>}</td></tr>; })}</tbody></table></div>}
+          {r.maturity === "released" && <span className="button-row"><a className="button secondary compact" href={`/api/releases/${r.id}/package`} download>下载签名发布包</a>
+            <button type="button" className="secondary compact" onClick={() => void verifyRelease(r.id)}>核验签名</button></span>}
+          {verified[r.id] && <small className={verified[r.id].ok ? "ok-text" : "bad-text"} role="status">{verified[r.id].text}</small>}</td></tr>; })}</tbody></table></div>}
     {current && <p className="muted">签名发布包含证据记录、经摘要核验的原生文件（STEP、FEA、MJCF、.blend…）与审批记录；清单由{c.data.capabilities.signing?.kms ? " AWS KMS 密钥" : "本机 Ed25519 密钥"}签名，可离线用 <code>npm run verify:package</code> 核验。</p>}
   </Card>;
 }

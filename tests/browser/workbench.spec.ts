@@ -662,6 +662,8 @@ test("robot cell closed loop in the UI: MuJoCo rejection, fixed cell, feedback r
   const verified = await (await page.request.post("/api/packages/verify", { data: { package: pkg, trustedPublicKeyPem: key.publicKeyPem } })).json();
   expect(verified.valid).toBe(true); expect(verified.signer.trusted).toBe(true);
   expect(Object.keys(pkg.files)).toContain("candidate/scene.xml");
+  await page.getByRole("button", { name: "核验签名" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "签名有效" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("robot-release.png") });
   expect(errors).toEqual([]);
 });
