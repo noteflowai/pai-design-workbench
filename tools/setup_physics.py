@@ -33,7 +33,8 @@ subprocess.run([str(python), "-m", "pip", "install", "--quiet", "--disable-pip-v
                 "--require-hashes", "--no-deps", "--only-binary", ":all:", "-r", str(lock)], check=True)
 
 # Shared libraries the Gmsh wheel links against (headless use still loads them); not bundled in the wheel.
-SYSTEM_LIBS = ["libglu1-mesa", "libgl1", "libopengl0", "libxcursor1", "libxft2", "libxinerama1", "libfontconfig1", "libgomp1"]
+SYSTEM_LIBS = ["libglu1-mesa", "libgl1", "libopengl0", "libxcursor1", "libxft2", "libxinerama1", "libfontconfig1", "libgomp1",
+               "libopenmpi3t64"]  # ccx 2.21 in Ubuntu links OpenMPI through ARPACK/SPOOLES
 DEBS = ["calculix-ccx", "libarpack2t64", "libspooles2.2t64", "libgfortran5", "libblas3", "liblapack3"]
 debs = {}
 if not (ccx_root / "usr/bin/ccx").exists():
@@ -66,7 +67,7 @@ versions = json.loads(probe.stdout)
 banner = subprocess.run([str(wrapper), "-v"], capture_output=True, text=True, timeout=30)
 ccx_version = next((line.strip() for line in (banner.stdout + banner.stderr).splitlines() if "Version" in line), "")
 if "2.21" not in ccx_version:
-    raise SystemExit(f"CalculiX self-check failed: {ccx_version!r}")
+    raise SystemExit(f"CalculiX self-check failed: {ccx_version!r}; install the runtime libraries ({' '.join(SYSTEM_LIBS)}).\n{banner.stderr[-1500:]}")
 receipt = {**versions, "ccx": ccx_version, "ccxBinary": str(wrapper), "debs": debs or "previously unpacked",
            "lockSha256": hashlib.sha256(lock.read_bytes()).hexdigest(), "python": platform.python_version(), "interpreter": str(python)}
 (tools / "physics-install-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")

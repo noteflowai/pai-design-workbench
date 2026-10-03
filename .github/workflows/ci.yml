@@ -75,7 +75,7 @@ jobs:
       - name: Pinned physics toolchain (Gmsh, CalculiX, Optuna, scikit-learn, MuJoCo) and the native structural loop
         if: matrix.node == '24.21.0'
         run: |
-          sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1
+          sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
           "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py && npm run test:fea && npm run test:robot && npm run test:optimize
       - name: Slim CadQuery runtime lock is current and the AgentCore entrypoint contract holds
         if: matrix.node == '24.21.0'
