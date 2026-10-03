@@ -1,0 +1,131 @@
+{
+  "schema": "pai-aero-batch-1",
+  "checkedAt": "2026-10-03T21:50:00Z",
+  "site": "https://pai.oneai.host",
+  "hostedRelease": "40793f34d438e9a468289e9473662f0e6391e463469794db0722237c116e7623",
+  "runner": "AWS Batch Fargate, 16 vCPU / 32 GiB per case, image pai-solver:cfd-b9b3932a90998103 FROM opencfd/openfoam-default@sha256:33fb575a\u2026",
+  "review": {
+    "id": "670f0894-ae8d-4e42-899e-406843f39128",
+    "state": "completed",
+    "verdict": "accepted-aero-body",
+    "minutes": 9,
+    "baseline": {
+      "checks": [
+        [
+          "drag-coefficient",
+          true,
+          0.23406
+        ],
+        [
+          "grid-convergence",
+          true,
+          0.1002
+        ],
+        [
+          "iterative-convergence",
+          true,
+          0
+        ],
+        [
+          "mesh-quality",
+          true,
+          2
+        ]
+      ],
+      "levels": [
+        [
+          3,
+          61310,
+          0.25751,
+          141.9
+        ],
+        [
+          4,
+          219622,
+          0.23406,
+          352.5
+        ]
+      ],
+      "remote": [
+        [
+          3,
+          "ac2954ef",
+          "cfd-b9b3932a90998103",
+          61,
+          16
+        ],
+        [
+          4,
+          "05b92cd2",
+          "cfd-b9b3932a90998103",
+          269.1,
+          16
+        ]
+      ]
+    },
+    "candidate": {
+      "checks": [
+        [
+          "drag-coefficient",
+          true,
+          0.22926
+        ],
+        [
+          "grid-convergence",
+          true,
+          0.1064
+        ],
+        [
+          "iterative-convergence",
+          true,
+          0.00012
+        ],
+        [
+          "mesh-quality",
+          true,
+          2
+        ]
+      ],
+      "levels": [
+        [
+          3,
+          61573,
+          0.25366,
+          152
+        ],
+        [
+          4,
+          221354,
+          0.22926,
+          262.1
+        ]
+      ],
+      "remote": [
+        [
+          3,
+          "efdd83e7",
+          "cfd-b9b3932a90998103",
+          61.6,
+          16
+        ],
+        [
+          4,
+          "86ec6bee",
+          "cfd-b9b3932a90998103",
+          169.2,
+          16
+        ]
+      ]
+    },
+    "blocking": 0
+  },
+  "localComparison": {
+    "referenceCdLocal": 0.23406,
+    "referenceCdBatch": 0.23406,
+    "candidateCdLocal": 0.22945,
+    "candidateCdBatch": 0.22926,
+    "wallMinutesLocal8Cores": 94,
+    "wallMinutesBatch": 9
+  },
+  "note": "Each case ran as its own Batch job; coefficient.dat, run.json and log.checkMesh were re-hashed against the job's result.json and the OpenFOAM version (v2512) checked."
+}

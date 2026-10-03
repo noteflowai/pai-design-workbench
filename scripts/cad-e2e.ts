@@ -85,13 +85,24 @@ try {
   });
   assert.equal(boundary.verdict, "accepted-cad-part", "nominal envelope at the exact requirement boundary must pass after staged exports");
   assert.ok(boundary.candidate!.checks.every(c => c.passed));
+  // DFM (3-axis milling) frozen as a requirement: measured on the B-Rep, mapped into the same checks and EvalArc.
+  const dfmRun = await request<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "compact",
+    requirements: { ...requirements, dfm: { maxSetups: 2, maxUnitCostEur: 16 } } });
+  assert.equal(dfmRun.state, "completed", dfmRun.error ?? "DFM review failed");
+  const dfmCheck = (w: "baseline" | "candidate", id: string) => (dfmRun[w]!.checks.find(c => c.id === id) as unknown as { passed: boolean; observed: number });
+  assert.equal(dfmCheck("candidate", "machining-setups").observed, 2, "the bracket needs two setups (+Y face, +Z base)");
+  assert.equal(dfmCheck("baseline", "unit-cost").passed, false, "the larger reference bracket is over the 16 EUR target");
+  assert.equal(dfmCheck("candidate", "unit-cost").passed, true, "the compact bracket is under the 16 EUR target");
+  assert.ok(dfmRun.files["candidate/dfm.json"]);
+  const dfmReport = { setups: dfmCheck("candidate", "machining-setups").observed, unitCostEur: { reference: dfmCheck("baseline", "unit-cost").observed, compact: dfmCheck("candidate", "unit-cost").observed },
+    verdict: dfmRun.verdict };
   const report = { schema: "pai-cad-e2e-1", checkedAt: new Date().toISOString(), result: "passed",
     cadquery: fixed.candidate!.cadquery, ocp: fixed.candidate!.ocp, part: "NEMA 17 motor-mount bracket (6061 aluminium, nominal)",
     candidates: { lightweight: ["min-wall"], ...others }, referenceMassG: fixed.candidate!.mass, lightweightMassG: light.candidate!.mass,
     feedbackStatus: f.status, preventedUnfixedClosure: true, rejectedChangedRequirementsRecheck: true, stageEvents: 12, stepReimport: roundtrip,
     nominalEnvelopeBoundaryAccepted: true,
     nativeArtifactKinds: ["step", "stl", "glb", "assembly-glb", "svg-drawing", "native-checks-json"],
-    physicalValidation: false, feaPerformed: false, toleranceStackUp: false };
+    dfm: dfmReport, physicalValidation: false, feaPerformed: false, toleranceStackUp: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence/cad-e2e.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
   console.log(JSON.stringify(report, null, 2));

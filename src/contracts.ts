@@ -28,7 +28,8 @@ export const CreateFeedback = z.object({
   checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel", "reach", "collision-free", "cycle-time", "success-rate",
     "output-per-seed", "demand-intervals", "hall-comfort", "ev-service", "closed-failures",
     "solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope", "max-deflection", "max-stress",
-    "drag-coefficient", "grid-convergence", "iterative-convergence", "mesh-quality"]).optional(),
+    "drag-coefficient", "grid-convergence", "iterative-convergence", "mesh-quality",
+    "machining-setups", "hole-drillability", "unit-cost"]).optional(),
   // Robot panels use seeds 0–9; Factory Twin panels use their own recorded seed IDs.
   seed: z.number().int().min(0).max(1000).nullable(),
   expected: z.string().trim().min(1).max(2000),

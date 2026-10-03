@@ -291,14 +291,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(cad, reply, "cad");
   });
   app.get("/api/cad/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum([...CAD_FILES, ...FEA_FILES]) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum([...CAD_FILES, ...FEA_FILES, "dfm.json"]) }).parse(request.params);
     const cad = store.get<CadReview>("cad-review", p.id);
     if (!cad || cad.state !== "completed" || !cad.files[`${p.which}/${p.file}`]) throw new DomainError("NOT_FOUND", "Completed CAD evidence required", 404);
     const content = await readFile(join(config.state, "cad", p.id, p.which, p.file));
     if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
     const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
       "drawing.svg": "image/svg+xml", "checks.json": "application/json", "fea.json": "application/json", "fea.glb": "model/gltf-binary",
-      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain" };
+      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json" };
     // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);

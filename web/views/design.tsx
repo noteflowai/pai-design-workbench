@@ -119,7 +119,11 @@ function CadLane() {
   const [load, setLoad] = useState(Number(q.get("forceN") ?? (physics ? physics.defaultStructural.forceN : 60)));
   const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? (physics ? physics.defaultStructural.maxDeflectionMm : 0.06)));
   const structural = fea && physics ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
-  const formRequirements = { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm, ...(structural ? { structural } : {}) };
+  const [dfmOn, setDfmOn] = useState(Boolean(latestCad?.request.requirements.dfm));
+  const [setups, setSetups] = useState(latestCad?.request.requirements.dfm?.maxSetups ?? 2), [cost, setCost] = useState(latestCad?.request.requirements.dfm?.maxUnitCostEur ?? 25);
+  const dfm = dfmOn ? { maxSetups: setups, maxUnitCostEur: cost } : undefined;
+  const formRequirements = { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm,
+    ...(structural ? { structural } : {}), ...(dfm ? { dfm } : {}) };
   const sandbox = cap ? cap.generatedCode : undefined;
   const [code, setCode] = useState(() => sessionStorage.getItem(CAD_DRAFT_KEY) ?? sandbox?.template ?? "");
   const [codeCheck, setCodeCheck] = useState<{ ok: boolean; violations: string[] }>();
@@ -165,6 +169,12 @@ function CadLane() {
       <label>电机轴挠度上限<span className="unit-input"><input type="number" aria-label="电机轴挠度上限" min={0.001} max={10} step={0.005} disabled={!fea || Boolean(feedback)} value={deflection} onChange={e => setDeflection(Number(e.target.value))} /><em>mm</em></span></label>
       <small className="muted">力臂 {physics.defaultStructural.leverMm} mm · 安全系数 {physics.defaultStructural.safetyFactor}（6061-T6 屈服 276 MPa）· 两级网格收敛对照</small>
     </fieldset>}
+    <fieldset className="field-grid"><legend>可制造性（三轴铣削 DFM，B-Rep 实测）</legend>
+      <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={dfmOn} onChange={e => setDfmOn(e.target.checked)} />冻结制造要求并做 DFM</label>
+      <label>装夹次数上限<span className="unit-input"><input type="number" aria-label="装夹次数上限" min={1} max={6} step={1} disabled={!dfmOn || Boolean(feedback)} value={setups} onChange={e => setSetups(Number(e.target.value))} /><em>次</em></span></label>
+      <label>单件成本上限<span className="unit-input"><input type="number" aria-label="单件成本上限" min={0.1} max={100000} step={0.5} disabled={!dfmOn || Boolean(feedback)} value={cost} onChange={e => setCost(Number(e.target.value))} /><em>EUR</em></span></label>
+      <small className="muted">最少装夹方向（精确覆盖）、孔深径比、6061 棒料 + 工时估算（批量 50，车间参数见 native/dfm-shop.json）；估算，不是报价</small>
+    </fieldset>
     <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {

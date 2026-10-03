@@ -37,9 +37,9 @@
 | F16 | 外部 Agent 经 AgentForge 网关读取和提议；托管站点用客户端凭据 | 网关策略测试；托管 401/404 检查 | 已验证 |
 | F17 | PAI 技能经底座的技能分发机制提供并锁定摘要；用 `eval/` 度量模型的物理估算 | `examples/pai-workbench/skill.test.mjs`；分发器手工核验 | 已验证：Kiro 2.27.1（claude-opus-5.5）经受控执行器跑评测，中位误差 11.4 %、最差 32.1 %、Spearman 0.95，通过；高度趋势方向判断错误。见 [physics-eval.json](evidence/physics-eval.json) |
 | F18 | FEA 批量扩展到 AWS Batch，每个点一个作业，结果同样经摘要核验 | 托管寻优：5 个 Batch 作业，摘要与版本核对；单点与本机结果一致（0.0478 mm），见 [solver-batch.json](evidence/solver-batch.json) | 已验证 |
-| F19 | 流体通道：OpenFOAM v2512（固定 digest 的官方 OpenCFD 镜像）+ CadQuery 生成 Ahmed 型车身；snappyHexMesh 两级网格 + simpleFoam k-ω SST；检查阻力、网格收敛、迭代收敛、网格质量 | `npm run test:aero`；角度扫描与 Ahmed 1984 实验对照，见 [AERO.md](AERO.md) | 已验证（本机；托管站点上还需在 Batch 上跑 OpenFOAM 作业） |
+| F19 | 流体通道：OpenFOAM v2512（固定 digest 的官方 OpenCFD 镜像）+ CadQuery 生成 Ahmed 型车身；snappyHexMesh 两级网格 + simpleFoam k-ω SST；检查阻力、网格收敛、迭代收敛、网格质量 | `npm run test:aero`；角度扫描与 Ahmed 1984 实验对照，见 [AERO.md](AERO.md) | 已验证：本机，以及托管站点经 AWS Batch 跑（16 vCPU，9 分钟，本机 94 分钟；Cd 与本机一致，见 [aero-batch.json](evidence/aero-batch.json)） |
 | F20 | 物理 AI 代理模型 PhysicsNeMo：用自己积累的求解数据训练，只负责排序 | 留出集误差 + 实测复核 | 待做 |
-| F21 | 可制造性：CAM 或切片 CLI 检查，加工时间和成本 | 原生 e2e | 待做 |
+| F21 | 可制造性：三轴铣削 DFM，在 B-Rep 上实测最少装夹方向（精确覆盖）、孔深径比、单件成本估算（车间参数放在 `native/dfm-shop.json`，经审查）；作为可选冻结要求进入 CAD 检查和 EvalArc | `npm run test:cad`：2 次装夹；参考件 17.22 EUR 超出 16 EUR 目标，紧凑型 14.69 EUR 达标 | 已验证（估算，不是报价；未做 CAM 刀路仿真） |
 | F22 | 第二个零件族，以及 FreeCAD / build123d 文档 | 原生 e2e | 待做 |
 
 ## N. 非功能需求

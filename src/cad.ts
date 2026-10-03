@@ -21,7 +21,12 @@ import { invokeRuntime } from "./agentcore.js";
 export const GEOMETRY_CHECKS = ["solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope"] as const;
 /** Structural checks from the native FEA (Gmsh + CalculiX); present only when structural requirements are frozen. */
 export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
-export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS] as const;
+/** 3-axis milling DFM (native/cad_dfm.py on the B-Rep, shop assumptions in native/dfm-shop.json); opt-in like FEA. */
+export const DFM_CHECKS = ["machining-setups", "hole-drillability", "unit-cost"] as const;
+export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS] as const;
+export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000) }).strict();
+export type DfmRequirements = z.infer<typeof DfmRequirements>;
+export const DEFAULT_DFM: DfmRequirements = { maxSetups: 2, maxUnitCostEur: 25 };
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
 /** "generated": the candidate solid comes from CadQuery code (AI, external agent or maintainer) run in the OS sandbox. */
 export const CAD_VARIANTS = [...CAD_PRESETS, "parametric", "generated"] as const;
@@ -46,6 +51,7 @@ export const CadRequirements = z.object({
   maxMassG: z.number().min(1).max(10000), minWallMm: z.number().min(0.5).max(50),
   edgeDistanceFactor: z.number().min(1).max(4), requireNoInterference: z.boolean(), maxEnvelopeMm: z.tuple([mm, mm, mm]),
   structural: StructuralRequirements.optional(),
+  dfm: DfmRequirements.optional(),
 }).strict();
 export type CadRequirements = z.infer<typeof CadRequirements>;
 export const DEFAULT_CAD_REQUIREMENTS: CadRequirements = { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] };
@@ -64,7 +70,7 @@ export const CadRequest = z.object({
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
-  checks: z.array(z.object({ id: z.enum(CAD_CHECKS), passed: z.boolean() }).passthrough()).min(7).max(9),
+  checks: z.array(z.object({ id: z.enum(CAD_CHECKS), passed: z.boolean() }).passthrough()).min(7).max(12),
   scope: z.literal("parametric-part-geometry"), physicalValidation: z.literal(false),
 }).passthrough();
 export type CadChecks = z.infer<typeof CadChecks>;
@@ -263,7 +269,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const native = (file: string) => join(config.repository, "native", file);
     const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
     const structural = request.requirements.structural;
-    const used = ["cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
       ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
@@ -331,8 +337,22 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         record.fea = { ...record.fea, [name]: summary };
       }
       record[name] = checks;
-      await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, structural ? CAD_CHECKS : GEOMETRY_CHECKS), { mode: 0o600, flag: "wx" });
-      for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
+      const dfm = request.requirements.dfm;
+      if (dfm) {
+        publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM：三轴铣削装夹、钻孔与单件成本（${name === "baseline" ? "基准" : "候选"}）`, status: "running", which: name });
+        const r = await command(config.cadquery, ["-I", "-W", "ignore", native("cad_dfm.py"), "--step", join(target, "part.step"), "--shop", native("dfm-shop.json"),
+          "--requirements", JSON.stringify(dfm), "--output", join(target, "dfm.json")], config.repository, undefined, 180_000);
+        record.receipts.push({ adapter: "cadquery-dfm", command: ["python", "cad_dfm.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
+          stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(native("cad_dfm.py"))), shop: sha256(await readFile(native("dfm-shop.json"))) } });
+        publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM（${name === "baseline" ? "基准" : "候选"}）`, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: r.stdout.trim().slice(0, 160) });
+        if (r.exitCode !== 0) throw new DomainError("DFM_FAILED", "Native DFM analysis failed; retain receipts", 422);
+        const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(3) }).passthrough()
+          .parse(JSON.parse(await readFile(join(target, "dfm.json"), "utf8")));
+        checks.checks.push(...measured.checks as typeof checks.checks);
+      }
+      const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : [])];
+      await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
+      for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       store.put("cad-review", record);
     }
     publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选零件", status: "running" });

@@ -61,3 +61,18 @@ npm run test:aero   # 35° body vs the Cd target → feedback → 12.5° body re
 API: `POST /api/projects/:id/aero` with `{ requestId, projectRevision, parameters: { slantAngleDeg, noseRadius,
 length, height }, requirements? }`. The UI lane is "车身气动". The AI tool `aero-body` proposes typed parameters,
 which still need confirmation.
+
+## On AWS Batch
+
+When `PAI_SOLVER_CFD_JOB_DEFINITION` is configured, as on the hosted site, each case runs as its own Batch job.
+
+- **Image.** `Dockerfile.cfd` is built FROM the same pinned OpenCFD digest and adds Python and boto3 only.
+- **Resources.** Each job gets 16 vCPU and 32 GiB. Jobs are not retried.
+- **Job I/O.** The host prepares the case (dictionaries and `body.stl`) and uploads it as `case.tar`. The job runs the
+  image's own `cfd_run.sh`.
+- **Checks.** The host re-hashes `coefficient.dat`, `run.json` and `log.checkMesh` against `result.json` and requires
+  OpenFOAM v2512.
+
+The 12.5° review on pai.oneai.host took 9 minutes in 4 jobs; locally on 8 cores it took 94 minutes. The drag
+coefficients equal the local ones: reference 0.23406, candidate 0.22926 against 0.22945 locally. See
+[aero-batch.json](evidence/aero-batch.json).

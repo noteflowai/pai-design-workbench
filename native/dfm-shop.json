@@ -1,0 +1,15 @@
+{
+  "//": "Reviewed shop assumptions for the 3-axis milling DFM estimate (native/cad_dfm.py). Rule-of-thumb values for 6061-T6 on a small VMC; change them here, not in code.",
+  "process": "3-axis CNC milling from rectangular 6061-T6 bar stock",
+  "stockAllowanceMm": 2.0,
+  "materialEurPerKg": 6.5,
+  "densityGPerCm3": 2.70,
+  "machineEurPerHour": 75.0,
+  "setupMinutes": 15.0,
+  "roughingCm3PerMin": 20.0,
+  "finishingCm2PerMin": 25.0,
+  "drillSecondsPerHole": 20.0,
+  "minToolDiameterMm": 3.0,
+  "maxDrillDepthToDiameter": 4.0,
+  "batch": 50
+}
