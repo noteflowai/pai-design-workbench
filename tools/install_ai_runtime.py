@@ -1,25 +1,34 @@
-"""Install the pinned AI runtime: Kiro CLI and the NoteFlow bounded text executor.
+"""Install the pinned AI runtime: the NoteFlow bounded text executor and the Kiro CLI it enforces.
 
-Used by the container image build and by the hosted release update, so both run identical pinned
-components (tools/runtime-pins.json). Every download is checked against its pinned SHA-256; the
-executor comes from a `git archive` tarball whose digest is pinned. Installs nothing global except
-the optional --link-dir symlinks. Never reads, writes or prints credentials.
+Used by the container image builds and by the hosted release update, so all of them run the same components.
+
+Single sources of truth (no versions are repeated here or in the Dockerfiles):
+- tools/runtime-pins.json pins only the executor: its commit and the SHA-256 of its `git archive`.
+- The executor's own config/engine-pins.json pins the Kiro CLI version and the official archive digests.
+- The executor's own package.json and lockfile pin the npm adapters (acpx, Codex ACP, Claude ACP).
+
+Kiro archives are checked against the digest pinned by the executor; the executor archive against runtime-pins.json.
+Stable links `<prefix>/executor` and `<prefix>/kiro` point at the installed versions, so image and service
+definitions never name a version. Installs nothing global except the optional --link-dir symlinks; never reads,
+writes or prints credentials.
 
   python3 tools/install_ai_runtime.py --prefix DIR --executor-tar FILE [--link-dir /usr/local/bin]
 """
 import argparse
 import hashlib
+import io
 import json
 import os
 import platform
 import shutil
-import sys
 import subprocess
+import sys
 import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
+KIRO_DOWNLOAD = "https://prod.download.cli.kiro.dev/stable/{version}/kirocli-{arch}-linux.zip"
 pins = json.loads((Path(__file__).resolve().parent / "runtime-pins.json").read_text())
 parser = argparse.ArgumentParser()
 parser.add_argument("--prefix", type=Path, required=True)
@@ -28,23 +37,61 @@ parser.add_argument("--link-dir", type=Path)
 args = parser.parse_args()
 prefix = args.prefix.resolve()
 prefix.mkdir(parents=True, exist_ok=True)
-sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+sha = lambda data: hashlib.sha256(data).hexdigest()
 
-# Kiro CLI, pinned to the version the executor enforces.
+
+def relink(link: Path, target: Path):
+    tmp = link.with_name(link.name + ".next")
+    if tmp.is_symlink() or tmp.exists():
+        tmp.unlink()
+    tmp.symlink_to(target)
+    tmp.replace(link)
+
+
+# ---------------------------------------------------------------- executor (pinned by commit and archive digest)
+ex = pins["executor"]
+archive = args.executor_tar.read_bytes()
+if sha(archive) != ex["archiveSha256"]:
+    raise SystemExit("Executor archive digest differs from the pinned commit; not installing")
+with tarfile.open(fileobj=io.BytesIO(archive)) as t:
+    engine_pins = json.load(t.extractfile("config/engine-pins.json"))
+    npm_pins = json.load(t.extractfile("package.json"))["dependencies"]
+ex_dir = prefix / f"noteflow-text-executor-{ex['commit'][:12]}"
+if not (ex_dir / ".pai-installed").exists():
+    tmp = ex_dir.with_suffix(".partial")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(mode=0o755)
+    with tarfile.open(fileobj=io.BytesIO(archive)) as t:
+        t.extractall(tmp, filter="data")
+    # Tool output goes to stderr so stdout stays a single JSON summary for callers.
+    subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=tmp, check=True, stdout=sys.stderr)
+    subprocess.run(["npm", "run", "build"], cwd=tmp, check=True, stdout=sys.stderr)
+    for name, version in npm_pins.items():
+        installed = json.loads((tmp / "node_modules" / name / "package.json").read_text())["version"]
+        if installed != version:
+            raise SystemExit(f"{name} {installed} differs from the executor's pin {version}")
+    (tmp / ".pai-installed").write_text(ex["commit"] + "\n")
+    shutil.rmtree(ex_dir, ignore_errors=True)
+    tmp.rename(ex_dir)
+entry = ex_dir / ".runtime/compiled/flows/execute.js"
+if not entry.exists():
+    raise SystemExit("Executor build output missing")
+
+# ---------------------------------------------------------------- Kiro CLI (version and digests pinned by the executor)
 arch = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}[platform.machine().lower()]
-kiro = pins["kiro"]
+kiro = engine_pins["kiro"]
 kiro_dir = prefix / f"kiro-{kiro['version']}"
 chat = kiro_dir / "kirocli/bin/kiro-cli-chat"
 if not chat.exists():
-    archive = prefix / f"kiro-{kiro['version']}-{arch}.zip"
-    with urllib.request.urlopen(kiro["url"].format(arch=arch), timeout=120) as response, archive.open("wb") as out:
+    zip_path = prefix / f"kiro-{kiro['version']}-{arch}.zip"
+    with urllib.request.urlopen(KIRO_DOWNLOAD.format(version=kiro["version"], arch=arch), timeout=120) as response, zip_path.open("wb") as out:
         shutil.copyfileobj(response, out)
-    if sha(archive) != kiro["sha256"][arch]:
-        archive.unlink()
+    if sha(zip_path.read_bytes()) != kiro["linuxZipSha256"][arch]:
+        zip_path.unlink()
         raise SystemExit("Kiro archive checksum mismatch; not installing")
     tmp = kiro_dir.with_suffix(".partial")
     shutil.rmtree(tmp, ignore_errors=True)
-    with zipfile.ZipFile(archive) as z:
+    with zipfile.ZipFile(zip_path) as z:
         for member in z.infolist():
             path = Path(member.filename)
             if path.is_absolute() or ".." in path.parts:
@@ -54,41 +101,16 @@ if not chat.exists():
             if mode:
                 os.chmod(tmp / member.filename, mode & 0o755)
     tmp.rename(kiro_dir)
-    archive.unlink()
+    zip_path.unlink()
 version = subprocess.run([str(chat), "--version"], capture_output=True, text=True, check=True, timeout=20).stdout
 if kiro["version"] not in version:
     raise SystemExit(f"Unexpected Kiro version: {version.strip()}")
 
-# Executor at the pinned commit.
-ex = pins["executor"]
-if sha(args.executor_tar) != ex["archiveSha256"]:
-    raise SystemExit("Executor archive digest differs from the pinned commit; not installing")
-ex_dir = prefix / f"noteflow-text-executor-{ex['commit'][:12]}"
-marker = ex_dir / ".pai-installed"
-if not marker.exists():
-    tmp = ex_dir.with_suffix(".partial")
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(mode=0o755)
-    with tarfile.open(args.executor_tar) as t:
-        t.extractall(tmp, filter="data")
-    # Tool output goes to stderr so stdout stays a single JSON summary for callers.
-    subprocess.run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], cwd=tmp, check=True, stdout=sys.stderr)
-    subprocess.run(["npm", "run", "build"], cwd=tmp, check=True, stdout=sys.stderr)
-    for name, key in (("acpx", "acpx"), ("@agentclientprotocol/codex-acp", "codexAcp"), ("@agentclientprotocol/claude-agent-acp", "claudeAgentAcp")):
-        installed = json.loads((tmp / "node_modules" / name / "package.json").read_text())["version"]
-        if installed != ex[key]:
-            raise SystemExit(f"{name} {installed} differs from pin {ex[key]}")
-    (tmp / ".pai-installed").write_text(ex["commit"] + "\n")
-    shutil.rmtree(ex_dir, ignore_errors=True)
-    tmp.rename(ex_dir)
-entry = ex_dir / ".runtime/compiled/flows/execute.js"
-if not entry.exists():
-    raise SystemExit("Executor build output missing")
+relink(prefix / "executor", ex_dir)
+relink(prefix / "kiro", kiro_dir)
 if args.link_dir:
     args.link_dir.mkdir(parents=True, exist_ok=True)
     for name in ("kiro-cli", "kiro-cli-chat"):
-        link = args.link_dir / name
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(kiro_dir / "kirocli/bin" / name)
-print(json.dumps({"kiro": kiro["version"], "kiroChat": str(chat), "executorRoot": str(ex_dir), "executorEntrypoint": str(entry), "executorCommit": ex["commit"]}))
+        relink(args.link_dir / name, prefix / "kiro/kirocli/bin" / name)
+print(json.dumps({"kiro": kiro["version"], "kiroChat": str(chat), "executorRoot": str(ex_dir), "executorEntrypoint": str(entry),
+                  "executorCommit": ex["commit"], "adapters": npm_pins}))

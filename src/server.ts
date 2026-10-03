@@ -10,6 +10,7 @@ import { configuration, type Config } from "./config.js";
 import { Candidate, CreateProject, Id } from "./contracts.js";
 import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
+import { buildPackage, signer, verifyPackage } from "./signing.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -28,7 +29,7 @@ import { DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCo
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, optimizeCad, type CadOptimization } from "./optimize.js";
-import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
+import { KIND_STORE, admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
 import { agentAuthentication, agentRoute, rewriteAgentUrl, type AgentPrincipal } from "./agent-api.js";
@@ -148,6 +149,31 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const p = workbench.project(paramId(request.params));
     return decideRelease(store, p, lifecycle(p), paramId(request.params, "releaseId"), request.body, actor(request.headers));
   });
+  // Signed, self-contained release package: record + digest-checked native files + release decision.
+  const DIRS: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad" };
+  app.get("/api/releases/:id/package", async (request, reply) => {
+    const release = store.get<Release>("release", paramId(request.params));
+    if (!release) throw new DomainError("NOT_FOUND", "Release not found", 404);
+    const kind = KIND_STORE[release.evidenceKind];
+    const record = store.get<{ id: string; verdict?: string; decision?: { verdict: string }; requirementDigest: string; files?: Record<string, string>; artifacts?: Record<string, string> }>(kind, release.runId);
+    if (!record) throw new DomainError("NOT_FOUND", "Release evidence not found", 404);
+    const files: Record<string, Buffer> = {};
+    for (const [name, digest] of Object.entries(record.files ?? {})) {
+      const dir = DIRS[kind]; if (!dir) continue;
+      const content = await readFile(join(config.state, dir, record.id, name));
+      if (sha256(content) !== digest) throw new DomainError("NATIVE_FILE_CHANGED", `Native artifact differs from its verified digest: ${name}`, 422);
+      files[name] = content;
+    }
+    for (const [name, content] of Object.entries(record.artifacts ?? {})) files[`artifacts/${name}`] = Buffer.from(content);
+    const pkg = await buildPackage(config, { ...release }, { ...record, verdict: record.verdict ?? record.decision?.verdict ?? null }, files);
+    reply.header("Content-Disposition", `attachment; filename="pai-release-${release.number}.json"`);
+    return pkg;
+  });
+  app.get("/api/signing/public-key", async () => { const s = await signer(config); return { keyId: s.keyId, algorithm: s.algorithm, publicKeyPem: s.publicKeyPem }; });
+  app.post("/api/packages/verify", async request => {
+    const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
+    return verifyPackage(body.package, body.trustedPublicKeyPem);
+  });
   app.get("/api/state", async () => ({
     releases: store.list("release"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
@@ -159,6 +185,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
+      signing: { kms: Boolean(config.signingKmsKeyId), keyId: (await signer(config)).keyId, algorithm: (await signer(config)).algorithm },
       physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
         optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS } } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,

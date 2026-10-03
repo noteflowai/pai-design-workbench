@@ -60,6 +60,8 @@ export function ReleasePanel() {
       <thead><tr><th scope="col">编号</th><th scope="col">标题</th><th scope="col">成熟度</th><th scope="col">需求</th><th scope="col">最后变更</th></tr></thead>
       <tbody>{releases.map(r => { const [label, tone] = MATURITY[r.maturity]; const last = r.history.at(-1)!;
         return <tr key={r.id}><td><strong>{r.number}</strong></td><td>{r.title}<small>{KIND_LABEL[r.evidenceKind as RunKind]}</small></td><td><Chip tone={tone}>{label}</Chip></td>
-          <td>v{r.projectRevision}</td><td>{time(last.at)}<small>{last.reason}</small></td></tr>; })}</tbody></table></div>}
+          <td>v{r.projectRevision}</td><td>{time(last.at)}<small>{last.reason}</small>
+          {r.maturity === "released" && <a className="button secondary compact" href={`/api/releases/${r.id}/package`} download>下载签名发布包</a>}</td></tr>; })}</tbody></table></div>}
+    {current && <p className="muted">签名发布包含证据记录、经摘要核验的原生文件（STEP、FEA、MJCF、.blend…）与审批记录；清单由{c.data.capabilities.signing?.kms ? " AWS KMS 密钥" : "本机 Ed25519 密钥"}签名，可离线用 <code>npm run verify:package</code> 核验。</p>}
   </Card>;
 }

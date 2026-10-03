@@ -43,7 +43,7 @@ const SCOPE: Record<EvidenceKind, string> = {
   "factory-twin": "演示仿真：参数未按真实工厂校准",
 };
 type Run = { id: string; projectId: string; projectRevision: number; state: string; verdict?: string; decision?: { verdict: string } };
-const KIND_STORE: Record<EvidenceKind, string> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review" };
+export const KIND_STORE: Record<EvidenceKind, string> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review" };
 
 export function admission(store: Store, project: Project, lifecycle: Lifecycle, kind: EvidenceKind, runId: string): AdmissionCheck[] {
   const run = store.get<Run>(KIND_STORE[kind], runId);

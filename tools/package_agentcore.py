@@ -14,7 +14,7 @@ files = ["Dockerfile.agentcore", "agentcore/server.py", "native/cadquery-runtime
          "tools/install_ai_runtime.py", "tools/agentcore-ledger-policy.json",
          *[f"native/{n}" for n in ("cad_bracket.py", "cad_recipe.py", "cad_checks.py", "cad_sweep.py", "cad_code_policy.py",
                                    "cad_lockdown.py", "cad_sandbox.py", "cad_generated.py", "cad_template.py", "cad_reopen.py")]]
-executor = root / ".state/deploy/executor-ec007f070db8.tar"
+executor = root / ".state/deploy/executor.tar"
 pins = json.loads((root / "tools/runtime-pins.json").read_text())
 if hashlib.sha256(executor.read_bytes()).hexdigest() != pins["executor"]["archiveSha256"]:
     raise SystemExit("executor archive missing or not the pinned commit; run python3 tools/package_executor.py")

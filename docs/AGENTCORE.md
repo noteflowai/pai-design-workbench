@@ -9,7 +9,7 @@ AgentCore 对镜像大小有 2 GB 的硬上限，不能申请提高，而 amd64 
 | 运行时 | 镜像（压缩后） | 内容 | 网络 | 凭据 |
 |---|---|---|---|---|
 | `pai_cad_sandbox` | 约 0.42 GB | CadQuery 2.8 / OCP 7.9（精简哈希锁，13 个包）、共用原生检查、bubblewrap | 隔离子网：无 NAT、无 IGW，只能访问拉取镜像和写日志所需的端点 | 无 |
-| `pai_kiro_agent` | 约 0.55 GB（解压后 1.34 GB） | Node 24.21、Kiro CLI 2.24.0 aarch64、NoteFlow 执行器 ec007f0 | 私有子网经 NAT 出网（访问 Kiro 服务和 Secrets Manager） | 每次调用时从 Secrets Manager 读取 Kiro 密钥 |
+| `pai_kiro_agent` | 约 0.55 GB（解压后 1.34 GB） | Node LTS、执行器锁定的 Kiro CLI（aarch64）、NoteFlow 执行器（版本见 `tools/runtime-pins.json`） | 私有子网经 NAT 出网（访问 Kiro 服务和 Secrets Manager） | 每次调用时从 Secrets Manager 读取 Kiro 密钥 |
 
 两个镜像都不含 Blender，因为 Blender 官方没有 linux-arm64 版本，而且这两项工作也不需要它。
 

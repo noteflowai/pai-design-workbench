@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# PAI Design Workbench — single image: workbench, NoteFlow bounded executor (acpx 0.19.3), Kiro CLI 2.24.0,
+# PAI Design Workbench — single image: workbench, NoteFlow bounded executor and the Kiro CLI it pins (tools/runtime-pins.json),
 # Codex/Claude ACP adapters, Blender 5.2.2 LTS, CadQuery 2.8 / OCCT 7.9 and the pinned demo evidence.
 # Every download is checked against tools/runtime-pins.json or a hash-locked requirements file.
 # Credentials are never part of the image: mount them read-only at runtime (see docs/CONTAINER.md).
@@ -57,15 +57,15 @@ RUN python3 -m venv /opt/cadquery && /opt/cadquery/bin/python -m pip install -q 
 COPY tools/install_ai_runtime.py /opt/pai/tools/install_ai_runtime.py
 COPY tools/runtime-pins.json /opt/pai/tools/runtime-pins.json
 RUN --mount=type=bind,from=executor,target=/executor \
-    python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /executor/executor-ec007f070db8.tar --link-dir /usr/local/bin \
-    && rm -rf /root/.npm /opt/ai/noteflow-text-executor-ec007f070db8/node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl /opt/ai/noteflow-text-executor-ec007f070db8/node_modules/typescript
+    python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /executor/executor.tar --link-dir /usr/local/bin \
+    && rm -rf /root/.npm /opt/ai/executor/node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl /opt/ai/executor/node_modules/typescript
 
 # Workbench: built in a throwaway stage so dev dependencies and caches never reach a layer.
 COPY --from=app /opt/pai/app /opt/pai/app
 WORKDIR /opt/pai/app
 RUN chown -R pai:pai /opt/pai/app/.state
 ENV PAI_STATE=/data/state PAI_BLENDER=/opt/blender-5.2.2-linux-x64/blender PAI_CADQUERY_PYTHON=/opt/cadquery/bin/python \
-    PAI_CONTROL_ROOT=/opt/ai/noteflow-text-executor-ec007f070db8 PAI_CONTROLLER_ENTRYPOINT=/opt/ai/noteflow-text-executor-ec007f070db8/.runtime/compiled/flows/execute.js \
+    PAI_CONTROL_ROOT=/opt/ai/executor PAI_CONTROLLER_ENTRYPOINT=/opt/ai/executor/.runtime/compiled/flows/execute.js \
     PORT=4317 HOME=/home/pai
 RUN install -d -o pai -g pai -m 0700 /data /data/state
 USER pai

@@ -2,7 +2,7 @@
 # PAI images for Amazon Bedrock AgentCore Runtime (BYOC): linux/arm64, HTTP contract on 0.0.0.0:8080, each < 2 GB.
 #
 #   --target sandbox  CadQuery 2.8 / OCCT 7.9 (slim hash lock) + shared native checks + bubblewrap. No credentials.
-#   --target agent    Node 24 LTS + Kiro CLI 2.24.0 + NoteFlow bounded executor (ec007f0). Keys from Secrets Manager.
+#   --target agent    Node LTS + NoteFlow bounded executor + the Kiro CLI it pins (tools/runtime-pins.json). Keys from Secrets Manager.
 #
 # Built natively on arm64 by CodeBuild (infra/agentcore.ts). Every download is pinned: base image digest,
 # tools/runtime-pins.json and native/cadquery-runtime-requirements.txt (--require-hashes).
@@ -43,9 +43,8 @@ RUN set -eu; arch=$([ "$TARGETARCH" = "arm64" ] && echo linux-arm64 || echo linu
     curl -fsSL -o /tmp/node.tar.xz "https://nodejs.org/dist/v$v/node-v$v-$arch.tar.xz"; echo "$h  /tmp/node.tar.xz" | sha256sum -c -; \
     tar -xJf /tmp/node.tar.xz -C /opt && mv /opt/node-v$v-$arch /opt/node && rm /tmp/node.tar.xz
 ENV PATH=/opt/node/bin:$PATH
-COPY vendor/executor-ec007f070db8.tar /tmp/executor.tar
-RUN python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /tmp/executor.tar \
-    && mv /opt/ai/noteflow-text-executor-ec007f070db8 /opt/ai/executor \
+COPY vendor/executor.tar /tmp/executor.tar
+RUN python3 /opt/pai/tools/install_ai_runtime.py --prefix /opt/ai --executor-tar /tmp/executor.tar > /opt/ai/install.json \
     && cd /opt/ai/executor && rm -rf node_modules/typescript node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl /root/.npm \
     && rm -f /tmp/executor.tar
 
@@ -54,8 +53,11 @@ FROM os AS agent
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates python3 && rm -rf /var/lib/apt/lists/*
 COPY --from=agent-build /opt/node /opt/node
 COPY --from=agent-build /opt/ai /opt/ai
-RUN ln -s /opt/ai/kiro-2.24.0/kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && ln -s /opt/ai/kiro-2.24.0/kirocli/bin/kiro-cli-chat /usr/local/bin/kiro-cli-chat \
-    && kiro-cli-chat --version | grep -q 2.24.0 && test "$(cat /opt/ai/executor/.pai-installed)" = "ec007f070db8b012bea49ae622055e7e291787be"
+COPY tools/runtime-pins.json /opt/pai/tools/runtime-pins.json
+# Versions come from the install summary and the pins, never from this file.
+RUN ln -s /opt/ai/kiro/kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && ln -s /opt/ai/kiro/kirocli/bin/kiro-cli-chat /usr/local/bin/kiro-cli-chat \
+    && kiro-cli-chat --version | grep -qF "$(python3 -c "import json;print(json.load(open('/opt/ai/install.json'))['kiro'])")" \
+    && test "$(cat /opt/ai/executor/.pai-installed)" = "$(python3 -c "import json;print(json.load(open('/opt/pai/tools/runtime-pins.json'))['executor']['commit'])")"
 COPY tools/agentcore-ledger-policy.json /opt/pai/agentcore-ledger-policy.json
 COPY agentcore/server.py /opt/pai/agentcore/server.py
 ARG PAI_IMAGE_VERSION=dev

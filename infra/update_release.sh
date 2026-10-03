@@ -26,7 +26,8 @@ PY
 if [ ! -e "$RELEASE/.state" ]; then ln -s /var/lib/pai/data/state "$RELEASE/.state"; fi
 chown -R pai:pai "$RELEASE"
 cd "$RELEASE"
-NODE_BIN="/var/lib/pai/data/state/tools/node-v24.21.0-linux-x64/bin"
+NODE_VERSION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['node']['version'])" "$PAI_RELEASE/tools/runtime-pins.json")
+NODE_BIN="/var/lib/pai/data/state/tools/node-v$NODE_VERSION-linux-x64/bin"
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm ci
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm prune --omit=dev
 # Native parametric CAD: hash-locked CadQuery 2.8.0 / OCCT 7.9 in persistent state; idempotent. Fails before any switch.
@@ -46,6 +47,10 @@ fi
 # AI engine (pinned Kiro CLI + bounded executor); skipped only if the stack predates the AI resources.
 if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
   bash "$RELEASE/infra/install_ai.sh"
+fi
+if [ -n "${PAI_SIGNING_KMS_KEY_ID:-}" ]; then
+  sed -i '/^PAI_SIGNING_KMS_KEY_ID=/d' /etc/pai/runtime.env
+  printf 'PAI_SIGNING_KMS_KEY_ID=%s\n' "$PAI_SIGNING_KMS_KEY_ID" >> /etc/pai/runtime.env
 fi
 # Machine-agent API settings come from stack outputs; keep the file's other lines unchanged.
 if [ -n "${PAI_AGENT_USER_POOL_ID:-}" ] && [ -n "${PAI_AGENT_CLIENT_ID:-}" ]; then

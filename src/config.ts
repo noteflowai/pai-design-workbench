@@ -8,6 +8,8 @@ export interface Config {
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
   /** Pinned physics toolchain (npm run setup:physics): Python with Gmsh/Optuna/scikit-learn/MuJoCo, and CalculiX ccx. */
   physicsPython?: string; ccx?: string;
+  /** AWS KMS asymmetric key (ECC_NIST_P256) that signs release packages; local Ed25519 when unset. */
+  signingKmsKeyId?: string;
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
   /** Amazon Bedrock AgentCore runtimes (infra/agentcore.ts): remote executor and remote CAD sandbox. */
@@ -60,6 +62,7 @@ export function configuration(): Config {
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
     physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX,
+    signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
     bwrap: process.env.PAI_BWRAP,
     agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
     agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),

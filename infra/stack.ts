@@ -9,6 +9,7 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as actions from "aws-cdk-lib/aws-elasticloadbalancingv2-actions";
 import * as targets from "aws-cdk-lib/aws-elasticloadbalancingv2-targets";
 import * as backup from "aws-cdk-lib/aws-backup";
+import * as kms from "aws-cdk-lib/aws-kms";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import { Construct } from "constructs";
@@ -105,7 +106,7 @@ export class WorkbenchStack extends cdk.Stack {
     asset.bucket.grantRead(role, context("bootstrapAssetKey"));
     asset.bucket.grantRead(role, asset.s3ObjectKey);
     // AI runtime: the pinned NoteFlow executor archive (private source, never in Git) and Kiro API keys.
-    const executorPath = resolve("../.state/deploy/executor-ec007f070db8.tar");
+    const executorPath = resolve("../.state/deploy/executor.tar");
     const executor = new assets.Asset(this, "Executor", {
       path: executorPath, assetHash: createHash("sha256").update(readFileSync(executorPath)).digest("hex"), assetHashType: cdk.AssetHashType.CUSTOM,
     });
@@ -115,6 +116,12 @@ export class WorkbenchStack extends cdk.Stack {
       description: "Kiro headless API keys for the PAI bounded executor (primary, backup, backup2); written by the operator, read by the instance",
     });
     aiKeys.grantRead(role);
+    // Release-package signing: asymmetric key, private half never leaves KMS; the instance may only sign with it.
+    const signingKey = new kms.Key(this, "ReleaseSigningKey", {
+      description: "Signs PAI release-package manifests (ECDSA P-256)", keySpec: kms.KeySpec.ECC_NIST_P256, keyUsage: kms.KeyUsage.SIGN_VERIFY,
+      alias: "pai-workbench/release-signing", removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    signingKey.grant(role, "kms:Sign", "kms:GetPublicKey");
     const data = new ec2.Volume(this, "Data", {
       availabilityZone: zone, size: cdk.Size.gibibytes(40), volumeType: ec2.EbsDeviceVolumeType.GP3,
       encrypted: true, removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -221,6 +228,7 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolId", { value: pool.userPoolId });
     new cdk.CfnOutput(this, "UserPoolClientId", { value: client.userPoolClientId });
     new cdk.CfnOutput(this, "AgentUserPoolId", { value: pool.userPoolId });
+    new cdk.CfnOutput(this, "SigningKeyId", { value: signingKey.keyId });
     new cdk.CfnOutput(this, "AgentClientId", { value: agentClient.userPoolClientId });
     new cdk.CfnOutput(this, "AgentClientSecretArn", { value: agentSecret.secretArn });
     new cdk.CfnOutput(this, "AgentTokenUrl", { value: `https://${authDomain.domainName}.auth.${this.region}.amazoncognito.com/oauth2/token` });

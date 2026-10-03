@@ -50,7 +50,7 @@ A hosted workbench is reached through `/api/agent/*`, a read-and-propose allowli
 A contract test (`tests/agentforge-contract.test.ts`) keeps the profile and the MCP tool set identical.
 
 
-- **acpx**, through the NoteFlow executor. Version currency is maintained at that layer. AgentForge's acpx moved from 0.15.1 to 0.19.4 in [PR #548](https://github.com/noteflowai/agentforge/pull/548), with its upstream guards re-measured. The NoteFlow executor pins 0.19.3, and that is its owner's upgrade to make.
+- **acpx**, through the NoteFlow executor. Version currency is maintained at that layer. AgentForge's acpx moved from 0.15.1 to 0.19.4 in [PR #548](https://github.com/noteflowai/agentforge/pull/548), with its upstream guards re-measured. The NoteFlow executor moves to acpx 0.19.4 and Kiro CLI 2.27.1 in [PR #53](https://github.com/noteflowai/noteflow-agent-control/pull/53). Its pins have one source (`config/engine-pins.json` and the lockfile), and the workbench pins only the executor commit.
 - **Bedrock AgentCore** for remote isolation ([AGENTCORE.md](AGENTCORE.md)). This is the managed service that AgentForge's AgentCore backend also targets.
 
 ## Gates for an AgentForge Host channel

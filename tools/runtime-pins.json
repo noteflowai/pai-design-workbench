@@ -5,12 +5,25 @@
     "evalarc": "6af26bf0184d1e4f3c5496615eda594603cc68c3",
     "physical-ai-radar": "c7cd75d3cca62c822d7f5711110aefdf12159103"
   },
-  "node": { "version": "24.21.0", "sha256": { "linux-x64": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6", "linux-arm64": "6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2" } },
-  "blender": { "version": "5.2.2", "sha256": { "linux-x64": "84098912789dc450e95697c4184fb8a90acbe5111c2ba4aede3fecb57806a168" }, "note": "No official linux-arm64 build" },
-  "kiro": { "version": "2.24.0", "url": "https://prod.download.cli.kiro.dev/stable/2.24.0/kirocli-{arch}-linux.zip",
-    "sha256": { "x86_64": "dc34701a28f302b84ff2067d019394566eab0f7742dc529cbb90351e1ec02004", "aarch64": "a7f046dc579266a67ea9bb178ca60deaa0d5930fb2c04919f538b4f2b505c1ee" },
-    "note": "Hashes recorded 2026-10-01; the x86_64 kiro-cli-chat binary inside is byte-identical to the locally verified 2.24.0 install" },
-  "executor": { "repository": "noteflowai/noteflow-agent-control (private)", "commit": "ec007f070db8b012bea49ae622055e7e291787be",
-    "archiveSha256": "534303b3055b3b3eb11705ea909d65f03b4df427df9aea89ffba9f03d1106bec", "acpx": "0.19.3", "codexAcp": "2.0.0", "claudeAgentAcp": "0.84.0" },
+  "node": {
+    "version": "24.21.0",
+    "sha256": {
+      "linux-x64": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6",
+      "linux-arm64": "6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2"
+    }
+  },
+  "blender": {
+    "version": "5.2.2",
+    "sha256": {
+      "linux-x64": "84098912789dc450e95697c4184fb8a90acbe5111c2ba4aede3fecb57806a168"
+    },
+    "note": "No official linux-arm64 build"
+  },
+  "executor": {
+    "repository": "noteflowai/noteflow-agent-control (private)",
+    "commit": "95215e6086db8540dda53c24c3e25ed45b37ad02",
+    "archiveSha256": "0292fb925f1e5c4b3cc1f04f7cd57897f4e1c3afc218ffd75f7dc1efdb31abeb",
+    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json"
+  },
   "ubuntu": "ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3"
 }

@@ -36,7 +36,8 @@ ln -s /var/lib/pai/data/state "$RELEASE/.state"
 chown -R pai:pai "$RELEASE"
 cd "$RELEASE"
 runuser -u pai -- python3 tools/setup_node.py
-NODE_BIN="$RELEASE/.state/tools/node-v24.21.0-linux-x64/bin"
+NODE_VERSION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['node']['version'])" "$PAI_RELEASE/tools/runtime-pins.json")
+NODE_BIN="$RELEASE/.state/tools/node-v$NODE_VERSION-linux-x64/bin"
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm ci
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm run setup:demo
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm run setup:native

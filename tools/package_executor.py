@@ -5,13 +5,15 @@ and is handed to the image build / hosted release as a separately hashed artifac
 """
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 pins = json.loads((root / "tools/runtime-pins.json").read_text())["executor"]
-source = Path.home() / ".local/share/noteflow-text-executor"
-out = root / ".state/deploy" / f"executor-{pins['commit'][:12]}.tar"
+# Any checkout that contains the pinned commit (the archive digest proves the content).
+source = Path(os.environ.get("PAI_EXECUTOR_SOURCE", Path.home() / ".local/share/noteflow-text-executor"))
+out = root / ".state/deploy/executor.tar"
 out.parent.mkdir(parents=True, exist_ok=True)
 data = subprocess.run(["git", "archive", "--format=tar", pins["commit"]], cwd=source, capture_output=True, check=True).stdout
 digest = hashlib.sha256(data).hexdigest()

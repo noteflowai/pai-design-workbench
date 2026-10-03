@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
@@ -14,6 +14,7 @@ import type { Project } from "../src/contracts.js";
  * Usage: npm run test:ai-live [-- --engines kiro,codex,claude]
  */
 const config = configuration();
+const pins = JSON.parse(await readFile(join(config.repository, "tools/runtime-pins.json"), "utf8")) as { executor: { commit: string } };
 assert.ok(config.controllerEntrypoint && config.controllerDatabase && config.cadquery, "Configure the executor, ledger and CadQuery");
 const engines = (process.argv.find(a => a.startsWith("--engines="))?.slice(10) ?? "kiro").split(",");
 const state = join(config.state, "ai-live", randomUUID());
@@ -58,7 +59,7 @@ try {
   }
   const status = await call<{ capabilities: unknown }>("GET", "/api/state");
   const report = { schema: "pai-ai-live-1", checkedAt: new Date().toISOString(), engines, results,
-    executor: "noteflow-text-executor ec007f0 (acpx 0.19.3)", ledger: "dedicated PAI attempt-only ledger (money_limits null)",
+    executor: `noteflow-text-executor ${pins.executor.commit.slice(0, 7)}`, ledger: "dedicated PAI attempt-only ledger (money_limits null)",
     capabilities: (status.body.capabilities as { assistant: unknown }).assistant, promptAndAnswerContentRecorded: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence", "ai-live.json"), JSON.stringify(report, null, 2) + "\n", { mode: 0o600 });

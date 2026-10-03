@@ -86,3 +86,8 @@ python3 tools/aws_operator.py login-file
 目前是单实例、单管理工作区，没有高可用或用户间数据隔离。后续多人试用需要独立工作区授权。新增费用主要是 EC2、公网 IPv4、EBS、快照和少量 Cognito 用量；复用既有 ALB，无新增 ALB 或 NAT 网关费用。
 
 当前最新 CDK 2.271.0 捆绑的开发依赖 `brace-expansion` 5.0.9 有已知 DoS 公告，`npm audit fix` 无法修改厂商捆绑包。它只参与本地受控路径的模板构建，不包含在生产发布包中；已保留此上游限制，后续 CDK 更新需要重新检查。应用依赖安装审计未报告漏洞。
+
+## Release signing and runtime pins (2026-10-03)
+
+- **Release signing:** each approved release can be downloaded as a signed package (`GET /api/releases/:id/package`). The package contains the evidence record, every native file whose digest is in the record, the release decision, and a manifest signed by the KMS key `alias/pai-workbench/release-signing` (ECC_NIST_P256, ECDSA_SHA_256). The private key never leaves KMS, and the instance role can only call `Sign` and `GetPublicKey`. Verify offline with `npm run verify:package -- package.json key.pem`; the public key comes from `GET /api/signing/public-key`. A package is reported as trusted only when its signing key matches the key you pass in.
+- **Runtime pins:** `tools/runtime-pins.json` records only the executor commit and its archive digest. The Kiro CLI version, the Kiro archive digests and the npm adapters are pinned inside the executor. The installer reads them from there and creates stable `executor` and `kiro` links, so the Dockerfiles and the service unit never name a version. Node comes from the same pins file.

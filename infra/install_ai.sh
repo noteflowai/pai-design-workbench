@@ -6,7 +6,8 @@ set -euo pipefail
 : "${PAI_RELEASE:?}" "${PAI_ASSET_BUCKET:?}" "${PAI_EXECUTOR_KEY:?}" "${PAI_AI_KEYS_ARN:?}"
 STATE=/var/lib/pai/data/state
 AI=$STATE/tools/ai
-NODE_BIN="$STATE/tools/node-v24.21.0-linux-x64/bin"
+NODE_VERSION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['node']['version'])" "$PAI_RELEASE/tools/runtime-pins.json")
+NODE_BIN="$STATE/tools/node-v$NODE_VERSION-linux-x64/bin"
 install -d -m 0700 -o pai -g pai "$AI" "$STATE/ai-ledger"
 TAR=$(mktemp /tmp/pai-executor.XXXXXX.tar)
 python3 -c "import boto3,os,sys; boto3.client('s3').download_file(os.environ['PAI_ASSET_BUCKET'], os.environ['PAI_EXECUTOR_KEY'], sys.argv[1])" "$TAR"
