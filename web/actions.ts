@@ -7,14 +7,15 @@ import type { FailingCase } from "../src/lifecycle";
 import type { CadReview, CadRequirements } from "../src/cad";
 import { CAD_DRAFT_KEY, CAD_VARIANTS } from "./context";
 
-export function runCad(c: Ctx, variant: string, requirements: CadRequirements, code?: string, feedback?: Feedback) {
+export function runCad(c: Ctx, variant: string, requirements: CadRequirements, code?: string, feedback?: Feedback,
+  parameters?: { thickness: number; width: number; plateHeight: number; pilotBore: number }) {
   const p = c.project!;
   const source = variant === "generated" && code ? { language: "cadquery-2.8", code } : undefined;
-  const requestId = requestIdFor(`pai-cad-${p.id}-${p.revision}-${variant}-${JSON.stringify(requirements)}-${code ?? ""}-${feedback ? `${feedback.id}-${feedback.revision}` : ""}`);
+  const requestId = requestIdFor(`pai-cad-${p.id}-${p.revision}-${variant}-${JSON.stringify(requirements)}-${code ?? ""}-${parameters ? JSON.stringify(parameters) : ""}-${feedback ? `${feedback.id}-${feedback.revision}` : ""}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
     const r = await c.track(requestId, `CadQuery 参数化零件 · ${CAD_VARIANTS[variant][0]}`, "cad-part",
-      () => api<CadReview>(`/projects/${p.id}/cad`, { requestId, projectRevision: p.revision, variant, requirements, ...(source ? { source } : {}), ...(feedback ? { feedbackId: feedback.id } : {}) }));
+      () => api<CadReview>(`/projects/${p.id}/cad`, { requestId, projectRevision: p.revision, variant, requirements, ...(source ? { source } : {}), ...(variant === "parametric" && parameters ? { parameters } : {}), ...(feedback ? { feedbackId: feedback.id } : {}) }));
     c.navigate("validate", { kind: "cad-part", id: r.id });
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
     if (feedback) await api(`/feedback/${feedback.id}`, { expectedRevision: feedback.revision, status: "rechecked", reason: "按修订后的生成代码重新执行沙箱建模与原生检查，绑定新回执。", recheckRunId: r.id }, "PATCH");

@@ -609,12 +609,16 @@ test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell wit
   await expect(page.getByRole("table", { name: "配对种子（同一来料偏差）" }).locator("tbody tr")).toHaveCount(10);
   await page.screenshot({ path: testInfo.outputPath("robot-cell.png") });
   await page.goto("/#/design?lane=cad");
-  await page.getByRole("radio", { name: /紧凑化/ }).click();
+  await page.getByRole("radio", { name: /参数化/ }).check();
+  await page.getByLabel("板厚 t", { exact: true }).fill("3");
   await page.getByLabel("冻结结构要求并做 FEA").check();
   await expect(page.getByLabel("电机轴挠度上限", { exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 600_000 });
   await expect(page.locator(".check-table")).toContainText("电机轴挠度（FEA）");
+  // Geometry accepts t = 3 mm; only the native FEA rejects it.
+  await expect(page.locator(".check-table tr.fail")).toHaveCount(1);
+  await expect(page.locator(".check-table tr.fail")).toContainText("电机轴挠度（FEA）");
   await expect(page.getByRole("group", { name: "FEA 结果" })).toContainText("CalculiX");
   await expect(page.locator(".viewport")).toHaveAttribute("data-objects", /[1-9]/, { timeout: 60_000 });
   await page.screenshot({ path: testInfo.outputPath("fea-view.png") });

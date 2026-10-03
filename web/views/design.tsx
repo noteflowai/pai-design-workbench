@@ -125,14 +125,15 @@ function CadLane() {
   useEffect(() => { if (code) sessionStorage.setItem(CAD_DRAFT_KEY, code); setCodeCheck(undefined); }, [code]);
   const feedback = q.get("feedback") ? c.data.feedback.find(f => f.id === q.get("feedback") && f.status === "fix-proposed") : undefined;
   const generated = variant === "generated";
+  const [params, setParams] = useState({ thickness: Number(q.get("t") ?? 3), width: Number(q.get("w") ?? 60), plateHeight: Number(q.get("h") ?? 46), pilotBore: 22.5 });
   if (!cap) return <Empty title="未配置 CadQuery" action={<InstallTool kind="cadquery" />}>运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
   return <><Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
     {feedback && <p className="notice" role="status">反馈复测：修改代码后提交，新回执将绑定到反馈「{feedback.observed.slice(0, 40)}」；零件要求保持不变。</p>}
-    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).filter(([id]) => id !== "parametric").map(([id, [label, note]]) => {
+    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) => {
       const off = id === "generated" && !sandbox?.available;
       return <label key={id} className={`option ${variant === id ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? sandbox?.reason : undefined}>
         <input type="radio" name="cad-variant" value={id} checked={variant === id} disabled={off} onChange={() => setVariant(id)} />
-        <span className="option-tag">{id === "generated" ? "CODE" : id.toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
+        <span className="option-tag">{id === "generated" ? "CODE" : id === "parametric" ? "PARAM" : id.toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
     })}</div>
     {generated && sandbox?.available && <div className="code-editor">
       <label htmlFor="cad-code">CadQuery 代码<small>只能 import cadquery as cq / math；给 result（一个实体）与 MOTOR_AXIS_Z 赋值。电机安装面 y=0，电机轴经过 x=0、z=MOTOR_AXIS_Z。</small></label>
@@ -146,6 +147,11 @@ function CadLane() {
       </div>
       <p className="muted">隔离：{sandbox.isolation.map(x => ISOLATION_LABEL[x] ?? x).join(" · ")}。代码只产生实体；结论来自与预设相同的原生 B-Rep 检查。</p>
     </div>}
+    {variant === "parametric" && <fieldset className="field-grid"><legend>参数（受控配方的有界范围）</legend>
+      {([["thickness", "板厚 t", 2, 8, 0.1], ["width", "宽度 W", 46, 80, 1], ["plateHeight", "安装板高度 H", 40, 60, 0.5], ["pilotBore", "止口孔径 Ø", 21, 24, 0.1]] as const).map(([k, label, min, max, step]) =>
+        <label key={k}>{label}<span className="unit-input"><input type="number" aria-label={label} min={min} max={max} step={step} value={params[k]}
+          onChange={e => setParams({ ...params, [k]: Number(e.target.value) })} /><em>mm</em></span></label>)}
+    </fieldset>}
     <div className="field-grid" style={{ marginTop: 14 }}>
       <label>质量上限<span className="unit-input"><input type="number" min={1} max={10000} step={1} disabled={Boolean(feedback)} value={mass} onChange={e => setMass(Number(e.target.value))} /><em>g</em></span></label>
       <label>最小壁厚<span className="unit-input"><input type="number" min={0.5} max={50} step={0.1} disabled={Boolean(feedback)} value={wall} onChange={e => setWall(Number(e.target.value))} /><em>mm</em></span></label>
@@ -163,7 +169,7 @@ function CadLane() {
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {
         const original = feedback ? (c.data.cads ?? []).find(x => x.id === feedback.runId) : undefined;
         const requirements = original?.request.requirements ?? formRequirements;
-        void runCad(c, variant, requirements, generated ? code : undefined, feedback);
+        void runCad(c, variant, requirements, generated ? code : undefined, feedback, params);
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
   {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
