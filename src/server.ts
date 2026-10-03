@@ -12,6 +12,7 @@ import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
+import { solverDataset } from "./dataset.js";
 import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
@@ -207,6 +208,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
     return verifySealedPackage(body.package, body.trustedPublicKeyPem, config.tsaCaFile);
   });
+  app.get("/api/dataset/solver", async () => solverDataset(store));
   app.get("/api/state", async () => ({
     releases: store.list("release"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
