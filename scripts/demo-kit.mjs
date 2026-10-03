@@ -13,7 +13,23 @@ export async function openDemo(out) {
   const gl = process.env.DEMO_GL === "gpu" ? ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist"] : ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"];
   const browser = await chromium.launch({ args: gl });
   // The product CSP forbids inline styles; only this recording context bypasses it to draw overlays.
-  const context = await browser.newContext({ bypassCSP: true, viewport: { width: W, height: H }, deviceScaleFactor: 1, recordVideo: { dir: out, size: { width: W, height: H } } });
+  // Hosted runs (DEMO_LOGIN=<login json>, DEMO_SITE=<origin>): sign in through Cognito in a separate, unrecorded
+  // context and hand only the session cookies to the recording context, so no credential appears on video.
+  let storageState;
+  if (process.env.DEMO_LOGIN && process.env.DEMO_SITE) {
+    const login = JSON.parse(await readFile(process.env.DEMO_LOGIN, "utf8"));
+    const auth = await browser.newContext();
+    const p = await auth.newPage();
+    await p.goto(process.env.DEMO_SITE);
+    await p.locator('input[name="username"]:visible').first().fill(login.username);
+    await p.locator('input[type="password"]:visible').first().fill(login.password);
+    await p.locator('input[name="signInSubmitButton"]:visible').first().click();
+    await p.waitForURL(`${process.env.DEMO_SITE}/`, { timeout: 60_000 });
+    storageState = await auth.storageState();
+    await auth.close();
+  }
+  const context = await browser.newContext({ bypassCSP: true, viewport: { width: W, height: H }, deviceScaleFactor: 1, storageState,
+    recordVideo: { dir: out, size: { width: W, height: H } } });
   await context.addInitScript(([logo]) => {
     localStorage.setItem("pai-theme", "dark"); localStorage.setItem("pai-assistant", "open"); localStorage.setItem("pai-rail", "expanded");
     localStorage.setItem("pai-assistant-mode", "ai"); localStorage.removeItem("pai-cad-code-draft");
