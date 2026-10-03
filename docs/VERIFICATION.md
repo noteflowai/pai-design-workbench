@@ -9,7 +9,7 @@
 | 云端 CI（run 37104007842，`6186f4a`） | 全部通过。工业用例 27/27，含 Y1（FEA）与 K1（MuJoCo）；浏览器 17 组；`test:fea`、`test:robot`、`test:optimize` |
 | 结构 FEA | t = 3 mm 支架：几何 7 项全过，CalculiX 实测挠度 0.095 mm > 0.06 mm，结论拒绝；两级网格挠度差 1.85 % |
 | MuJoCo 工作单元 | 速度 75 %、围栏内收到 0.12 m：每个种子都碰围栏，拒绝；围栏退回 0.30 m 后 10/10 通过，节拍 4.60 s，比参考快 22 % |
-| pai.oneai.host（release `3818cc2f…ae12`）真实 AI | Kiro 主账号（claude-opus-5.5，48 s）根据 cad-1 给出 `cad-optimize` 计划，含 3 个带物理估算的种子，没有放宽任何要求。按原计划执行 17 个点，7 个可行。最轻的是 AI 种子 t 4、W 57（45.9 g，0.046 mm）。AI 挠度估算误差 10–19 %；代理模型在最后几轮的预测误差约 0.5 % |
+| pai.oneai.host（release `3818cc2f…ae12`）真实 AI | Kiro 主账号（claude-opus-5.5，48 s）根据 cad-1 给出 `cad-optimize` 计划，含 3 个带物理估算的种子，没有放宽任何要求。按原计划执行 17 个点，7 个可行。最轻的是 AI 种子 t 4、W 57（45.9 g，0.046 mm）。AI 挠度估算误差 10–19 %；代理模型在最后 6 个点的平均相对误差约 1.3 % |
 | Agent API | ALB `jwt-validation` 规则 119：无令牌和伪造令牌都返回 401；只有 read scope 的令牌不能提议计划（401）；未列出的路由返回 404。提议计划带已验证的客户端 id 和会话 id，权限为无。pai-mcp 用客户端凭据经 HTTPS 正常读取工作区 |
 | 基础设施 | ALB 规则 100/110/默认未变；WordPress 200；目标健康 |
 
