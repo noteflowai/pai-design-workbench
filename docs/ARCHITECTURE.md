@@ -84,6 +84,8 @@ The model is an untrusted planner. `src/controller.ts` writes `request.json` + `
 
 One OCI image (see [CONTAINER.md](CONTAINER.md)) contains the workbench, the executor, Kiro and the native tools; the hosted host installs the same pins with the same installer. Credentials are runtime mounts or Secrets Manager values, never image layers.
 
+Reuse of other agent runtimes is decided in [AGENT_RUNTIME.md](AGENT_RUNTIME.md): AgentForge shares the same acpx engine layer, but its Host is not adopted until it can use this ledger, run without automatic retries, and be obtained reproducibly.
+
 External agents use the same boundary through `pai-mcp` ([MCP.md](MCP.md)): read tools plus `pai_propose_plan`, which lands a typed, validated, authority-free plan in the assistant for human confirmation. There is no MCP tool to confirm, execute, reconcile, transition feedback or release.
 
 ## Generated CAD code

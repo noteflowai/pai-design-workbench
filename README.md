@@ -135,6 +135,7 @@ TypeScript 7.0.2 与当前稳定依赖锁定在 `package-lock.json`。Node 24.21
 - [主流工业设计软件界面对比](docs/UI_UX_BENCHMARK.md)
 - [工业设计典型测试用例](docs/INDUSTRIAL_TEST_CASES.md)
 - [系统设计与取舍](docs/ARCHITECTURE.md)
+- [Agent 运行时复用决策（acpx / NoteFlow / AgentForge）](docs/AGENT_RUNTIME.md)
 - [API 与闭环操作](docs/API.md)
 - [后续领域接入和试用计划](docs/NEXT.md)
 - [主流工业软件与开源方案](docs/INDUSTRIAL_SOFTWARE.md)
