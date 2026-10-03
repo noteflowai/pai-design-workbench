@@ -18,7 +18,7 @@
 
 | 项 | 需求 | 退出条件 |
 |---|---|---|
-| PAI 技能进入底座 `skills/` | F17 | `skills/pin.mjs` 生成摘要；工作台侧契约测试比对摘要，不再保留复制件 |
+| PAI 技能经底座的技能分发机制提供 | F17 | ✓ 已完成：按底座的分层，技能内容属于运营方叠加层，不放进底座 `skills/`。`examples/pai-workbench/install-skill.mjs` 在固定提交拉取技能，核对文件摘要，再用 `computeSkillDigest` 锁定；底座的 `skills-config.mjs` 分发到会话时重新核验，篡改会被拒绝（`integrity_failed`） |
 | 物理推理评测 | F17 | 底座 `eval/` 增加 PAI golden task：以求解器实测为基准，给模型估算打分（相对误差、偏差方向）；固定解算器的自测通过 |
 | Host 通道闸门 | — | AGENT_RUNTIME 的 6 个闸门逐项给出证据，满足后才实现"提议 → 原生检查 → 修订"的多轮循环 |
 

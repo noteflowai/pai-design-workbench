@@ -5,7 +5,7 @@ Agents in [AgentForge](https://github.com/noteflowai/agentforge) sessions (Kiro,
 | File | Use |
 |---|---|
 | `mcp-profile.json` | One entry of `AUTOFORGE_MCP_PROFILES_JSON`. Sessions select it with `mcp_profile: "pai-workbench"` |
-| `skills/pai-industrial-design/` | Agent Skill: the propose → native check → revise loop and the physical-reasoning standard |
+| `skills/pai-industrial-design/` | Agent Skill: the propose → native check → revise loop and the physical-reasoning standard. Install it in a Host with `examples/pai-workbench/install-skill.mjs` in agentforge. That script pins the skill with the base `computeSkillDigest`, and the provisioner re-verifies the digest. |
 
 Two deployment modes:
 

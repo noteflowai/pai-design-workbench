@@ -86,7 +86,7 @@ flowchart TB
 | Host 会话通道 | PAI 的规划器暂不迁到 Host | 六个闸门尚未全部满足 | [AGENT_RUNTIME.md](AGENT_RUNTIME.md) |
 
 计划中的下一批接缝（见[规划](ROADMAP.md) M2）：
-- 底座 `skills/` 的摘要锁定 PAI 技能，替代现在的复制件；
+- PAI 技能经底座的技能分发机制提供：在固定提交拉取，用 `computeSkillDigest` 锁定，分发器失败即拒绝（已完成，PR #549）；
 - 用底座 `eval/` 的 golden-task harness 度量模型的物理推理能力，以 AI 种子估算误差为指标；
 - 让 Host 的 OTel GenAI 遥测接入外部 Agent 的调用链。
 

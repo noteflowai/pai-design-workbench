@@ -35,7 +35,7 @@
 | F14 | RFC 3161 可信时间戳；发布只封存一次，重复下载字节相同 | `tests/seal.test.ts`；托管 DigiCert | 已验证 |
 | F15 | S3 Object Lock 写一次归档 | 单元测试；桶已创建 | 部分（需确认保留期后开启） |
 | F16 | 外部 Agent 经 AgentForge 网关读取和提议；托管站点用客户端凭据 | 网关策略测试；托管 401/404 检查 | 已验证 |
-| F17 | 用 AgentForge `skills/` 摘要锁定 PAI 技能；用 `eval/` 度量模型的物理估算 | 底座侧测试 | 待做 |
+| F17 | PAI 技能经底座的技能分发机制提供并锁定摘要；用 `eval/` 度量模型的物理估算 | `examples/pai-workbench/skill.test.mjs`；分发器手工核验 | 部分（技能分发已完成；物理推理评测待做） |
 | F18 | FEA 批量扩展到 AWS Batch，每个点一个作业，结果同样经摘要核验 | 托管 Batch 作业回执 | 待做 |
 | F19 | 流体通道：OpenFOAM（snappyHexMesh + simpleFoam），网格无关性检查 | 原生 e2e | 待做 |
 | F20 | 物理 AI 代理模型 PhysicsNeMo：用自己积累的求解数据训练，只负责排序 | 留出集误差 + 实测复核 | 待做 |
