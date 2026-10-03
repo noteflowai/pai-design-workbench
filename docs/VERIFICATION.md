@@ -2,6 +2,15 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 求解扩展、优化策略对比、底座合并（2026-10-04）
+
+| 检查 | 实际结果 |
+|---|---|
+| AWS Batch（PAISolver） | Fargate amd64 镜像 `fea-fc58a742f6198340`（gmsh 4.15.2 自检通过）；单点作业 10 s，参考件 0.0478 mm，与本机一致；托管站点一次寻优跑完 5 个 Batch 作业和 6 个本地几何筛查，耗时 220 s。见 [solver-batch.json](evidence/solver-batch.json) |
+| 部署中发现的问题 | SubmitJob 授权对象是不带版本号的作业定义 ARN，已补进策略（IAM 生效约 1 分钟）；没有求解成功的点时，优化器拟合 GP 会崩溃，现在改为停止迭代，并照实报告失败的点 |
+| 优化策略对比 | 预算相同，用种子 3、7、11 配对比较：BoTorch 的超体积 1.056，NSGA-II 0.482；最轻质量 46.57 g 对 46.87 g；求解次数 15.7 对 15.0。见 [optimizer-compare.json](evidence/optimizer-compare.json) |
+| AgentForge 合并 | #547 `0b57506`、#548 `d6cc5c8`、#549 `9594430`。合并前每个 PR 都在 CodeBuild 上跑了 rust、js、delivery，全部 SUCCEEDED；合并后 CodePipeline `autoforge-unified` 的三次执行在 Source、Test（rust/js/desktop/delivery）、BuildArm64、PackageSignVSIX 都成功，Deploy 仍在等人工审批 |
+
 ## 演示 A、CAD → MJCF/OpenUSD、发布封存（2026-10-03 晚）
 
 | 检查 | 实际结果 |
