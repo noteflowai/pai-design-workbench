@@ -87,7 +87,7 @@ flowchart TB
 
 计划中的下一批接缝（见[规划](ROADMAP.md) M2）：
 - PAI 技能经底座的技能分发机制提供：在固定提交拉取，用 `computeSkillDigest` 锁定，分发器失败即拒绝（已完成，PR #549）；
-- 用底座 `eval/` 的 golden-task harness 度量模型的物理推理能力，以 AI 种子估算误差为指标；
+- 用底座 `eval/` 的 golden-task harness 度量模型的物理推理能力：`estimate-bracket-deflection`，评分程序放在工作区外，用 CalculiX 留出集打分（框架已完成）；
 - 让 Host 的 OTel GenAI 遥测接入外部 Agent 的调用链。
 
 ## 4. 复用矩阵（不重造轮子）
