@@ -19,7 +19,7 @@
 | 项 | 需求 | 退出条件 |
 |---|---|---|
 | PAI 技能经底座的技能分发机制提供 | F17 | ✓ 已完成：按底座的分层，技能内容属于运营方叠加层，不放进底座 `skills/`。`examples/pai-workbench/install-skill.mjs` 在固定提交拉取技能，核对文件摘要，再用 `computeSkillDigest` 锁定；底座的 `skills-config.mjs` 分发到会话时重新核验，篡改会被拒绝（`integrity_failed`） |
-| 物理推理评测 | F17 | ✓ 测评框架已完成（PR #549 `c09154f`，CodeBuild 3 条全过）：复用底座 `eval/runner.mjs` 跑 golden task `estimate-bracket-deflection`，用工作区外的评分程序对照 9 个留出的 CalculiX 结果；纯 t³ 估算不通过，参考解通过。待做：通过受控执行器用真实模型跑一次并记录分数 |
+| 物理推理评测 | F17 | ✓ 测评框架已完成（PR #549 `c09154f`，CodeBuild 3 条全过）：复用底座 `eval/runner.mjs` 跑 golden task `estimate-bracket-deflection`，用工作区外的评分程序对照 9 个留出的 CalculiX 结果；纯 t³ 估算不通过，参考解通过。✓ 真实模型已测：Kiro 2.27.1（claude-opus-5.5）中位误差 11.4 %、最差 32.1 %、Spearman 0.95，通过；板厚和宽度趋势判断正确，高度趋势方向错误 |
 | Host 通道闸门 | — | AGENT_RUNTIME 的 6 个闸门逐项给出证据，满足后才实现"提议 → 原生检查 → 修订"的多轮循环 |
 
 ## M3 · 规模化求解
