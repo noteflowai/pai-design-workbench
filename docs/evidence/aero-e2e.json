@@ -1,0 +1,64 @@
+{
+  "schema": "pai-aero-e2e-1",
+  "checkedAt": "2026-10-03T20:59:59.717Z",
+  "result": "passed",
+  "seconds": 5647,
+  "engine": "OpenFOAM v2512",
+  "image": "opencfd/openfoam-default@sha256:33fb575aa9980d2bc42fd58c75ae698c489293ba30c991380fe3f899c622f319",
+  "reference": {
+    "cd": 0.23406
+  },
+  "steep": {
+    "verdict": "rejected",
+    "cd": 0.24885,
+    "grid": 0.1353,
+    "band": 0,
+    "levels": [
+      {
+        "level": 3,
+        "cells": 61491,
+        "cd": 0.28251,
+        "seconds": 1036.7
+      },
+      {
+        "level": 4,
+        "cells": 221443,
+        "cd": 0.24885,
+        "seconds": 1939.3
+      }
+    ]
+  },
+  "fixed": {
+    "verdict": "accepted-aero-body",
+    "cd": 0.22945,
+    "grid": 0.1056,
+    "band": 0.00035,
+    "levels": [
+      {
+        "level": 3,
+        "cells": 61573,
+        "cd": 0.25369,
+        "seconds": 927.8
+      },
+      {
+        "level": 4,
+        "cells": 221354,
+        "cd": 0.22945,
+        "seconds": 1733.4
+      }
+    ]
+  },
+  "evalarcBlocking": {
+    "steep": 2,
+    "fixed": 0
+  },
+  "feedback": "closed",
+  "comparison": {
+    "ahmed1984Experiment": {
+      "12.5": 0.23,
+      "25": 0.285,
+      "35": 0.26
+    },
+    "note": "12.5\u00b0 matches; 25\u00b0\u201335\u00b0 are under-predicted by steady RANS with wall functions (see docs/AERO.md)."
+  }
+}
