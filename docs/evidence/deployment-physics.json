@@ -1,0 +1,148 @@
+{
+  "schema": "pai-deployment-physics-1",
+  "site": "https://pai.oneai.host",
+  "release": "3818cc2f17e4976731e1f81704c2e654f099534e78bcf00a19c849724929ae12",
+  "sourceCommit": "6186f4a",
+  "checkedAt": "2026-10-03T07:21:17.458Z",
+  "ci": {
+    "run": 37104007842,
+    "result": "success",
+    "industrialSuite": "27/27 (incl. Y1 FEA, K1 MuJoCo)",
+    "browser": "17 passed",
+    "physicsE2e": [
+      "test:fea",
+      "test:robot",
+      "test:optimize"
+    ]
+  },
+  "agentApi": {
+    "albJwtValidation": "rule 119 (jwt-validation → forward)",
+    "noToken": 401,
+    "invalidToken": 401,
+    "readToken": 200,
+    "readScopeCannotPropose": 401,
+    "unlistedRoute": 404,
+    "proposal": {
+      "verified": true,
+      "session": "af-verify-1",
+      "authority": "none"
+    },
+    "paiMcpOverHttps": "pai_list_projects + pai_get_workspace succeeded with client credentials"
+  },
+  "fea": {
+    "state": "completed",
+    "verdict": "rejected",
+    "minWall": true,
+    "deflection": 0.095,
+    "convergence": {
+      "axisDisplacement": 0.0185,
+      "peakVonMises": 0.1966
+    },
+    "seconds": 36
+  },
+  "robotCell": {
+    "state": "completed",
+    "verdict": "rejected",
+    "failed": [
+      "collision-free",
+      "success-rate"
+    ],
+    "seconds": 9
+  },
+  "liveAi": {
+    "engine": {
+      "profile": "kiro-primary",
+      "provider": "kiro",
+      "model": "claude-opus-5.5",
+      "engineVersion": "2.24.0",
+      "modelEvidence": "acp_advertised"
+    },
+    "seconds": 48,
+    "citations": [
+      "cad-1",
+      "version-1"
+    ],
+    "tool": "cad-optimize",
+    "relaxedFields": [],
+    "seeds": [
+      {
+        "parameters": {
+          "thickness": 3.6,
+          "width": 60,
+          "plateHeight": 46
+        },
+        "expectedDeflectionMm": 0.055,
+        "expectedMassG": 44
+      },
+      {
+        "parameters": {
+          "thickness": 3.5,
+          "width": 57,
+          "plateHeight": 46
+        },
+        "expectedDeflectionMm": 0.055,
+        "expectedMassG": 40.8
+      },
+      {
+        "parameters": {
+          "thickness": 4,
+          "width": 57,
+          "plateHeight": 46
+        },
+        "expectedDeflectionMm": 0.037,
+        "expectedMassG": 46
+      }
+    ]
+  },
+  "optimization": {
+    "state": "completed",
+    "seconds": 267,
+    "points": 17,
+    "feasible": 7,
+    "recommended": {
+      "index": 4,
+      "origin": "ai-seed",
+      "parameters": {
+        "thickness": 4,
+        "width": 57,
+        "plateHeight": 46,
+        "pilotBore": 22.5
+      },
+      "massG": 45.906,
+      "deflectionMm": 0.0459
+    },
+    "aiSeedScores": [
+      {
+        "index": 2,
+        "expected": 0.055,
+        "measured": 0.0612,
+        "relativeError": 0.1013
+      },
+      {
+        "index": 3,
+        "expected": 0.055,
+        "measured": 0.0626,
+        "relativeError": 0.1214
+      },
+      {
+        "index": 4,
+        "expected": 0.037,
+        "measured": 0.0459,
+        "relativeError": 0.1939
+      }
+    ],
+    "surrogateLastRoundMeanRelError": 0.0133,
+    "confirmation": "as-proposed"
+  },
+  "infrastructure": {
+    "existingAlbRulesUnchanged": [
+      "100",
+      "110",
+      "default"
+    ],
+    "wordPressPublicStatus": 200,
+    "targetHealth": "healthy",
+    "ingressOnlyFromAlb": true
+  },
+  "scope": "Linear static FEA with nominal material; generic-arm rigid-body simulation; no physical test or certification. Prompt and answer text not stored."
+}
