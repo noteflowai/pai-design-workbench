@@ -48,6 +48,14 @@ fi
 if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
   bash "$RELEASE/infra/install_ai.sh"
 fi
+# Release seals: S3 Object Lock archive and RFC 3161 time-stamping authority (each optional).
+for key in PAI_PACKAGE_ARCHIVE_BUCKET PAI_PACKAGE_RETENTION_DAYS PAI_TSA_URL; do
+  value="${!key:-}"
+  if [ -n "$value" ]; then
+    sed -i "/^${key}=/d" /etc/pai/runtime.env
+    printf '%s=%s\n' "$key" "$value" >> /etc/pai/runtime.env
+  fi
+done
 if [ -n "${PAI_SIGNING_KMS_KEY_ID:-}" ]; then
   sed -i '/^PAI_SIGNING_KMS_KEY_ID=/d' /etc/pai/runtime.env
   printf 'PAI_SIGNING_KMS_KEY_ID=%s\n' "$PAI_SIGNING_KMS_KEY_ID" >> /etc/pai/runtime.env

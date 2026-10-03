@@ -50,7 +50,9 @@ elif args.action in ("send", "apply-release"):
                      "PAI_ASSET_KEY": outputs["ReleaseKey"], "PAI_EXECUTOR_KEY": outputs.get("ExecutorKey", ""),
                      "PAI_AI_KEYS_ARN": outputs.get("AiKeysArn", ""),
                      "PAI_AGENT_USER_POOL_ID": outputs.get("AgentUserPoolId", ""), "PAI_AGENT_CLIENT_ID": outputs.get("AgentClientId", ""),
-                     "PAI_SIGNING_KMS_KEY_ID": outputs.get("SigningKeyId", "")}
+                     "PAI_SIGNING_KMS_KEY_ID": outputs.get("SigningKeyId", ""),
+                     "PAI_PACKAGE_ARCHIVE_BUCKET": outputs.get("PackageArchiveBucket", ""), "PAI_PACKAGE_RETENTION_DAYS": outputs.get("PackageRetentionDays", ""),
+                     "PAI_TSA_URL": os.environ.get("PAI_TSA_URL", "http://timestamp.digicert.com")}
         script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
         script = args.script.read_text()

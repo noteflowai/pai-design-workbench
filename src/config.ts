@@ -10,6 +10,10 @@ export interface Config {
   physicsPython?: string; ccx?: string;
   /** AWS KMS asymmetric key (ECC_NIST_P256) that signs release packages; local Ed25519 when unset. */
   signingKmsKeyId?: string;
+  /** RFC 3161 time-stamping authority for release seals (only a SHA-256 digest is sent) and its CA bundle. */
+  tsaUrl?: string; tsaCaFile?: string;
+  /** S3 bucket with Object Lock for write-once archiving of sealed release packages, and the retention in days. */
+  packageArchiveBucket?: string; packageRetentionDays: number; packageLockMode: "COMPLIANCE" | "GOVERNANCE";
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
   /** Amazon Bedrock AgentCore runtimes (infra/agentcore.ts): remote executor and remote CAD sandbox. */
@@ -63,6 +67,10 @@ export function configuration(): Config {
     cadquery: process.env.PAI_CADQUERY_PYTHON,
     physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX,
     signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
+    tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
+    packageArchiveBucket: process.env.PAI_PACKAGE_ARCHIVE_BUCKET || undefined,
+    packageRetentionDays: Math.min(3650, Math.max(1, Number(process.env.PAI_PACKAGE_RETENTION_DAYS) || 365)),
+    packageLockMode: process.env.PAI_PACKAGE_LOCK_MODE === "GOVERNANCE" ? "GOVERNANCE" : "COMPLIANCE",
     bwrap: process.env.PAI_BWRAP,
     agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
     agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),

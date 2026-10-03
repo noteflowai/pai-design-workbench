@@ -10,6 +10,7 @@ import * as actions from "aws-cdk-lib/aws-elasticloadbalancingv2-actions";
 import * as targets from "aws-cdk-lib/aws-elasticloadbalancingv2-targets";
 import * as backup from "aws-cdk-lib/aws-backup";
 import * as kms from "aws-cdk-lib/aws-kms";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import { Construct } from "constructs";
@@ -122,6 +123,18 @@ export class WorkbenchStack extends cdk.Stack {
       alias: "pai-workbench/release-signing", removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     signingKey.grant(role, "kms:Sign", "kms:GetPublicKey");
+    // Write-once archive of sealed release packages. Object Lock (COMPLIANCE default retention) means no principal,
+    // including this stack and the account root, can delete or shorten a retained version before its date.
+    const retentionDays = Number(this.node.tryGetContext("packageRetentionDays") ?? 365);
+    const packages = new s3.Bucket(this, "ReleasePackages", {
+      objectLockEnabled: true, objectLockDefaultRetention: s3.ObjectLockRetention.compliance(cdk.Duration.days(retentionDays)),
+      versioned: true, encryption: s3.BucketEncryption.S3_MANAGED, enforceSSL: true, minimumTLSVersion: 1.2,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    // Put and read back only; no delete, no governance bypass, no lock-configuration change.
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:PutObjectRetention", "s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectRetention", "s3:GetObjectAttributes"],
+      resources: [packages.arnForObjects("releases/*")] }));
     const data = new ec2.Volume(this, "Data", {
       availabilityZone: zone, size: cdk.Size.gibibytes(40), volumeType: ec2.EbsDeviceVolumeType.GP3,
       encrypted: true, removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -229,6 +242,8 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolClientId", { value: client.userPoolClientId });
     new cdk.CfnOutput(this, "AgentUserPoolId", { value: pool.userPoolId });
     new cdk.CfnOutput(this, "SigningKeyId", { value: signingKey.keyId });
+    new cdk.CfnOutput(this, "PackageArchiveBucket", { value: packages.bucketName });
+    new cdk.CfnOutput(this, "PackageRetentionDays", { value: String(retentionDays) });
     new cdk.CfnOutput(this, "AgentClientId", { value: agentClient.userPoolClientId });
     new cdk.CfnOutput(this, "AgentClientSecretArn", { value: agentSecret.secretArn });
     new cdk.CfnOutput(this, "AgentTokenUrl", { value: `https://${authDomain.domainName}.auth.${this.region}.amazoncognito.com/oauth2/token` });

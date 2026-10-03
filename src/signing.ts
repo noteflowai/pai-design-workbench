@@ -15,6 +15,7 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { Timestamp, verifyTimestamp } from "./seal.js";
 import type { Config } from "./config.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
 
@@ -67,10 +68,12 @@ export const ReleasePackage = z.object({
   manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
   signature: z.object({ algorithm: z.enum(["ECDSA_P256_SHA256", "ED25519"]), keyId: z.string(), publicKeyPem: z.string(), value: z.string(), signedAt: z.string() }).strict(),
   physicalValidation: z.literal(false),
+  /** RFC 3161 token over SHA-256(signature value); added after signing, so it is outside the signed manifest. */
+  timestamp: Timestamp.optional(),
 }).strict();
 export type ReleasePackage = z.infer<typeof ReleasePackage>;
 
-const manifest = (p: Omit<ReleasePackage, "manifestSha256" | "signature">) => canonical({
+const manifest = (p: Omit<ReleasePackage, "manifestSha256" | "signature" | "timestamp">) => canonical({
   schema: p.schema, release: p.release, subject: p.subject, files: Object.fromEntries(Object.entries(p.files).map(([k, f]) => [k, { sha256: f.sha256, bytes: f.bytes }])),
   physicalValidation: p.physicalValidation });
 
@@ -109,7 +112,7 @@ export function verifyPackage(input: unknown, trustedPublicKeyPem?: string) {
   for (const [name, digest] of Object.entries(record.files ?? {})) {
     if (p.files[name]?.sha256 !== digest) throw new DomainError("PACKAGE_FILE", `File missing or different from the record's digest: ${name}`, 422);
   }
-  const { manifestSha256, signature, ...body } = p;
+  const { manifestSha256, signature, timestamp: _timestamp, ...body } = p;
   const digest = createHash("sha256").update(manifest(body)).digest();
   if (digest.toString("hex") !== manifestSha256) throw new DomainError("PACKAGE_MANIFEST", "Manifest digest mismatch", 422);
   const key = createPublicKey(signature.publicKeyPem);
@@ -121,4 +124,12 @@ export function verifyPackage(input: unknown, trustedPublicKeyPem?: string) {
   const pinned = trustedPublicKeyPem ? createPublicKey(trustedPublicKeyPem).export({ format: "pem", type: "spki" }).toString() === key.export({ format: "pem", type: "spki" }).toString() : undefined;
   return { valid: true as const, release: p.release.number, kind: p.subject.kind, recordId: p.subject.recordId, verdict: p.subject.verdict, files: Object.keys(p.files).length,
     signer: { keyId: signature.keyId, algorithm: signature.algorithm, trusted: pinned ?? false, pinned: pinned !== undefined }, physicalValidated: false as const };
+}
+
+/** verifyPackage plus the RFC 3161 time-stamp, when present (checked against `tsaCaFile`, the system bundle by default). */
+export async function verifySealedPackage(input: unknown, trustedPublicKeyPem?: string, tsaCaFile?: string) {
+  const result = verifyPackage(input, trustedPublicKeyPem);
+  const p = ReleasePackage.parse(input);
+  const timestamp = p.timestamp ? await verifyTimestamp(p.timestamp, Buffer.from(p.signature.value, "base64"), tsaCaFile) : null;
+  return { ...result, timestamp };
 }

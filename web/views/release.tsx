@@ -31,8 +31,9 @@ export function ReleasePanel() {
   const verifyRelease = async (id: string) => {
     try {
       const [pkg, key] = await Promise.all([fetch(`/api/releases/${id}/package`).then(r => r.json()), api<{ publicKeyPem: string }>("/signing/public-key")]);
-      const v = await api<{ files: number; signer: { trusted: boolean; algorithm: string; keyId: string } }>("/packages/verify", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
-      setVerified(x => ({ ...x, [id]: { ok: v.signer.trusted, text: `签名有效 · ${v.signer.algorithm === "ECDSA_P256_SHA256" ? "AWS KMS ECDSA P-256" : "本机 Ed25519"} · ${v.files} 个原生文件摘要一致 · 签名者已固定` } }));
+      const v = await api<{ files: number; signer: { trusted: boolean; algorithm: string; keyId: string }; timestamp?: { genTime: string; tsa: string } | null }>("/packages/verify", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
+      setVerified(x => ({ ...x, [id]: { ok: v.signer.trusted, text: `签名有效 · ${v.signer.algorithm === "ECDSA_P256_SHA256" ? "AWS KMS ECDSA P-256" : "本机 Ed25519"} · ${v.files} 个原生文件摘要一致 · 签名者已固定`
+        + (v.timestamp ? ` · RFC 3161 可信时间 ${v.timestamp.genTime}（${new URL(v.timestamp.tsa).hostname}）` : "") } }));
     } catch (e) { setVerified(x => ({ ...x, [id]: { ok: false, text: `核验失败：${e instanceof Error ? e.message : String(e)}` } })); }
   };
   const decide = (r: Release, decision: "approve" | "reject") => c.perform(() => api(`/projects/${p.id}/releases/${r.id}`,
@@ -72,6 +73,8 @@ export function ReleasePanel() {
           <td>v{r.projectRevision}</td><td>{time(last.at)}<small>{last.reason}</small>
           {r.maturity === "released" && <span className="button-row"><a className="button secondary compact" href={`/api/releases/${r.id}/package`} download>下载签名发布包</a>
             <button type="button" className="secondary compact" onClick={() => void verifyRelease(r.id)}>核验签名</button></span>}
+          {(() => { const seal = (c.data as { releaseSeals?: { releaseId: string; archive?: { mode: string; retainUntil: string; versionId: string } | null; timestamp?: { genTime: string } | null }[] }).releaseSeals?.find(x => x.releaseId === r.id);
+            return seal && <small>已封存{seal.timestamp ? ` · 可信时间 ${seal.timestamp.genTime}` : ""}{seal.archive ? ` · S3 Object Lock ${seal.archive.mode} 保留至 ${seal.archive.retainUntil.slice(0, 10)}（版本 ${seal.archive.versionId.slice(0, 8)}…）` : ""}</small>; })()}
           {verified[r.id] && <small className={verified[r.id].ok ? "ok-text" : "bad-text"} role="status">{verified[r.id].text}</small>}</td></tr>; })}</tbody></table></div>}
     {current && <p className="muted">签名发布包含证据记录、经摘要核验的原生文件（STEP、FEA、MJCF、.blend…）与审批记录；清单由{c.data.capabilities.signing?.kms ? " AWS KMS 密钥" : "本机 Ed25519 密钥"}签名，可离线用 <code>npm run verify:package</code> 核验。</p>}
   </Card>;

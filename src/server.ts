@@ -1,6 +1,6 @@
 import Fastify, { type FastifyReply } from "fastify";
 import staticPlugin from "@fastify/static";
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setImmediate as yieldTick } from "node:timers/promises";
@@ -10,7 +10,8 @@ import { configuration, type Config } from "./config.js";
 import { Candidate, CreateProject, Id } from "./contracts.js";
 import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
-import { buildPackage, MAX_PACKAGE_BYTES, signer, verifyPackage } from "./signing.js";
+import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
+import { archive, timestamp, type Archive } from "./seal.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -151,9 +152,41 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   // Signed, self-contained release package: record + digest-checked native files + release decision.
   const DIRS: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad" };
+  // A release is sealed once: signed, optionally time-stamped (RFC 3161) and archived write-once (S3 Object Lock).
+  // Later downloads return the same bytes, so the archived copy, the time-stamp and every download agree.
+  const sealing = new Map<string, Promise<Buffer>>();
+  const sealed = (release: Release) => {
+    const existing = sealing.get(release.id);
+    if (existing) return existing;
+    const file = join(config.state, "packages", `${release.id}.json`);
+    const job = (async () => {
+      const stored = await readFile(file).catch(() => undefined);
+      if (stored) return stored;
+      let pkg = await packageOf(release);
+      if (config.tsaUrl) pkg = { ...pkg, timestamp: await timestamp(config, Buffer.from(pkg.signature.value, "base64")) };
+      const bytes = Buffer.from(JSON.stringify(pkg));
+      let archived: Archive | undefined;
+      if (config.packageArchiveBucket) archived = await archive(config, `releases/${release.projectId}/${release.number}-${release.id}.json`, bytes);
+      await mkdir(join(config.state, "packages"), { recursive: true, mode: 0o700 });
+      await writeFile(file, bytes, { mode: 0o600, flag: "wx" });
+      const seal = { id: release.id, releaseId: release.id, projectId: release.projectId, number: release.number, sealedAt: new Date().toISOString(),
+        packageSha256: sha256(bytes), manifestSha256: pkg.manifestSha256, signer: { keyId: pkg.signature.keyId, algorithm: pkg.signature.algorithm },
+        timestamp: pkg.timestamp ? { tsa: pkg.timestamp.tsa, genTime: pkg.timestamp.genTime, serial: pkg.timestamp.serial } : null, archive: archived ?? null };
+      store.insert("release-seal", seal); // append-only: one seal per release
+      return bytes;
+    })().finally(() => sealing.delete(release.id));
+    sealing.set(release.id, job);
+    return job;
+  };
   app.get("/api/releases/:id/package", async (request, reply) => {
     const release = store.get<Release>("release", paramId(request.params));
     if (!release) throw new DomainError("NOT_FOUND", "Release not found", 404);
+    if (release.maturity !== "released") throw new DomainError("NOT_RELEASED", "Only an approved release can be packaged", 409);
+    const bytes = await sealed(release);
+    reply.header("Content-Disposition", `attachment; filename="pai-release-${release.number}.json"`);
+    return reply.type("application/json").send(bytes);
+  });
+  async function packageOf(release: Release): Promise<ReleasePackage> {
     const kind = KIND_STORE[release.evidenceKind];
     const record = store.get<{ id: string; verdict?: string; decision?: { verdict: string }; requirementDigest: string; files?: Record<string, string>; artifacts?: Record<string, string> }>(kind, release.runId);
     if (!record) throw new DomainError("NOT_FOUND", "Release evidence not found", 404);
@@ -165,18 +198,16 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       files[name] = content;
     }
     for (const [name, content] of Object.entries(record.artifacts ?? {})) files[`artifacts/${name}`] = Buffer.from(content);
-    const pkg = await buildPackage(config, { ...release }, { ...record, verdict: record.verdict ?? record.decision?.verdict ?? null }, files);
-    reply.header("Content-Disposition", `attachment; filename="pai-release-${release.number}.json"`);
-    return pkg;
-  });
+    return buildPackage(config, { ...release }, { ...record, verdict: record.verdict ?? record.decision?.verdict ?? null }, files);
+  }
   app.get("/api/signing/public-key", async () => { const s = await signer(config); return { keyId: s.keyId, algorithm: s.algorithm, publicKeyPem: s.publicKeyPem }; });
   // Packages carry base64 native files (FEA results are several MB): this route alone accepts up to the package cap.
   app.post("/api/packages/verify", { bodyLimit: Math.ceil(MAX_PACKAGE_BYTES * 1.4) + 1_000_000 }, async request => {
     const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
-    return verifyPackage(body.package, body.trustedPublicKeyPem);
+    return verifySealedPackage(body.package, body.trustedPublicKeyPem, config.tsaCaFile);
   });
   app.get("/api/state", async () => ({
-    releases: store.list("release"), projectVersions: store.list("project-version"),
+    releases: store.list("release"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
