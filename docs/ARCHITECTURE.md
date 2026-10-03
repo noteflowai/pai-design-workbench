@@ -1,5 +1,7 @@
 # Architecture decision: domain workbench with native evidence
 
+> The overall architecture, requirements and plan are in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), [REQUIREMENTS.md](REQUIREMENTS.md) and [ROADMAP.md](ROADMAP.md). This file records the per-lane design decisions.
+
 The workbench owns domain records and a local UI. It does not replace the control plane's workflow engine, providers or accounting.
 
 ```mermaid

@@ -1,5 +1,7 @@
 # Domain expansion and pilot
 
+> Current plan with exit criteria: [ROADMAP.md](ROADMAP.md). Requirements and verified status: [REQUIREMENTS.md](REQUIREMENTS.md).
+
 Priority is one verified decision workflow, then one external task owner, then a second domain tool.
 
 1. **Robot/Physical AI experiment design:** Blender static scene generation/checks and the recorded regression loop are implemented. Next accept newly produced native records with fixed task/seed/policy identities, compare actual candidate versions, preserve hard failures. Add controlled simulation production only after compute availability and native safety limits are explicit.
