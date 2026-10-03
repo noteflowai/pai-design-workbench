@@ -76,12 +76,30 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "factory-criteria": "冻结工厂孪生验收标准（必须先于 factory-review）",
   "factory-review": "按冻结标准评估已复核的工厂孪生样本；criteria 填已有标准句柄（如 criteria-1）或同一回答中 factory-criteria 计划的 ref（如 p1）",
 };
+/**
+ * Display prose (titles, rationale, interpretation, answer text) is clipped rather than rejected: its limits protect the
+ * UI and storage, not meaning. Structure (refs, tools, payloads, citations) stays strict and is validated as before.
+ */
+const prose = (max: number) => z.string().transform(v => v.length > max ? `${v.slice(0, max - 1)}…` : v);
+/** Zod issues as `path: message`, for diagnostics. Paths and messages only; no model content. */
+/**
+ * Models often write `"field": null` for an optional field they do not use. JSON null on an object property is treated
+ * as absent (recursively in objects); null inside arrays and every required field stay strict.
+ */
+export function dropNulls(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(x => (x && typeof x === "object" ? dropNulls(x) : x));
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== null).map(([k, x]) => [k, dropNulls(x)]));
+  return v;
+}
+export function issuePaths(error: z.ZodError): string {
+  return error.issues.slice(0, 4).map(i => `${i.path.join(".") || "(根)"}: ${i.message}`).join("; ");
+}
 const ModelOutput = z.object({
   kind: z.enum(["plan", "answer", "clarify"]),
-  interpretation: z.array(z.string().max(500)).max(8).default([]),
-  answer: z.object({ text: z.string().min(1).max(4000), citations: z.array(z.string().max(40)).max(24).default([]) }).optional(),
+  interpretation: z.array(prose(500)).default([]).transform(v => v.slice(0, 8)),
+  answer: z.object({ text: prose(4000).pipe(z.string().min(1)), citations: z.array(z.string().max(40)).max(24).default([]) }).optional(),
   plans: z.array(z.object({
-    ref: z.string().regex(/^p\d{1,2}$/), tool: z.string(), title: z.string().max(120).optional(), rationale: z.string().max(800).optional(),
+    ref: z.string().regex(/^p\d{1,2}$/), tool: z.string(), title: prose(120).optional(), rationale: prose(800).optional(),
     dependsOn: z.string().regex(/^p\d{1,2}$/).optional(), payload: z.record(z.string(), z.unknown()).default({}),
   })).max(4).default([]),
 }).passthrough();
@@ -387,7 +405,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
 
 /** Turn model text into interpretation, validated plans and a cited answer. Invalid plans are dropped with a reason. */
 export function interpretOutput(text: string, context: AiContext): Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched"> {
-  return interpretPlanned(ModelOutput.parse(extractJson(text)), context);
+  return interpretPlanned(ModelOutput.parse(dropNulls(extractJson(text))), context);
 }
 function interpretPlanned(out: z.infer<typeof ModelOutput>, context: AiContext): Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched"> {
   const interpretation = [...out.interpretation];
@@ -404,7 +422,7 @@ function interpretPlanned(out: z.infer<typeof ModelOutput>, context: AiContext):
       plans.push(plan); refs.set(raw.ref, plan);
     } catch (error) {
       seq = plans.length;
-      interpretation.push(`已拒绝 AI 计划 ${raw.ref}（${raw.tool}）：${error instanceof z.ZodError ? "参数不符合 schema" : error instanceof Error ? error.message : "无效"}`);
+      interpretation.push(`已拒绝 AI 计划 ${raw.ref}（${raw.tool}）：${error instanceof z.ZodError ? `参数不符合 schema（${issuePaths(error)}）` : error instanceof Error ? error.message : "无效"}`);
     }
   }
   let answer: AssistantPlan["answer"];
@@ -489,7 +507,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
         step("validate", "按 schema 校验计划与引用", "done", `${record.plans.length} 个计划${record.answer ? ` · ${record.answer.citations.length} 个引用` : ""}`);
       } catch (error) {
         if (record.state === "done") record.state = "invalid-output";
-        record.ai.error = `AI 输出无法使用：${error instanceof z.ZodError ? "结构不符合约定" : error instanceof Error ? error.message : "未知"}`;
+        record.ai.error = `AI 输出无法使用：${error instanceof z.ZodError ? `结构不符合约定（${issuePaths(error)}）` : error instanceof Error ? error.message : "未知"}`;
         record.interpretation = [record.ai.error, "未自动重试；可以换个说法重新提问。"];
         step("validate", "按 schema 校验计划与引用", "failed", record.ai.error);
       }

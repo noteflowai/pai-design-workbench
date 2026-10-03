@@ -9,7 +9,9 @@
 | 引擎 | 执行器 `95215e6`（[PR #53](https://github.com/noteflowai/noteflow-agent-control/pull/53)）：Kiro CLI 2.27.1、acpx 0.19.4、Codex ACP 2.1.1、Claude ACP 0.85.1。各版本只在一处登记，执行器 176 个单元测试和 20 个 acpx 流程测试全部通过。托管站点的安装器报告 `kiro-cli-chat 2.27.1` |
 | pai.oneai.host（release `0d2de0a1…34ad5`）完整闭环 | MuJoCo 发现 75 % 速度下撞围栏，结论拒绝 → Kiro 主账号 2.27.1（claude-opus-5.5）引用 scene-1 和 version-1，把围栏退回 0.30 m，没有放宽任何要求 → 按原计划执行，复测 4 项全部通过 → 反馈用绑定的复测记录关闭 → 准入 5 项全部通过 → 批准发布 R1 |
 | 签名发布包 | 包含 8 个原生文件（MJCF、逐种子结果、GLB、检查结果）。清单由 KMS 密钥（ECDSA P-256）签名，固定公钥后核验为可信；改动发布标题后检测到“Manifest digest mismatch” |
-| 本地 | `npm run test:package`：12 个文件，篡改后返回 PACKAGE_FILE |
+| 本地 | `npm run test:package`（含结构 FEA）：20 个文件、22.9 MB，篡改后返回 PACKAGE_FILE。录制时发现带 FEA 结果的发布包超过全局 4 MB 请求上限，界面上的核验失败；现在只有核验路由按发布包上限放宽，并有回归测试 |
+| AI 回复解析 | 真实 Kiro 在回复对象前后加了说明文字，导致第二个 JSON 对象解析失败。现在只取最后一个带 `kind` 的完整对象（能识别字符串内的括号），仍经同一 Zod 契约校验；无法解析时报错，不做猜测 |
+| AgentForge | 底座 PR [#548](https://github.com/noteflowai/agentforge/pull/548)（acpx 0.19.4，Rust 门禁已过）；示例 PR [#549](https://github.com/noteflowai/agentforge/pull/549)：用底座自己的 `mcp-gateway` 策略核验 PAI 配置，8 个读/提议工具放行，批准、执行、反馈、shell 一律拒绝；JS 门禁和交付门禁均通过 |
 | 基础设施 | ALB 规则 100/110/默认未变；WordPress 200；目标健康 |
 
 见 [回执](evidence/deployment-signing.json)。

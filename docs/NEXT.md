@@ -33,7 +33,7 @@ The model proposes and the native solvers decide. This layer table follows the e
 | 5 Optimisation | Done: Optuna NSGA-II on the surrogate, multi-fidelity B-Rep screen, explore/exploit, solver re-measurement, formal review of the pick | Next: BoTorch qNEHVI for expensive multi-objective; topology optimisation |
 | 6 System / robot | Done: MuJoCo workcell (IK, dynamics, contacts, cycle time over paired seeds) | Next: CAD → URDF/MJCF of designed parts (gripper, camera bracket); OpenUSD scene as the twin source; Isaac Lab policy success |
 | 7 Manufacturability | Geometry rules (wall, hole edge, envelope) | Next: CAM/slicer CLI checks and cost |
-| 8 Evidence | Hash-bound bundles, EvalArc, release admission | Next: KMS-signed bundles, trusted timestamps, S3 Object Lock |
+| 8 Evidence | Done: hash-bound bundles, EvalArc, release admission, KMS-signed release packages with in-UI and offline verification | Next: RFC 3161 trusted timestamps, S3 Object Lock retention of packages |
 
 The model's physical reasoning is a measured quantity here, not a claim. Each AI seed in `cad-optimize` carries the model's first-principles estimate, and the solver's result scores it.
 

@@ -198,9 +198,14 @@ await caption("准入检查：结论通过、绑定当前需求、所有失败�
 await spot(page.getByLabel("发布准入检查"), 2600);
 await click(page.getByRole("button", { name: "创建发布候选" }), 1200);
 await click(page.getByRole("button", { name: "批准发布 R1" }), 1500);
-await click(page.getByRole("button", { name: "核验签名" }), 2500);
+await page.getByText("R1 已发布").first().waitFor({ timeout: 60_000 }); await busyDone(); await pause(1500);
 const signed = page.getByRole("status").filter({ hasText: "签名有效" });
-await signed.waitFor({ timeout: 60_000 });
+// Verification is read-only: if the first click raced the post-approval re-render, clicking again is harmless.
+for (let i = 0; i < 2 && !(await signed.count()); i++) {
+  await click(page.getByRole("button", { name: "核验签名" }), 600);
+  await signed.waitFor({ timeout: 45_000 }).catch(() => undefined);
+}
+if (!(await signed.count())) throw new Error(`signature status: ${await page.locator('[role="status"]').allInnerTexts()}`);
 facts.signerLabel = (await signed.innerText()).includes("KMS") ? "AWS KMS ECDSA P-256" : "本机 Ed25519 密钥；托管站点使用 AWS KMS";
 await caption("发布包：证据记录 + 全部原生文件（STEP、FEA、MJCF…）+ 审批记录", `清单已签名（${facts.signerLabel}）；任何人都可以用公开的公钥离线核验`);
 await spot(page.locator(".release-history"), 3200);

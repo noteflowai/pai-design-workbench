@@ -28,7 +28,8 @@ export const DEFAULT_OPTIMIZE_BUDGET = { initial: 8, rounds: 3, perRound: 3 };
 export const OptimizeSeed = z.object({
   parameters: z.object({ thickness: CadParameters.shape.thickness, width: CadParameters.shape.width, plateHeight: CadParameters.shape.plateHeight }).strict(),
   expectedDeflectionMm: z.number().positive().max(10).optional(), expectedMassG: z.number().positive().max(10000).optional(),
-  rationale: z.string().trim().max(400).optional(),
+  // Prose is clipped, not rejected; the numbers above are what gets scored.
+  rationale: z.string().trim().transform(v => v.length > 400 ? `${v.slice(0, 399)}…` : v).optional(),
 }).strict();
 export const OptimizeRequest = z.object({
   requestId: Id, projectRevision: z.number().int().positive(),
