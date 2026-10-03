@@ -16,7 +16,7 @@ export interface Config {
   /** Aerodynamics lane: the pinned OpenCFD OpenFOAM image (name@sha256 digest) and the cores to give OpenFOAM. */
   openfoamImage?: string; cfdProcessors?: number;
   /** FEA scale-out on AWS Batch (PAISolver stack): queue, job definition, jobs bucket and region. */
-  solverBatch?: { queue: string; jobDefinition: string; bucket: string; region: string };
+  solverBatch?: { queue: string; jobDefinition: string; cfdJobDefinition?: string; bucket: string; region: string };
   packageArchiveBucket?: string; packageRetentionDays: number; packageLockMode: "COMPLIANCE" | "GOVERNANCE";
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
@@ -75,7 +75,7 @@ export function configuration(): Config {
     openfoamImage: /^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$/.test(process.env.PAI_OPENFOAM_IMAGE ?? "") ? process.env.PAI_OPENFOAM_IMAGE : undefined,
     cfdProcessors: Number(process.env.PAI_CFD_PROCESSORS) || undefined,
     solverBatch: process.env.PAI_SOLVER_QUEUE && process.env.PAI_SOLVER_JOB_DEFINITION && process.env.PAI_SOLVER_BUCKET
-      ? { queue: process.env.PAI_SOLVER_QUEUE, jobDefinition: process.env.PAI_SOLVER_JOB_DEFINITION, bucket: process.env.PAI_SOLVER_BUCKET,
+      ? { queue: process.env.PAI_SOLVER_QUEUE, jobDefinition: process.env.PAI_SOLVER_JOB_DEFINITION, cfdJobDefinition: process.env.PAI_SOLVER_CFD_JOB_DEFINITION || undefined, bucket: process.env.PAI_SOLVER_BUCKET,
           region: process.env.PAI_SOLVER_REGION || process.env.AWS_REGION || "ap-northeast-1" } : undefined,
     packageArchiveBucket: process.env.PAI_PACKAGE_ARCHIVE_BUCKET || undefined,
     packageRetentionDays: Math.min(3650, Math.max(1, Number(process.env.PAI_PACKAGE_RETENTION_DAYS) || 365)),

@@ -4,7 +4,7 @@
 # The OpenFOAM environment script is not errexit/nounset-safe: source it first, then turn strict mode on.
 source /usr/lib/openfoam/openfoam2512/etc/bashrc
 set -euo pipefail
-cd /case
+cd "${PAI_CASE:-/case}"
 N=$(foamDictionary -entry numberOfSubdomains -value system/decomposeParDict)
 log() { "$@" > "log.$1" 2>&1 || { echo "FAILED $1"; tail -20 "log.$1"; exit 1; }; }
 log surfaceFeatureExtract

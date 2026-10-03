@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1.7
+# PAI CFD job image for AWS Batch on Fargate (linux/amd64): one OpenFOAM case per job (native/cfd_job.py).
+# Base: the official OpenCFD OpenFOAM v2512 image, pinned by digest (the same image the local lane runs).
+# Adds Python 3 (Ubuntu 24.04 archive, signed index) and boto3 (native/cfd-job-requirements.txt, --require-hashes).
+ARG OPENFOAM=opencfd/openfoam-default@sha256:33fb575aa9980d2bc42fd58c75ae698c489293ba30c991380fe3f899c622f319
+FROM ${OPENFOAM}
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends python3 python3-venv ca-certificates && rm -rf /var/lib/apt/lists/* \
+ && install -d -m 0755 /opt/pai /opt/pai/native && useradd --uid 1002 --create-home --home-dir /home/pai --shell /usr/sbin/nologin pai
+COPY --chmod=0644 native/cfd-job-requirements.txt /opt/pai/
+RUN python3 -m venv /opt/job && /opt/job/bin/python -m pip install -q --no-cache-dir --no-input --require-hashes --no-deps --only-binary :all: \
+      -r /opt/pai/cfd-job-requirements.txt && /opt/job/bin/python -c "import boto3" && rm -rf /opt/job/lib/python3*/site-packages/pip
+COPY --chmod=0644 native/cfd_job.py native/cfd_run.sh /opt/pai/native/
+ARG PAI_IMAGE_VERSION=dev
+ENV PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} OMPI_MCA_rmaps_base_oversubscribe=1
+USER pai
+WORKDIR /home/pai
+ENTRYPOINT ["/opt/job/bin/python", "-I", "/opt/pai/native/cfd_job.py"]

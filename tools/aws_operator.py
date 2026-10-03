@@ -59,7 +59,8 @@ elif args.action in ("send", "apply-release"):
         if os.environ.get("PAI_ENABLE_SOLVER_BATCH") == "1":
             account = boto3.client("sts").get_caller_identity()["Account"]
             variables.update({"PAI_SOLVER_QUEUE": "pai-solver", "PAI_SOLVER_JOB_DEFINITION": "pai-solver-fea",
-                              "PAI_SOLVER_BUCKET": f"pai-solver-jobs-{account}-ap-northeast-1", "PAI_SOLVER_REGION": "ap-northeast-1"})
+                              "PAI_SOLVER_BUCKET": f"pai-solver-jobs-{account}-ap-northeast-1", "PAI_SOLVER_REGION": "ap-northeast-1",
+                              "PAI_SOLVER_CFD_JOB_DEFINITION": "pai-solver-cfd"})
         script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
         script = args.script.read_text()

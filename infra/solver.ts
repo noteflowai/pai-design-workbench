@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 
 /** Names the workbench stack grants against without a cross-stack reference. */
 export const SOLVER = {
-  queue: "pai-solver", jobDefinition: "pai-solver-fea", repository: "pai-solver",
+  queue: "pai-solver", jobDefinition: "pai-solver-fea", cfdJobDefinition: "pai-solver-cfd", repository: "pai-solver",
   bucket: (account: string, region: string) => `pai-solver-jobs-${account}-${region}`,
 };
 const OPERATOR_ROLE = (account: string, region: string) => `cdk-hnb659fds-pai-operator-role-${account}-${region}`;
@@ -51,13 +51,13 @@ export class SolverStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, lifecycleRules: [{ maxImageCount: 10 }],
     });
     const source = new assets.Asset(this, "BuildContext", { path: contextDir });
-    const imageTag = `fea-${source.assetHash.slice(0, 16)}`;
+    const imageTag = `fea-${source.assetHash.slice(0, 16)}`, cfdTag = `cfd-${source.assetHash.slice(0, 16)}`;
     const buildLogs = new logs.LogGroup(this, "BuildLogs", { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: cdk.RemovalPolicy.DESTROY });
     const project = new codebuild.Project(this, "ImageBuild", {
       projectName: "pai-solver-image", description: "linux/amd64 build of the PAI FEA solver job image",
       source: codebuild.Source.s3({ bucket: source.bucket, path: source.s3ObjectKey }),
       environment: { buildImage: codebuild.LinuxBuildImage.STANDARD_7_0, computeType: codebuild.ComputeType.LARGE, privileged: true },
-      environmentVariables: { REPO: { value: repo.repositoryUri }, TAG: { value: imageTag } },
+      environmentVariables: { REPO: { value: repo.repositoryUri }, TAG: { value: imageTag }, CFD_TAG: { value: cfdTag } },
       timeout: cdk.Duration.minutes(60), logging: { cloudWatch: { logGroup: buildLogs } },
       buildSpec: codebuild.BuildSpec.fromObject({
         version: "0.2",
@@ -68,8 +68,11 @@ export class SolverStack extends cdk.Stack {
             `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$TAG >/dev/null 2>&1; then echo "exists $TAG"; else `
               + "docker build --platform linux/amd64 -f Dockerfile.solver --build-arg PAI_IMAGE_VERSION=$TAG -t $REPO:$TAG . && docker push $REPO:$TAG; fi",
             "docker run --rm --network none --entrypoint /opt/physics/bin/python $REPO:$TAG -c \"import gmsh; print('gmsh', gmsh.__version__)\" || true",
+            // CFD image: FROM the digest-pinned OpenCFD OpenFOAM v2512 image (Dockerfile.cfd).
+            `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CFD_TAG >/dev/null 2>&1; then echo "exists $CFD_TAG"; else `
+              + "docker build --platform linux/amd64 -f Dockerfile.cfd --build-arg PAI_IMAGE_VERSION=$CFD_TAG -t $REPO:$CFD_TAG . && docker push $REPO:$CFD_TAG; fi",
           ] },
-          post_build: { commands: [`aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$TAG --query 'imageDetails[].[imageTags[0],imageSizeInBytes,imageDigest]' --output text`] },
+          post_build: { commands: [`aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$TAG imageTag=$CFD_TAG --query 'imageDetails[].[imageTags[0],imageSizeInBytes,imageDigest]' --output text`] },
         },
       }),
     });
@@ -93,6 +96,15 @@ export class SolverStack extends cdk.Stack {
       }),
     });
 
+    // OpenFOAM: one case per job, 16 vCPU / 32 GiB (the Fargate maximum vCPU), 2 h limit, one attempt.
+    const cfdJob = new batch.EcsJobDefinition(this, "CfdJob", {
+      jobDefinitionName: SOLVER.cfdJobDefinition, retryAttempts: 1, timeout: cdk.Duration.hours(2), propagateTags: true,
+      container: new batch.EcsFargateContainerDefinition(this, "CfdContainer", {
+        image: ecs.ContainerImage.fromEcrRepository(repo, cfdTag), cpu: 16, memory: cdk.Size.gibibytes(32), ephemeralStorageSize: cdk.Size.gibibytes(40),
+        fargateCpuArchitecture: ecs.CpuArchitecture.X86_64, fargateOperatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+        assignPublicIp: true, jobRole, logging: ecs.LogDriver.awsLogs({ streamPrefix: "cfd", logGroup: jobLogs }), readonlyRootFilesystem: false, user: "1002",
+      }),
+    });
     // A separately named policy: the AgentCore stack already owns the default policy name on this imported role.
     new iam.Policy(this, "SolverOperatorPolicy", {
       policyName: "pai-solver-operator", roles: [iam.Role.fromRoleName(this, "Operator", OPERATOR_ROLE(this.account, this.region))],
@@ -108,6 +120,8 @@ export class SolverStack extends cdk.Stack {
     new cdk.CfnOutput(this, "SolverBuildProject", { value: project.projectName });
     new cdk.CfnOutput(this, "SolverQueue", { value: queue.jobQueueName });
     new cdk.CfnOutput(this, "SolverJobDefinition", { value: jobDef.jobDefinitionName });
+    new cdk.CfnOutput(this, "SolverCfdJobDefinition", { value: cfdJob.jobDefinitionName });
+    new cdk.CfnOutput(this, "SolverCfdImageTag", { value: cfdTag });
     new cdk.CfnOutput(this, "SolverBucket", { value: jobs.bucketName });
     new cdk.CfnOutput(this, "SolverJobLogGroup", { value: jobLogs.logGroupName });
   }

@@ -12,7 +12,7 @@ import { DomainError, sha256 } from "./domain.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
-import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, reviewAero, type AeroReview } from "./aero.js";
+import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -222,7 +222,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
         optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS,
           strategies: (await botorchVersion(config)) ? ["gp-nsga2", "botorch-qlognehvi"] : ["gp-nsga2"], botorch: await botorchVersion(config) } } : false,
-      aero: aeroConfigured(config) ? { engine: "OpenFOAM v2512 (OpenCFD image) · snappyHexMesh + simpleFoam k-ω SST · two mesh levels", reference: AERO_REFERENCE,
+      aero: aeroConfigured(config) ? { engine: `OpenFOAM v2512 (OpenCFD image${aeroRunner(config) === "batch" ? ", AWS Batch 16 vCPU" : ""}) · snappyHexMesh + simpleFoam k-ω SST · two mesh levels`, reference: AERO_REFERENCE,
         defaultRequirements: DEFAULT_AERO_REQUIREMENTS } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,

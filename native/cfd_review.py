@@ -71,6 +71,49 @@ event({"type": "stage", "index": 1, "id": "body", "label": f"CadQuery 车身：�
        "file": "stages/01-body.glb", "objects": ["Body"]})
 
 
+def batch_case(case, level, b):
+    """Run the prepared case as one AWS Batch job (Dockerfile.cfd), then verify what comes back.
+
+    The case directory (dictionaries + body.stl) goes up as case.tar; the job runs the image's own cfd_run.sh and
+    returns coefficient.dat, run.json and log.checkMesh with their digests. Each file is re-hashed against
+    result.json, and the OpenFOAM version must be v2512. A failed or overdue job is reported, never resubmitted.
+    """
+    import hashlib, tarfile, boto3
+    s3, batch = boto3.client("s3", region_name=b["region"]), boto3.client("batch", region_name=b["region"])
+    prefix = f"jobs/{b['run']}/{b['name']}-l{level}/"
+    tar = case.parent / f"case-{level}.tar"
+    with tarfile.open(tar, "w") as t:
+        t.add(case, arcname="case", filter=lambda m: None if m.name.endswith("run.sh") else m)
+    s3.upload_file(str(tar), b["bucket"], prefix + "case.tar")
+    job = batch.submit_job(jobName=f"pai-cfd-{b['run'][:8]}-{b['name'][:4]}-l{level}", jobQueue=b["queue"], jobDefinition=b["jobDefinition"],
+                           containerOverrides={"command": ["--bucket", b["bucket"], "--prefix", prefix]}, tags={"pai-run": b["run"]})
+    event({"type": "job", "level": level, "jobId": job["jobId"]})
+    deadline = time.monotonic() + float(b.get("timeoutSeconds", 7200))
+    while True:
+        j = batch.describe_jobs(jobs=[job["jobId"]])["jobs"][0]
+        if j["status"] in ("SUCCEEDED", "FAILED"):
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"batch job {job['jobId']} still {j['status']} at the deadline; not resubmitted")
+        time.sleep(10)
+    if j["status"] != "SUCCEEDED":
+        raise RuntimeError(f"batch job {job['jobId']}: {j.get('statusReason', 'failed')[:160]}")
+    s3.download_file(b["bucket"], prefix + "result.json", str(case / "result.json"))
+    result = json.loads((case / "result.json").read_text())
+    if result.get("status") != "measured" or result.get("openfoam") != "v2512":
+        raise RuntimeError(f"CFD job {result.get('status')} ({result.get('error', result.get('openfoam'))})")
+    targets = {"coefficient.dat": case / "postProcessing/forceCoeffs/0/coefficient.dat", "run.json": case / "run.json", "log.checkMesh": case / "log.checkMesh"}
+    for name, dest in targets.items():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        s3.download_file(b["bucket"], prefix + name, str(dest))
+        if hashlib.sha256(dest.read_bytes()).hexdigest() != result["files"].get(name):
+            raise RuntimeError(f"{name} differs from the job's digest")
+    remote.append({"level": level, "jobId": job["jobId"], "image": result.get("image"), "seconds": result.get("seconds"), "nproc": result.get("nproc")})
+
+
+remote = []
+
+
 def run_case(level):
     case = out / f"case-{level}"
     shutil.rmtree(case, ignore_errors=True)
@@ -89,6 +132,8 @@ def run_case(level):
                             "-v", f"{case.resolve()}:/case", "--entrypoint", "bash", runner["image"], "/case/run.sh"], capture_output=True, text=True, timeout=7200)
         if r.returncode != 0:
             raise RuntimeError(f"OpenFOAM level {level}: {(r.stdout + r.stderr).strip().splitlines()[-1][:200]}")
+    elif runner["kind"] == "batch":
+        batch_case(case, level, runner)
     else:
         raise SystemExit(f"unknown runner {runner['kind']}")
     rows = [l.split() for l in (case / "postProcessing/forceCoeffs/0/coefficient.dat").read_text().splitlines() if l and not l.startswith("#")]
@@ -121,7 +166,8 @@ checks = [
     {"id": "mesh-quality", "passed": all(r["meshOk"] for r in results), "observed": sum(r["meshOk"] for r in results), "required": len(results), "unit": "meshes",
      "method": "OpenFOAM checkMesh reports Mesh OK"},
 ]
-cfd = {"schema": "pai-cfd-1", "openfoam": fine["openfoam"], "image": spec["runner"].get("image"), "body": body, "levels": results, "speedMs": speed,
+cfd = {"schema": "pai-cfd-1", "openfoam": fine["openfoam"], "image": spec["runner"].get("image") or spec["runner"].get("jobDefinition"), "body": body, "levels": results,
+       "runner": spec["runner"]["kind"], "remote": remote, "speedMs": speed,
        "seconds": round(time.monotonic() - started, 1), "scope": "steady-rans-cfd", "physicalValidation": False,
        "limits": "Steady RANS (k-ω SST, wall functions, no prism layers) of a bluff body; Cd is a design-comparison quantity, not a wind-tunnel value"}
 (out / "cfd.json").write_text(json.dumps(cfd, indent=2) + "\n")

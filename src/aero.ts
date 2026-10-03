@@ -48,7 +48,8 @@ export interface AeroReview {
   id: string; projectId: string; projectRevision: number; request: z.infer<typeof AeroRequest>; requirementDigest: string;
   state: "running" | "completed" | "failed" | "interrupted"; error?: string; createdAt: string; finishedAt?: string; feedbackId?: string;
   verdict?: "accepted-aero-body" | "rejected"; baseline?: AeroChecks; candidate?: AeroChecks; diff?: DiffResult;
-  cfd?: Partial<Record<"baseline" | "candidate", { levels: z.infer<typeof Level>[]; frontalAreaM2: number; seconds: number; image: string }>>;
+  cfd?: Partial<Record<"baseline" | "candidate", { levels: z.infer<typeof Level>[]; frontalAreaM2: number; seconds: number; image: string; runner?: string;
+    remote?: { level: number; jobId: string; image?: string; seconds?: number; nproc?: number }[] }>>;
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>; scope: "steady-rans-cfd"; physicalValidation: false;
 }
@@ -68,7 +69,9 @@ export function aeroCaseText(run: AeroReview) {
     + "Scope: steady RANS with wall functions on two snappyHexMesh levels; a design-comparison drag coefficient, not a wind-tunnel or road measurement.\n";
 }
 /** The OpenCFD image is configured by digest (PAI_OPENFOAM_IMAGE); docker is the local runner. */
-export const aeroConfigured = (config: Config) => Boolean(config.openfoamImage && config.cadquery && config.physicsPython);
+export const aeroConfigured = (config: Config) => Boolean((config.openfoamImage || config.solverBatch?.cfdJobDefinition) && config.cadquery && config.physicsPython);
+/** AWS Batch when its CFD job definition is configured (the hosted default), otherwise the local docker image. */
+export const aeroRunner = (config: Config) => config.solverBatch?.cfdJobDefinition ? "batch" as const : "docker" as const;
 
 export async function reviewAero(store: Store, config: Config, project: Project, input: unknown, live?: LiveBus): Promise<AeroReview> {
   const request = AeroRequest.parse(input);
@@ -98,9 +101,12 @@ export async function reviewAero(store: Store, config: Config, project: Project,
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
     const before = await digests(), nativeBefore = await adapters.sourceDigests();
-    record.sourceDigests = { ...nativeBefore, ...before, "openfoam-image": config.openfoamImage!, "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))) };
+    const runnerKind = aeroRunner(config);
+    record.sourceDigests = { ...nativeBefore, ...before, "openfoam-image": runnerKind === "batch" ? `batch:${config.solverBatch!.cfdJobDefinition}` : config.openfoamImage!,
+      ...(runnerKind === "batch" ? { "cfd-job.py": sha256(await readFile(native("cfd_job.py"))) } : {}), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))) };
     // Reference and candidate solve concurrently; each gets half of the host's cores.
-    const processors = Math.max(2, Math.floor((config.cfdProcessors ?? 8) / 2));
+    // Local: reference and candidate share the host's cores. Batch: each case gets its own 16-vCPU job.
+    const processors = runnerKind === "batch" ? 16 : Math.max(2, Math.floor((config.cfdProcessors ?? 8) / 2));
     await Promise.all((["baseline", "candidate"] as const).map(async name => {
       const target = join(directory, name);
       const parameters = name === "baseline" ? AERO_REFERENCE : request.parameters;
@@ -108,7 +114,10 @@ export async function reviewAero(store: Store, config: Config, project: Project,
       publish(request.requestId, { kind: "step", id: `cfd-${name}`, label, status: "running", which: name });
       const inputFile = join(directory, `${name}-input.json`);
       await writePrivate(inputFile, JSON.stringify({ parameters, requirements: request.requirements, cadquery: config.cadquery, levels: AERO_LEVELS,
-        iterations: 1200, speedMs: 40, processors, runner: { kind: "docker", image: config.openfoamImage } }));
+        iterations: 1200, speedMs: 40, processors, runner: runnerKind === "batch"
+          ? { kind: "batch", queue: config.solverBatch!.queue, jobDefinition: config.solverBatch!.cfdJobDefinition, bucket: config.solverBatch!.bucket,
+              region: config.solverBatch!.region, run: record.id, name, timeoutSeconds: 7200 }
+          : { kind: "docker", image: config.openfoamImage } }));
       let observed = Promise.resolve();
       const observe = (line: string) => {
         if (!line.startsWith("PAI_EVENT ")) return;
@@ -133,13 +142,15 @@ export async function reviewAero(store: Store, config: Config, project: Project,
       await writePrivate(join(directory, `${name}.stdout.log`), r.stdout);
       await writePrivate(join(directory, `${name}.stderr.log`), r.stderr);
       record.receipts.push({ adapter: "openfoam-native", command: ["python", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
-        stdoutSha256: sha256(r.stdout), sourceDigests: { script: before["cfd-review.py"], image: config.openfoamImage! } });
+        stdoutSha256: sha256(r.stdout), sourceDigests: { script: before["cfd-review.py"], image: record.sourceDigests["openfoam-image"] } });
       publish(request.requestId, { kind: "step", id: `cfd-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: `exit ${r.exitCode}` });
       if (r.exitCode !== 0) throw new DomainError("CFD_FAILED", `Native CFD failed (${name}); retain receipts and inspect local artifacts`, 422);
       const checks = AeroChecks.parse(JSON.parse(await readFile(join(target, "checks.json"), "utf8")));
       if (canonical(checks.parameters) !== canonical(parameters)) throw new DomainError("CFD_CONTEXT", "Native CFD solved different parameters");
-      const cfd = JSON.parse(await readFile(join(target, "cfd.json"), "utf8")) as { levels: unknown; body: { frontalAreaM2: number }; seconds: number; image: string };
-      record.cfd = { ...record.cfd, [name]: { levels: z.array(Level).parse(cfd.levels), frontalAreaM2: cfd.body.frontalAreaM2, seconds: cfd.seconds, image: cfd.image } };
+      const cfd = JSON.parse(await readFile(join(target, "cfd.json"), "utf8")) as { levels: unknown; body: { frontalAreaM2: number }; seconds: number; image: string; runner?: string;
+        remote?: { level: number; jobId: string; image?: string; seconds?: number; nproc?: number }[] };
+      record.cfd = { ...record.cfd, [name]: { levels: z.array(Level).parse(cfd.levels), frontalAreaM2: cfd.body.frontalAreaM2, seconds: cfd.seconds, image: cfd.image,
+        runner: cfd.runner, remote: cfd.remote } };
       record[name] = checks;
       for (const file of AERO_FILES) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       store.put("aero-review", record);

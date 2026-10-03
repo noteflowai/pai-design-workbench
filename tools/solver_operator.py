@@ -34,7 +34,7 @@ if args.action == "build":
             break
         time.sleep(20)
     events = op.client("logs").get_log_events(logGroupName=b["logs"]["groupName"], logStreamName=b["logs"]["streamName"], limit=60, startFromHead=False)["events"]
-    tail = [e["message"].rstrip() for e in events if any(k in e["message"] for k in ("exists", "fea-", "gmsh", "digest", "sha256"))][-6:]
+    tail = [e["message"].rstrip() for e in events if any(k in e["message"] for k in ("exists", "fea-", "cfd-", "gmsh", "digest", "sha256"))][-6:]
     print(json.dumps({"status": b["buildStatus"], "imageTag": out["SolverImageTag"], "log": [t.replace(ACCOUNT, "<acct>") for t in tail]}, indent=1))
     sys.exit(0 if b["buildStatus"] == "SUCCEEDED" else 1)
 else:

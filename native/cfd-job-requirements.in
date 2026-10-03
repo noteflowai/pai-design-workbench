@@ -1,0 +1,5 @@
+# CFD job image (AWS Batch, linux/amd64, FROM the pinned OpenCFD OpenFOAM v2512 image): boto3 for S3 job I/O only.
+# Constrained to the physics lock. Regenerate with:
+#   uv pip compile --python-version 3.12 --python-platform x86_64-manylinux_2_31 --generate-hashes \
+#     -c native/physics-requirements.in native/cfd-job-requirements.in -o native/cfd-job-requirements.txt
+boto3==1.43.108
