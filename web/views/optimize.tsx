@@ -6,16 +6,17 @@ import { LiveSteps } from "../studio";
 import type { CadRequirements, StructuralRequirements } from "../../src/cad";
 import type { CadOptimization, OptimizePoint } from "../../src/optimize";
 
-const ORIGIN: Record<string, string> = { reference: "参考件", "ai-seed": "AI 种子", initial: "初始 Sobol", screen: "几何筛除", exploit: "代理推荐", explore: "不确定性探索" };
+const ORIGIN: Record<string, string> = { reference: "参考件", "ai-seed": "AI 种子", initial: "初始 Sobol", screen: "几何筛除", exploit: "代理推荐", explore: "不确定性探索", bo: "BoTorch 采集" };
 const label = (p: OptimizePoint) => `t=${p.parameters.thickness} · W=${p.parameters.width} · H=${p.parameters.plateHeight}`;
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-function runOptimize(c: Ctx, requirements: CadRequirements) {
+type Strategy = "gp-nsga2" | "botorch-qlognehvi";
+function runOptimize(c: Ctx, requirements: CadRequirements, strategy: Strategy = "gp-nsga2") {
   const p = c.project!;
-  const requestId = requestIdFor(`pai-optimize-${p.id}-${p.revision}-${JSON.stringify(requirements)}`);
+  const requestId = requestIdFor(`pai-optimize-${p.id}-${p.revision}-${JSON.stringify(requirements)}-${strategy}`);
   return c.perform(async () => {
     const r = await c.track(requestId, "物理寻优 · CalculiX + 代理模型", "cad-optimize",
-      () => api<CadOptimization>(`/projects/${p.id}/cad-optimizations`, { requestId, projectRevision: p.revision, requirements }));
+      () => api<CadOptimization>(`/projects/${p.id}/cad-optimizations`, { requestId, projectRevision: p.revision, requirements, strategy }));
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
   }, "物理寻优完成：报告的每个点都由 CadQuery 与 CalculiX 实测。");
 }
@@ -67,6 +68,7 @@ export function OptimizePanel({ requirements }: { requirements: CadRequirements 
   const runs = (c.data.cadOptimizations ?? []).filter(s => s.projectId === c.project?.id);
   const latest = runs.at(-1);
   const [chosen, setChosen] = useState<number>();
+  const [strategy, setStrategy] = useState<Strategy>("gp-nsga2");
   if (!physics) return <Card title="物理寻优（FEA + 代理模型）"><p className="muted">未配置物理工具链：运行 npm run setup:physics（Gmsh、CalculiX、Optuna、scikit-learn、MuJoCo）。</p></Card>;
   const structural: StructuralRequirements = requirements.structural ?? physics.defaultStructural;
   const result = latest?.result;
@@ -79,11 +81,15 @@ export function OptimizePanel({ requirements }: { requirements: CadRequirements 
     <p className="muted">载荷 {structural.forceN} N、力臂 {structural.leverMm} mm，挠度 ≤ {structural.maxDeflectionMm} mm，安全系数 {structural.safetyFactor}（6061-T6 名义值）。
       先测参考件、AI 种子和 Sobol 初始点；之后每轮用高斯过程代理模型和 NSGA-II 排序候选，先做 B-Rep 几何筛查，再用 CalculiX 求解，并把代理模型的预测和实测一起记录下来。</p>
     <div className="form-foot"><small>约 {physics.optimize.defaultBudget.initial + 1 + physics.optimize.defaultBudget.rounds * physics.optimize.defaultBudget.perRound} 次 FEA · 约 8–15 分钟 · 也可以让 AI 助手给出带物理估算的种子</small>
-      <button type="button" disabled={c.busy} onClick={() => void runOptimize(c, { ...requirements, structural })}>运行物理寻优</button></div>
+      <label className="inline">搜索策略<select aria-label="搜索策略" value={strategy} onChange={e => setStrategy(e.target.value as Strategy)}>
+        <option value="gp-nsga2">GP 代理 + NSGA-II（默认）</option>
+        <option value="botorch-qlognehvi" disabled={!physics.optimize.strategies?.includes("botorch-qlognehvi")}>BoTorch qLogNEHVI（约束批量贝叶斯优化）{physics.optimize.botorch ? ` ${physics.optimize.botorch}` : " · 未安装"}</option>
+      </select></label>
+      <button type="button" disabled={c.busy} onClick={() => void runOptimize(c, { ...requirements, structural }, strategy)}>运行物理寻优</button></div>
     {live && <LiveSteps session={{ ...live, steps: live.steps.filter(s => s.id === "optimize").concat(live.steps.filter(s => s.id !== "optimize").slice(-5)) }} />}
     {latest?.state === "failed" && <p className="warning">⚠ {latest.error}</p>}
     {result && <>
-      <p className="muted">{time(latest!.createdAt)} · {solved} 个点完成 FEA，{screened} 个点在几何筛查阶段被排除 · {result.feasibleCount} 个点满足全部 9 项检查
+      <p className="muted">{time(latest!.createdAt)} · {solved} 个点完成 FEA，{result.points.filter(p => p.fidelity === "geometry" && p.feasible === false).length} 个点在几何筛查阶段被排除{screened - result.points.filter(p => p.fidelity === "geometry" && p.feasible === false).length > 0 ? `，${screened - result.points.filter(p => p.fidelity === "geometry" && p.feasible === false).length} 个只做了几何筛查（多保真先验，未求解）` : ""}{result.strategy === "botorch-qlognehvi" ? " · 策略：BoTorch qLogNEHVI" : ""} · {result.feasibleCount} 个点满足全部 9 项检查
         {meanCal !== undefined ? ` · 代理模型挠度预测平均误差 ${pct(meanCal)}` : ""}。</p>
       <Plot run={latest!} selected={selected?.index} onSelect={setChosen} />
       <p className="legend"><span className="dot ok" />全部通过 <span className="dot bad" />有未通过的检查 <span className="dot ring" />可行点的帕累托前沿（更轻 / 更刚）◆ AI 种子</p>

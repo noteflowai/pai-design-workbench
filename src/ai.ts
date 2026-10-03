@@ -13,7 +13,7 @@ import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobo
 import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
-import { DEFAULT_OPTIMIZE_BUDGET, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
+import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
@@ -49,7 +49,8 @@ const ModelPayload = {
   "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
-  "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]) }).strict(),
+  "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]),
+    strategy: z.enum(OPTIMIZE_STRATEGIES).optional() }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
   "factory-review": z.object({ criteria: z.string().min(1).max(40) }).strict(),
 } as const;
@@ -71,7 +72,8 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
   "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
     + "（forceN、leverMm、safetyFactor、maxDeflectionMm；缺省 60 N、50 mm、2、0.06 mm）。可以提供最多 4 个 seeds（thickness 2–8、width 46–80、plateHeight 40–60），"
     + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
-    + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4",
+    + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4。"
+    + "strategy 可选 gp-nsga2（默认）或 botorch-qlognehvi（BoTorch 约束批量超体积贝叶斯优化，先做几何多保真先验；需已安装）",
   "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
     + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 MOTOR_AXIS_Z（电机轴高度 mm）赋值。坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
     + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
@@ -350,17 +352,18 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       evidence: "每个点的原生 B-Rep 建模与 7 项检查；最轻可行点与帕累托前沿" };
   }
   if (t === "cad-optimize") {
-    const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[] };
+    const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[]; strategy?: (typeof OPTIMIZE_STRATEGIES)[number] };
     const prev = context.lastCad?.request.requirements;
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), structural: prev?.structural ?? DEFAULT_STRUCTURAL, ...p.requirements });
     const budget = p.budget ?? DEFAULT_OPTIMIZE_BUDGET;
-    const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds };
+    const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds, ...(p.strategy ? { strategy: p.strategy } : {}) };
     OptimizeRequest.parse({ ...payload, requestId: placeholder });
     const s0 = prev?.structural, s1 = requirements.structural!;
     const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"), compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
       compare("structural.forceN", s0?.forceN, s1.forceN, "higher"), compare("structural.safetyFactor", s0?.safetyFactor, s1.safetyFactor, "higher"),
       compare("structural.maxDeflectionMm", s0?.maxDeflectionMm, s1.maxDeflectionMm, "lower"),
-      { field: "seeds", from: null, to: `${p.seeds.length} 个 AI 种子`, direction: "new" }];
+      { field: "seeds", from: null, to: `${p.seeds.length} 个 AI 种子`, direction: "new" },
+      ...(p.strategy ? [{ field: "strategy", from: null, to: p.strategy, direction: "new" } as PlanChange] : [])];
     const evaluations = budget.initial + 1 + budget.rounds * budget.perRound;
     return { ...base, title: opts.title ?? `物理寻优：约 ${evaluations} 次 FEA`, route: route("cad-optimizations"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), `约 ${Math.ceil(evaluations * 0.5)} 分钟；代理模型只排序，结论只来自实测点，选中的点还要走正式复核。`, ...note],

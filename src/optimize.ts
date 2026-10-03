@@ -20,6 +20,17 @@ import { CadParameters, CadRequirements, type CadRequirements as CadReq } from "
  * ordinary parametric review (two-mesh FEA, baseline, EvalArc) with provenance to this record.
  */
 export const MAX_OPTIMIZE_EVALUATIONS = 28;
+export const OPTIMIZE_STRATEGIES = ["gp-nsga2", "botorch-qlognehvi"] as const;
+/** Whether the optional BoTorch lock is installed in the physics venv (probed once per interpreter path). */
+const botorchProbe = new Map<string, Promise<string | null>>();
+export function botorchVersion(config: Config): Promise<string | null> {
+  if (!config.physicsPython) return Promise.resolve(null);
+  if (!botorchProbe.has(config.physicsPython)) {
+    botorchProbe.set(config.physicsPython, command(config.physicsPython, ["-I", "-c", "import botorch; print(botorch.__version__)"], config.repository, undefined, 60_000)
+      .then(r => r.exitCode === 0 ? r.stdout.trim() : null).catch(() => null));
+  }
+  return botorchProbe.get(config.physicsPython)!;
+}
 export const OptimizeBudget = z.object({
   initial: z.number().int().min(4).max(16), rounds: z.number().int().min(1).max(4), perRound: z.number().int().min(2).max(4),
 }).strict().refine(b => b.initial + b.rounds * b.perRound <= MAX_OPTIMIZE_EVALUATIONS, { message: `at most ${MAX_OPTIMIZE_EVALUATIONS} solver evaluations` });
@@ -35,11 +46,15 @@ export const OptimizeRequest = z.object({
   requestId: Id, projectRevision: z.number().int().positive(),
   requirements: CadRequirements.refine(r => Boolean(r.structural), { message: "optimisation needs frozen structural requirements", path: ["structural"] }),
   budget: OptimizeBudget.default(DEFAULT_OPTIMIZE_BUDGET), seeds: z.array(OptimizeSeed).max(4).default([]),
+  /** gp-nsga2: scikit-learn GPs + Optuna NSGA-II (default). botorch-qlognehvi: BoTorch constrained batch qLogNEHVI. */
+  strategy: z.enum(OPTIMIZE_STRATEGIES).default("gp-nsga2"),
 }).strict();
 
 const Point = z.object({
-  index: z.number().int(), origin: z.enum(["reference", "ai-seed", "initial", "screen", "exploit", "explore"]),
-  fidelity: z.enum(["geometry", "fea", "failed"]), parameters: CadParameters, feasible: z.boolean(), failed: z.array(z.string()), seconds: z.number(),
+  index: z.number().int(), origin: z.enum(["reference", "ai-seed", "initial", "screen", "exploit", "explore", "bo"]),
+  fidelity: z.enum(["geometry", "fea", "failed"]), parameters: CadParameters,
+  /** null: geometry-only screen that passed the B-Rep checks but was not solved (multi-fidelity prior). */
+  feasible: z.boolean().nullable(), failed: z.array(z.string()), seconds: z.number(),
   mass: z.number().optional(), deflectionMm: z.number().optional(), stressMPa: z.number().optional(), minWallMm: z.number().optional(), holeEdgeMm: z.number().optional(),
   elements: z.number().int().optional(), error: z.string().optional(),
   checks: z.array(z.object({ id: z.string(), passed: z.boolean(), observed: z.unknown(), required: z.unknown() })).optional(),
@@ -47,7 +62,7 @@ const Point = z.object({
   estimate: z.object({ expectedDeflectionMm: z.number().optional(), expectedMassG: z.number().optional(), rationale: z.string().optional() }).strict().optional(),
 }).strict();
 export const OptimizeResult = z.object({
-  schema: z.literal("pai-cad-optimize-1"), optuna: z.string(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
+  schema: z.literal("pai-cad-optimize-1"), optuna: z.string(), strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
   budget: z.object({ initial: z.number(), rounds: z.number(), perRound: z.number() }).strict(), axes: z.array(z.string()), bounds: z.record(z.string(), z.array(z.number())),
   points: z.array(Point).min(1).max(80), feasibleCount: z.number().int(), lightestFeasible: z.number().int().nullable(), pareto: z.array(z.number().int()),
   rounds: z.array(z.object({ round: z.number().int(), trainedOn: z.number().int(), looMeanAbsError: z.record(z.string(), z.number()),
@@ -85,17 +100,21 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     const scripts = ["cad_optimize.py", "cad_point.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const before = await digests();
-    record.sourceDigests = { ...before, "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))),
+    if (request.strategy === "botorch-qlognehvi" && !(await botorchVersion(config))) {
+      throw new DomainError("BOTORCH_NOT_CONFIGURED", "BoTorch is not installed in the physics toolchain (npm run setup:physics -- --with-botorch)", 503);
+    }
+    record.sourceDigests = { ...before, ...(request.strategy === "botorch-qlognehvi" ? { "botorch-lock": sha256(await readFile(native("bo-requirements.txt"))) } : {}),
+      "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))),
       ccx: sha256(await readFile(config.ccx)) };
     const inputFile = join(directory, "input.json");
-    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, parallel: 2 }));
+    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2 }));
     const total = request.budget.initial + 1 + request.budget.rounds * request.budget.perRound;
     publish({ kind: "step", id: "optimize", label: `物理寻优：约 ${total} 次 CalculiX 求解 + 代理模型排序`, status: "running" });
     const observe = (line: string) => {
       if (!line.startsWith("PAI_EVENT ")) return;
       try {
         const e = JSON.parse(line.slice(10)) as { type?: string; phase?: string; index?: number; origin?: string; mass?: number; deflectionMm?: number; failed?: string[]; fidelity?: string; parameters?: CadParameters; trainedOn?: number };
-        if (e.type === "phase") publish({ kind: "step", id: `phase-${e.phase}`, label: e.phase === "initial" ? "初始设计：参考件 + AI 种子 + Sobol 点" : `第 ${e.phase?.split("-")[1]} 轮：代理模型（${e.trainedOn} 个实测点训练）→ NSGA-II 排序`, status: "done" });
+        if (e.type === "phase") publish({ kind: "step", id: `phase-${e.phase}`, label: e.phase === "initial" ? "初始设计：参考件 + AI 种子 + Sobol 点" : `第 ${e.phase?.split("-")[1]} 轮：代理模型（${e.trainedOn} 个实测点训练）→ ${request.strategy === "botorch-qlognehvi" ? "BoTorch qLogNEHVI 批量采集" : "NSGA-II 排序"}`, status: "done" });
         if (e.type !== "point") return;
         const p = e.parameters!;
         publish({ kind: "step", id: `opt-point-${e.index}`, label: `${e.origin} · t=${p.thickness} · W=${p.width} · H=${p.plateHeight}${e.fidelity === "geometry" ? "（几何筛除）" : ""}`,
@@ -114,7 +133,10 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     // Recompute the summary from the measured points: the native summary is not trusted on its own.
     const solved = result.points.filter(p => p.fidelity === "fea");
     const recomputed = solved.filter(p => p.feasible).sort((a, b) => a.mass! - b.mass! || a.index - b.index)[0]?.index ?? null;
-    if (recomputed !== result.lightestFeasible || result.points.some(p => p.feasible !== (p.failed.length === 0) || (p.feasible && p.fidelity !== "fea"))) {
+    if (recomputed !== result.lightestFeasible || result.points.some(p => (p.feasible === null
+        // Unsolved geometry-only screens (the BoTorch multi-fidelity prior) are neither feasible nor infeasible.
+        ? p.fidelity !== "geometry" || p.failed.length > 0
+        : p.feasible !== (p.failed.length === 0) || (p.feasible && p.fidelity !== "fea")))) {
       throw new DomainError("CAD_OPTIMIZE_INCONSISTENT", "Optimisation summary disagrees with its measured points");
     }
     if (canonical(await digests()) !== canonical(before)) throw new DomainError("SOURCE_CHANGED", "Native optimisation scripts changed during the run");

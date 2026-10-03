@@ -22,7 +22,7 @@ export type State = {
   capabilities: { modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
     generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
     signing?: { kms: boolean; keyId: string; algorithm: string };
-    physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number } };
+    physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number; strategies?: string[]; botorch?: string | null } };
     factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };
 };
 export const VIEWS: { id: ViewId; label: string; short: string; index?: number }[] = [

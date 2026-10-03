@@ -12,6 +12,11 @@ Run with the pinned physics interpreter. Each *measured* point is the trusted re
    - Pick the lightest candidates whose deflection is feasible at mean + 1σ (exploit), plus the most uncertain
      near-feasible candidate (explore), and measure them natively.
    - Before each measurement, record the surrogate's prediction, so calibration is reported honestly.
+   Strategy "botorch-qlognehvi" replaces the NSGA-II step with BoTorch: independent SingleTaskGPs (ModelListGP) on
+   the same targets, and a batch of `perRound` candidates that maximises qLogNoisyExpectedHypervolumeImprovement
+   (mass ↓, log deflection ↓) with the stress / wall / hole-edge / deflection limits as outcome constraints and the
+   envelope as linear input constraints (Daulton et al. 2021; Ament et al. 2023). Screening, measurement and
+   calibration are identical, so the two strategies are directly comparable.
 3. The recommendation is the lightest *measured* feasible point. Predictions are never evidence; a chosen point
    becomes an ordinary parametric review, which solves both meshes and runs EvalArc.
 """
@@ -47,6 +52,9 @@ structural = req["structural"]
 allowable = 276.0 / structural["safetyFactor"]
 limit = {"deflection": structural["maxDeflectionMm"], "stress": allowable, "mass": req["maxMassG"], "wall": req["minWallMm"]}
 rng_seed = int(spec.get("seed", 7))
+STRATEGY = spec.get("strategy", "gp-nsga2")
+if STRATEGY not in ("gp-nsga2", "botorch-qlognehvi"):
+    raise SystemExit(f"unknown strategy {STRATEGY}")
 
 
 def event(payload):
@@ -132,6 +140,19 @@ while len(initial) < budget["initial"]:
 event({"type": "phase", "phase": "initial", "points": len(initial)})
 points += run_batch([(i + 1, *x) for i, x in enumerate(initial)])
 
+# Multi-fidelity prior for the BoTorch strategy: B-Rep checks cost seconds, a CalculiX solve minutes. A Sobol layer of
+# geometry-only screens teaches the wall / hole-edge / mass GPs the recipe's feasible region before any acquisition.
+if STRATEGY == "botorch-qlognehvi":
+    cheap = []
+    for _ in range(int(spec.get("geometryPrior", 12))):
+        trial = study.ask({k: optuna.distributions.FloatDistribution(*BOUNDS[k]) for k in AXES})
+        cheap.append(trial.params); study.tell(trial, 0.0)
+    base = len(points)
+    with ThreadPoolExecutor(max_workers=int(spec.get("parallel", 2))) as pool:
+        prior = list(pool.map(lambda ix: measure(base + ix[0] + 1, ix[1], "screen", geometry_only=True, folder=out / "screen" / f"prior-{ix[0] + 1}"), enumerate(cheap)))
+    points += prior
+    event({"type": "phase", "phase": "geometry-prior", "points": len(prior)})
+
 # ---------------------------------------------------------------- surrogate rounds
 lo, hi = np.array([BOUNDS[k][0] for k in AXES]), np.array([BOUNDS[k][1] for k in AXES])
 norm = lambda p: (np.array([p[k] for k in AXES]) - lo) / (hi - lo)
@@ -176,10 +197,99 @@ def envelope_ok(p):
     return w <= e[0] and 30.0 <= e[1] and h <= e[2]
 
 
+def bo_candidates(r, q, pending=()):
+    """One BoTorch batch on the measured points; returns [(params, prediction)] in the unit cube's original units."""
+    import torch
+    from botorch.acquisition.multi_objective.logei import qLogNoisyExpectedHypervolumeImprovement
+    from botorch.acquisition.multi_objective.objective import WeightedMCMultiOutputObjective
+    from botorch.fit import fit_gpytorch_mll
+    from botorch.models import ModelListGP, SingleTaskGP
+    from botorch.models.transforms.outcome import Standardize
+    from botorch.optim import optimize_acqf
+    from botorch.sampling import SobolQMCNormalSampler
+    from gpytorch.mlls import SumMarginalLogLikelihood
+    torch.manual_seed(rng_seed + r)
+    dt = torch.double
+    names = ["mass", "logDeflection", "logStress", "minWall", "holeEdge"]
+    models = []
+    for name in names:
+        ok = [p for p in points if ("minWallMm" in p if name in GEOMETRY_TARGETS else "deflectionMm" in p)]
+        X = [norm(p["parameters"]) for p in ok]
+        Y = [[TARGETS[name](p)] for p in ok]
+        # A recipe build failure is an infeasible observation: zero wall and zero hole-edge distance, so the
+        # acquisition learns to leave that region (ranking only; the failure itself is the recorded evidence).
+        if name in ("minWall", "holeEdge"):
+            for p in points:
+                if p.get("fidelity") == "failed":
+                    X.append(norm(p["parameters"])); Y.append([0.0])
+        X = torch.tensor(np.array(X), dtype=dt)
+        Y = torch.tensor(Y, dtype=dt)
+        models.append(SingleTaskGP(X, Y, outcome_transform=Standardize(m=1)))
+    model = ModelListGP(*models)
+    fit_gpytorch_mll(SumMarginalLogLikelihood(model.likelihood, model))
+    solved = [p for p in points if "deflectionMm" in p]
+    X_base = torch.tensor(np.array([norm(p["parameters"]) for p in solved]), dtype=dt)
+    edge_min = req["edgeDistanceFactor"] * 5.5
+    # Outcome constraints, feasible when ≤ 0 (sample tensors are ... × q × m in the order of `names`).
+    constraints = [lambda Y: Y[..., 1] - math.log(limit["deflection"]), lambda Y: Y[..., 2] - math.log(limit["stress"]),
+                   lambda Y: limit["wall"] - Y[..., 3], lambda Y: edge_min - Y[..., 4], lambda Y: Y[..., 0] - limit["mass"]]
+    acqf = qLogNoisyExpectedHypervolumeImprovement(
+        model=model, ref_point=[-limit["mass"], -math.log(limit["deflection"])], X_baseline=X_base, prune_baseline=True,
+        objective=WeightedMCMultiOutputObjective(weights=torch.tensor([-1.0, -1.0], dtype=dt), outcomes=[0, 1]),
+        constraints=constraints, sampler=SobolQMCNormalSampler(sample_shape=torch.Size([128]), seed=rng_seed + r),
+        X_pending=torch.tensor(np.array([norm(p) for p in pending]), dtype=dt) if pending else None)
+    # Envelope as linear constraints on normalised inputs: width ≤ e0 and thickness + plateHeight ≤ e2.
+    e = req["maxEnvelopeMm"]; span = hi - lo
+    ineq = [(torch.tensor([1]), torch.tensor([-span[1]], dtype=dt), float(lo[1] - e[0])),
+            (torch.tensor([0, 2]), torch.tensor([-span[0], -span[2]], dtype=dt), float(lo[0] + lo[2] - e[2]))]
+    bounds = torch.stack([torch.zeros(3, dtype=dt), torch.ones(3, dtype=dt)])
+    cand, _ = optimize_acqf(acqf, bounds=bounds, q=q, num_restarts=8, raw_samples=256, sequential=True, inequality_constraints=ineq,
+                            options={"batch_limit": 8, "maxiter": 200})
+    with torch.no_grad():
+        post = model.posterior(cand)
+        mu, sd = post.mean.numpy(), post.variance.clamp_min(0).sqrt().numpy()
+    out = []
+    for x, m, v in zip(cand.numpy(), mu, sd):
+        params = {k: float(lo[i] + x[i] * span[i]) for i, k in enumerate(AXES)}
+        out.append((params, {"deflectionMm": round(math.exp(m[1]), 4), "deflectionSigmaLog": round(float(v[1]), 4),
+                             "stressMPa": round(math.exp(m[2]), 1), "massG": round(float(m[0]), 2)}))
+    return out, len(solved)
+
+
 rounds = []
 next_index = len(points) + 1
 for r in range(1, budget["rounds"] + 1):
-    models, loo, n = fit()
+    models, loo, n = fit()  # scikit-learn GPs: leave-one-out error is reported for both strategies
+    if STRATEGY == "botorch-qlognehvi":
+        # Acquire, screen the B-Rep cheaply, and re-acquire after each geometry failure: the failed screen is a
+        # measured point, so the geometry GPs learn from it before the next proposal (same screen budget as NSGA-II).
+        batch, screened, n, proposals = [], 0, 0, 0
+        while len(batch) < budget["perRound"] and screened < int(spec.get("screenPerRound", 6)):
+            cands, n = bo_candidates(r + 100 * proposals, budget["perRound"] - len(batch), pending=[b[1] for b in batch])
+            proposals += 1
+            progressed = False
+            for params, prediction in cands:
+                if screened >= int(spec.get("screenPerRound", 6)):
+                    break
+                if min(np.linalg.norm(norm(params) - norm(p["parameters"])) for p in points) <= 0.02 or any(np.linalg.norm(norm(params) - norm(b[1])) <= 0.02 for b in batch):
+                    continue  # already measured or chosen: the acquisition is not paid twice for one design
+                screened += 1; progressed = True
+                screen = measure(next_index, params, "screen", geometry_only=True, folder=out / "screen" / f"r{r}-{screened}")
+                if screen["feasible"] is None:
+                    batch.append((next_index, params, "bo", prediction, None))
+                else:
+                    points.append(screen)
+                    next_index += 1
+                    break  # refit on the new geometry evidence before proposing again
+                next_index += 1
+            if not progressed:
+                break
+        event({"type": "phase", "phase": f"round-{r}", "points": len(batch), "trainedOn": n})
+        new = run_batch(batch)
+        points += new
+        rounds.append({"round": r, "trainedOn": n, "looMeanAbsError": loo, "surrogateTrials": len(cands),
+                       "screenedGeometry": screened, "proposed": [p["index"] for p in new]})
+        continue
     edge_min = req["edgeDistanceFactor"] * 5.5
 
     def objective(trial):
@@ -244,8 +354,14 @@ calibration = [{"index": p["index"], "predicted": p["prediction"]["deflectionMm"
 ai = [{"index": p["index"], "expected": p["estimate"].get("expectedDeflectionMm"), "measured": p.get("deflectionMm"),
        "relativeError": round(abs(p["estimate"]["expectedDeflectionMm"] - p["deflectionMm"]) / p["deflectionMm"], 4)
        if p["estimate"].get("expectedDeflectionMm") and "deflectionMm" in p else None} for p in points if p.get("estimate")]
-result = {"schema": "pai-cad-optimize-1", "optuna": optuna.__version__, "surrogate": "GaussianProcessRegressor (Matérn 5/2 + white noise), scikit-learn",
-          "search": "NSGA-II on the surrogate, constraints at mean ± 1σ", "requirements": req, "budget": budget, "axes": AXES, "bounds": BOUNDS,
+if STRATEGY == "botorch-qlognehvi":
+    import botorch
+    surrogate_text = f"BoTorch {botorch.__version__} ModelListGP (SingleTaskGP per target, standardised)"
+    search_text = "qLogNoisyExpectedHypervolumeImprovement (mass, log deflection) with outcome and linear envelope constraints"
+else:
+    surrogate_text, search_text = "GaussianProcessRegressor (Matérn 5/2 + white noise), scikit-learn", "NSGA-II on the surrogate, constraints at mean ± 1σ"
+result = {"schema": "pai-cad-optimize-1", "optuna": optuna.__version__, "strategy": STRATEGY, "surrogate": surrogate_text,
+          "search": search_text, "requirements": req, "budget": budget, "axes": AXES, "bounds": BOUNDS,
           "points": points, "rounds": rounds, "feasibleCount": len(feasible), "lightestFeasible": feasible[0]["index"] if feasible else None,
           "pareto": front, "calibration": calibration, "aiSeeds": ai,
           "scope": "parametric-part-geometry-and-linear-static-fea", "physicalValidation": False,

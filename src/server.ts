@@ -29,7 +29,7 @@ import { toolCatalog } from "./tool-catalog.js";
 import { DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
-import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, optimizeCad, type CadOptimization } from "./optimize.js";
+import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, optimizeCad, type CadOptimization } from "./optimize.js";
 import { KIND_STORE, admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
@@ -219,7 +219,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       blender: Boolean(config.blender),
       signing: { kms: Boolean(config.signingKmsKeyId), keyId: (await signer(config)).keyId, algorithm: (await signer(config)).algorithm },
       physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
-        optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS } } : false,
+        optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS,
+          strategies: (await botorchVersion(config)) ? ["gp-nsga2", "botorch-qlognehvi"] : ["gp-nsga2"], botorch: await botorchVersion(config) } } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },

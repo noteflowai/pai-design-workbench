@@ -6,6 +6,9 @@
   against the archive's signed indices; the .deb files are unpacked into .state/tools/calculix-2.21 with their
   shared libraries, so no root and no system package changes are needed.
 
+- Optional (`--with-botorch` or PAI_PHYSICS_BOTORCH=1): BoTorch 0.18 / GPyTorch / CPU PyTorch from the hash-locked
+  native/bo-requirements.txt (PyTorch from its official CPU index), for the qLogNEHVI optimisation strategy.
+
 Writes PAI_PHYSICS_PYTHON and PAI_CCX to .state/demo.env and a receipt with every digest.
 """
 import hashlib
@@ -31,6 +34,11 @@ if not (venv / "bin/pip").exists():
     subprocess.run([sys.executable, "-m", "venv", "--clear", str(venv)], check=True)
 subprocess.run([str(python), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-input",
                 "--require-hashes", "--no-deps", "--only-binary", ":all:", "-r", str(lock)], check=True)
+with_bo = "--with-botorch" in sys.argv or os.environ.get("PAI_PHYSICS_BOTORCH") == "1"
+bo_lock = root / "native/bo-requirements.txt"
+if with_bo:
+    subprocess.run([str(python), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-input",
+                    "--require-hashes", "--no-deps", "--only-binary", ":all:", "-r", str(bo_lock)], check=True)
 
 # Shared libraries the Gmsh wheel links against (headless use still loads them); not bundled in the wheel.
 SYSTEM_LIBS = ["libglu1-mesa", "libgl1", "libopengl0", "libxcursor1", "libxft2", "libxinerama1", "libfontconfig1", "libgomp1",
@@ -63,13 +71,20 @@ if probe.returncode != 0:
     raise SystemExit("Physics import self-check failed. Gmsh needs the OpenGL/X11 runtime libraries "
                      f"({' '.join(SYSTEM_LIBS)}); install them with apt-get.\n{probe.stderr[-1500:]}")
 versions = json.loads(probe.stdout)
+if with_bo:
+    bo = subprocess.run([str(python), "-c", "import json, torch, botorch, gpytorch; print(json.dumps({'torch': torch.__version__, 'botorch': botorch.__version__, 'gpytorch': gpytorch.__version__}))"],
+                        capture_output=True, text=True)
+    if bo.returncode != 0:
+        raise SystemExit(f"BoTorch self-check failed:\n{bo.stderr[-1500:]}")
+    versions.update(json.loads(bo.stdout))
 # ccx prints its version banner when run without an input deck.
 banner = subprocess.run([str(wrapper), "-v"], capture_output=True, text=True, timeout=30)
 ccx_version = next((line.strip() for line in (banner.stdout + banner.stderr).splitlines() if "Version" in line), "")
 if "2.21" not in ccx_version:
     raise SystemExit(f"CalculiX self-check failed: {ccx_version!r}; install the runtime libraries ({' '.join(SYSTEM_LIBS)}).\n{banner.stderr[-1500:]}")
 receipt = {**versions, "ccx": ccx_version, "ccxBinary": str(wrapper), "debs": debs or "previously unpacked",
-           "lockSha256": hashlib.sha256(lock.read_bytes()).hexdigest(), "python": platform.python_version(), "interpreter": str(python)}
+           "lockSha256": hashlib.sha256(lock.read_bytes()).hexdigest(),
+           **({"botorchLockSha256": hashlib.sha256(bo_lock.read_bytes()).hexdigest()} if with_bo else {}), "python": platform.python_version(), "interpreter": str(python)}
 (tools / "physics-install-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
 env_file = Path(os.environ["PAI_ENV_FILE"]) if os.environ.get("PAI_ENV_FILE") else root / ".state/demo.env"
 existing = env_file.read_text() if env_file.exists() else ""

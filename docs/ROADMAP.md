@@ -10,7 +10,7 @@
 
 | 项 | 需求 | 退出条件 |
 |---|---|---|
-| BoTorch qLogNEHVI 策略 | F7b | `PAI_OPTIMIZE_STRATEGY=botorch-qlognehvi npm run test:optimize` 通过；同一预算下与 NSGA-II 并列比较可行点数和最轻质量；界面可选；CI 安装 BoTorch 锁文件 |
+| BoTorch qLogNEHVI 策略 | F7b | 本机端到端测试已通过 ✓，界面可选 ✓；待做：同一预算多种子下与 NSGA-II 并列比较可行点数和最轻质量；CI 和托管站点安装 BoTorch 锁文件 |
 | Object Lock 归档开启 | F15 | 用户确认保留期；托管站点归档 1 个发布并读回 COMPLIANCE 锁和版本 |
 | 基础镜像推广 | — | 拿到 ECR 扫描结果的读权限后审查；由维护者推广 `:full` 并更新 `base-image.lock` |
 

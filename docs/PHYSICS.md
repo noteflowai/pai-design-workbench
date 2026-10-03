@@ -112,3 +112,28 @@ review of the same project and checks the STL against the digest that review rec
 `npm run test:robot` mounts the reference bracket (B-Rep 48.37 g, MuJoCo mesh 48.37 g). It checks that the MJCF is
 portable, that the USD has the physics joints and articulation root, and that a part that is not accepted is refused
 (`TOOL_NOT_ACCEPTED`).
+
+## BoTorch strategy (`strategy: "botorch-qlognehvi"`)
+
+This strategy is optional. Install it with `npm run setup:physics -- --with-botorch`, which installs the hash-locked
+`native/bo-requirements.txt`: BoTorch 0.18.1, GPyTorch 1.15.2 and CPU PyTorch 2.14.1 from the official PyTorch CPU index.
+
+Only the acquisition step differs from the default; measurement, screening, calibration and the formal review are the
+same.
+
+- **Geometry prior.** Before the first round, 12 Sobol points are screened by B-Rep checks only. A screen costs
+  seconds, a solve minutes, so the wall, hole-edge and mass models learn where the recipe is feasible before any
+  acquisition. Points that pass geometry but are not solved carry `feasible: null`, and the server's consistency
+  check accepts that only for those points.
+- **Models.** `ModelListGP` holds one standardised `SingleTaskGP` per target: mass, log deflection, log stress,
+  minimum wall and hole edge. A recipe build failure counts as zero wall and zero edge distance, so the
+  acquisition steers away from that region.
+- **Acquisition.** The acquisition function is `qLogNoisyExpectedHypervolumeImprovement` over (−mass, −log
+  deflection). The reference point is the mass limit and the deflection limit. The stress, deflection, wall,
+  hole-edge and mass limits are outcome constraints. The envelope enters `optimize_acqf` as linear input constraints.
+- **Screening loop.** Each proposal is screened on the B-Rep first. After a geometry failure the models are refitted
+  and acquisition runs again with the already chosen points as `X_pending`. The screen budget is the same as for
+  NSGA-II.
+
+The first local run used the same budget as the default test: 20 points, 7 solved and 5 feasible. BoTorch's three
+proposals had surrogate errors of 4–8 %. In that budget the AI seed was still the lightest feasible point.
