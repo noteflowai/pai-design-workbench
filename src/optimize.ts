@@ -48,10 +48,13 @@ export const OptimizeRequest = z.object({
   budget: OptimizeBudget.default(DEFAULT_OPTIMIZE_BUDGET), seeds: z.array(OptimizeSeed).max(4).default([]),
   /** gp-nsga2: scikit-learn GPs + Optuna NSGA-II (default). botorch-qlognehvi: BoTorch constrained batch qLogNEHVI. */
   strategy: z.enum(OPTIMIZE_STRATEGIES).default("gp-nsga2"),
+  /** Where solved points run: this host, or one AWS Batch job per point (default when configured). */
+  solver: z.enum(["local", "batch"]).optional(),
 }).strict();
 
 const Point = z.object({
   index: z.number().int(), origin: z.enum(["reference", "ai-seed", "initial", "screen", "exploit", "explore", "bo"]),
+  remote: z.object({ jobId: z.string(), image: z.string().nullable().optional(), seconds: z.number().nullable().optional() }).strict().optional(),
   fidelity: z.enum(["geometry", "fea", "failed"]), parameters: CadParameters,
   /** null: geometry-only screen that passed the B-Rep checks but was not solved (multi-fidelity prior). */
   feasible: z.boolean().nullable(), failed: z.array(z.string()), seconds: z.number(),
@@ -66,7 +69,7 @@ export const OptimizeResult = z.object({
   budget: z.object({ initial: z.number(), rounds: z.number(), perRound: z.number() }).strict(), axes: z.array(z.string()), bounds: z.record(z.string(), z.array(z.number())),
   points: z.array(Point).min(1).max(80), feasibleCount: z.number().int(), lightestFeasible: z.number().int().nullable(), pareto: z.array(z.number().int()),
   rounds: z.array(z.object({ round: z.number().int(), trainedOn: z.number().int(), looMeanAbsError: z.record(z.string(), z.number()),
-    surrogateTrials: z.number().int(), screenedGeometry: z.number().int(), proposed: z.array(z.number().int()) }).strict()),
+    surrogateTrials: z.number().int(), screenedGeometry: z.number().int(), proposed: z.array(z.number().int()), skipped: z.string().optional() }).strict()),
   calibration: z.array(z.object({ index: z.number().int(), predicted: z.number(), measured: z.number(), relativeError: z.number() }).strict()),
   aiSeeds: z.array(z.object({ index: z.number().int(), expected: z.number().nullable().optional(), measured: z.number().nullable().optional(), relativeError: z.number().nullable() }).strict()),
   scope: z.literal("parametric-part-geometry-and-linear-static-fea"), physicalValidation: z.literal(false), limits: z.string(),
@@ -77,6 +80,8 @@ export interface CadOptimization {
   state: "running" | "completed" | "failed" | "interrupted"; error?: string; createdAt: string; finishedAt?: string;
   result?: z.infer<typeof OptimizeResult>; receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   scope: "parametric-part-geometry-and-linear-static-fea"; physicalValidation: false;
+  /** local: solved on this host; batch: one AWS Batch job per solved point (digests and tool versions checked). */
+  solver?: "local" | "batch";
 }
 
 export async function optimizeCad(store: Store, config: Config, project: Project, input: unknown, live?: LiveBus): Promise<CadOptimization> {
@@ -100,14 +105,19 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     const scripts = ["cad_optimize.py", "cad_point.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const before = await digests();
+    const solver = request.solver ?? (config.solverBatch ? "batch" : "local");
+    if (solver === "batch" && !config.solverBatch) throw new DomainError("SOLVER_NOT_CONFIGURED", "AWS Batch solver is not configured (PAI_SOLVER_QUEUE, PAI_SOLVER_JOB_DEFINITION, PAI_SOLVER_BUCKET)", 503);
+    record.solver = solver;
     if (request.strategy === "botorch-qlognehvi" && !(await botorchVersion(config))) {
       throw new DomainError("BOTORCH_NOT_CONFIGURED", "BoTorch is not installed in the physics toolchain (npm run setup:physics -- --with-botorch)", 503);
     }
-    record.sourceDigests = { ...before, ...(request.strategy === "botorch-qlognehvi" ? { "botorch-lock": sha256(await readFile(native("bo-requirements.txt"))) } : {}),
+    record.sourceDigests = { ...before, ...(solver === "batch" ? { "solver-job.py": sha256(await readFile(native("solver_job.py"))), "solver-lock": sha256(await readFile(native("solver-requirements.txt"))) } : {}),
+      ...(request.strategy === "botorch-qlognehvi" ? { "botorch-lock": sha256(await readFile(native("bo-requirements.txt"))) } : {}),
       "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))),
       ccx: sha256(await readFile(config.ccx)) };
     const inputFile = join(directory, "input.json");
-    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2 }));
+    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2,
+      ...(solver === "batch" ? { backend: "batch", batch: { ...config.solverBatch!, run: record.id, timeoutSeconds: 1800 } } : {}) }));
     const total = request.budget.initial + 1 + request.budget.rounds * request.budget.perRound;
     publish({ kind: "step", id: "optimize", label: `物理寻优：约 ${total} 次 CalculiX 求解 + 代理模型排序`, status: "running" });
     const observe = (line: string) => {

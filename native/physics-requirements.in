@@ -8,3 +8,4 @@ mujoco==3.14.0
 numpy==2.5.3
 scipy==1.18.1
 usd-core==26.8
+boto3==1.43.108

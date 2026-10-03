@@ -13,6 +13,8 @@ export interface Config {
   /** RFC 3161 time-stamping authority for release seals (only a SHA-256 digest is sent) and its CA bundle. */
   tsaUrl?: string; tsaCaFile?: string;
   /** S3 bucket with Object Lock for write-once archiving of sealed release packages, and the retention in days. */
+  /** FEA scale-out on AWS Batch (PAISolver stack): queue, job definition, jobs bucket and region. */
+  solverBatch?: { queue: string; jobDefinition: string; bucket: string; region: string };
   packageArchiveBucket?: string; packageRetentionDays: number; packageLockMode: "COMPLIANCE" | "GOVERNANCE";
   /** bubblewrap binary for generated CAD code; generated code is refused when it cannot isolate. */
   bwrap?: string;
@@ -68,6 +70,9 @@ export function configuration(): Config {
     physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX,
     signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
     tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
+    solverBatch: process.env.PAI_SOLVER_QUEUE && process.env.PAI_SOLVER_JOB_DEFINITION && process.env.PAI_SOLVER_BUCKET
+      ? { queue: process.env.PAI_SOLVER_QUEUE, jobDefinition: process.env.PAI_SOLVER_JOB_DEFINITION, bucket: process.env.PAI_SOLVER_BUCKET,
+          region: process.env.PAI_SOLVER_REGION || process.env.AWS_REGION || "ap-northeast-1" } : undefined,
     packageArchiveBucket: process.env.PAI_PACKAGE_ARCHIVE_BUCKET || undefined,
     packageRetentionDays: Math.min(3650, Math.max(1, Number(process.env.PAI_PACKAGE_RETENTION_DAYS) || 365)),
     packageLockMode: process.env.PAI_PACKAGE_LOCK_MODE === "GOVERNANCE" ? "GOVERNANCE" : "COMPLIANCE",

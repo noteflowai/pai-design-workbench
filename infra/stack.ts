@@ -11,6 +11,7 @@ import * as targets from "aws-cdk-lib/aws-elasticloadbalancingv2-targets";
 import * as backup from "aws-cdk-lib/aws-backup";
 import * as kms from "aws-cdk-lib/aws-kms";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import { SOLVER } from "./solver.js";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import { Construct } from "constructs";
@@ -123,6 +124,14 @@ export class WorkbenchStack extends cdk.Stack {
       alias: "pai-workbench/release-signing", removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     signingKey.grant(role, "kms:Sign", "kms:GetPublicKey");
+    // FEA scale-out (PAISolver stack): submit and observe solver jobs, and read/write their jobs/ prefix. Names are
+    // fixed so neither stack references the other.
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:SubmitJob", "batch:TagResource"], resources: [
+      `arn:aws:batch:${this.region}:${this.account}:job-queue/${SOLVER.queue}`, // Submitting by name (latest revision) is authorised against the unversioned ARN.
+      `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.jobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.jobDefinition}:*`,
+      `arn:aws:batch:${this.region}:${this.account}:job/*`] }));
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:DescribeJobs"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject"], resources: [`arn:aws:s3:::${SOLVER.bucket(this.account, this.region)}/jobs/*`] }));
     // Write-once archive of sealed release packages. Object Lock (COMPLIANCE default retention) means no principal,
     // including this stack and the account root, can delete or shorten a retained version before its date.
     const retentionDays = Number(this.node.tryGetContext("packageRetentionDays") ?? 365);

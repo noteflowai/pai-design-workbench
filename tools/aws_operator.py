@@ -55,6 +55,11 @@ elif args.action in ("send", "apply-release"):
                      "PAI_PACKAGE_ARCHIVE_BUCKET": outputs.get("PackageArchiveBucket", "") if os.environ.get("PAI_ENABLE_PACKAGE_ARCHIVE") == "1" else "",
                      "PAI_PACKAGE_RETENTION_DAYS": outputs.get("PackageRetentionDays", ""),
                      "PAI_TSA_URL": os.environ.get("PAI_TSA_URL", "http://timestamp.digicert.com")}
+        # FEA scale-out on AWS Batch (PAISolver stack; fixed names, see infra/solver.ts). Opt in per deployment.
+        if os.environ.get("PAI_ENABLE_SOLVER_BATCH") == "1":
+            account = boto3.client("sts").get_caller_identity()["Account"]
+            variables.update({"PAI_SOLVER_QUEUE": "pai-solver", "PAI_SOLVER_JOB_DEFINITION": "pai-solver-fea",
+                              "PAI_SOLVER_BUCKET": f"pai-solver-jobs-{account}-ap-northeast-1", "PAI_SOLVER_REGION": "ap-northeast-1"})
         script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
         script = args.script.read_text()

@@ -1,0 +1,7 @@
+# Solver job image (AWS Batch, linux/amd64): Gmsh + NumPy for fea_bracket.py, boto3 for job I/O.
+# Constrained to the physics lock so shared packages keep their exact versions. Regenerate with:
+#   uv pip compile --python-version 3.12 --python-platform x86_64-manylinux_2_31 --generate-hashes \
+#     -c native/physics-requirements.in native/solver-requirements.in -o native/solver-requirements.txt
+gmsh==4.15.2
+numpy==2.5.3
+boto3==1.43.108

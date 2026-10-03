@@ -1,6 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { WorkbenchStack } from "./stack.js";
 import { AgentCoreBaseStack, AgentCoreRuntimeStack } from "./agentcore.js";
+import { SolverStack } from "./solver.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -18,4 +19,6 @@ if (existsSync(resolve("../.state/deploy/agentcore-context"))) {
   const imageTag = app.node.tryGetContext("agentcoreImageTag");
   if (imageTag) new AgentCoreRuntimeStack(app, "PAIAgentCoreRuntime", { env, base, imageTag, description: "PAI AgentCore runtimes: CAD sandbox and Kiro agent" });
 }
+// FEA scale-out on AWS Batch; synthesized only when its image context is staged (python3 tools/package_solver.py).
+if (existsSync(resolve("../.state/deploy/solver-context"))) new SolverStack(app, "PAISolver", { env, description: "PAI FEA solver jobs on AWS Batch (Fargate, amd64)" });
 cdk.Tags.of(app).add("project", "pai-design-workbench");

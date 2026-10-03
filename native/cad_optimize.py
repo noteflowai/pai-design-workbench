@@ -77,6 +77,51 @@ def geometry(folder, params):
     return json.loads((folder / "point.json").read_text())
 
 
+BACKEND = spec.get("backend", "local")
+PINS = {"gmsh": "4.15.2", "ccx": "2.21", "cadquery": "2.8.0"}
+
+
+def remote_point(folder, params, index):
+    """Solve one point as an AWS Batch job (native/solver_job.py in the pinned solver image), then verify it.
+
+    The job writes point.json, fea.json, part.step and result.json under jobs/<run>/<index>/. Every downloaded file
+    must match the digest in result.json and the job's tool versions must equal the local pins, otherwise the point
+    is a failed measurement. A job that does not finish is reported, never resubmitted automatically.
+    """
+    import hashlib
+    import boto3
+    b = spec["batch"]
+    s3, batch = boto3.client("s3", region_name=b["region"]), boto3.client("batch", region_name=b["region"])
+    prefix = f"jobs/{b['run']}/{index:02d}/"
+    s = req["structural"]
+    s3.put_object(Bucket=b["bucket"], Key=prefix + "input.json", Body=json.dumps({"parameters": params, "requirements": {k: v for k, v in req.items() if k != "structural"},
+                                                                               "structural": s}).encode())
+    job = batch.submit_job(jobName=f"pai-fea-{b['run'][:8]}-{index:02d}", jobQueue=b["queue"], jobDefinition=b["jobDefinition"],
+                           containerOverrides={"command": ["--bucket", b["bucket"], "--prefix", prefix]}, tags={"pai-run": b["run"]})
+    job_id, deadline = job["jobId"], time.monotonic() + float(b.get("timeoutSeconds", 1800))
+    while True:
+        status = batch.describe_jobs(jobs=[job_id])["jobs"][0]
+        if status["status"] in ("SUCCEEDED", "FAILED"):
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"batch job {job_id} still {status['status']} at the deadline; not resubmitted")
+        time.sleep(5)
+    if status["status"] != "SUCCEEDED":
+        raise RuntimeError(f"batch job {job_id} {status.get('statusReason', 'failed')[:160]}")
+    s3.download_file(b["bucket"], prefix + "result.json", str(folder / "result.json"))
+    result = json.loads((folder / "result.json").read_text())
+    for name, digest in result.get("files", {}).items():
+        s3.download_file(b["bucket"], prefix + name, str(folder / name))
+        if hashlib.sha256((folder / name).read_bytes()).hexdigest() != digest:
+            raise RuntimeError(f"{name} differs from the job's digest")
+    v = result.get("versions", {})
+    if v.get("gmsh") != PINS["gmsh"] or PINS["ccx"] not in v.get("ccx", "") or v.get("cadquery") != PINS["cadquery"]:
+        raise RuntimeError(f"solver image versions {v} differ from the pins {PINS}")
+    if result.get("status") != "measured":
+        raise RuntimeError(result.get("error", "job reported a failed measurement"))
+    return {"jobId": job_id, "image": result.get("image"), "seconds": result.get("seconds")}
+
+
 def measure(index, params, origin, prediction=None, estimate=None, geometry_only=False, folder=None):
     folder = folder or out / "points" / f"{index:02d}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -85,6 +130,16 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
     point = {"index": index, "origin": origin, "parameters": params, **({"prediction": prediction} if prediction else {}),
              **({"estimate": estimate} if estimate else {})}
     try:
+        if BACKEND == "batch" and not geometry_only and origin != "screen":
+            point["remote"] = remote_point(folder, params, index)
+            geo = json.loads((folder / "point.json").read_text())
+            fea = json.loads((folder / "fea.json").read_text())
+            checks = geo["checks"] + [{k: c[k] for k in ("id", "passed", "observed", "required")} for c in fea["checks"]]
+            get = lambda cid: next(c["observed"] for c in checks if c["id"] == cid)
+            point.update({"mass": geo["mass"], "checks": checks, "failed": [c["id"] for c in checks if not c["passed"]], "fidelity": "fea",
+                          "deflectionMm": get("max-deflection"), "stressMPa": get("max-stress"), "minWallMm": get("min-wall"),
+                          "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"]})
+            raise _Done()
         geo = geometry(folder, params)
         geo_failed = [c["id"] for c in geo["checks"] if not c["passed"]]
         if geometry_only or geo_failed and origin == "screen":
@@ -108,8 +163,11 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
         point.update({"mass": geo["mass"], "checks": checks, "failed": [c["id"] for c in checks if not c["passed"]], "fidelity": "fea",
                       "deflectionMm": get("max-deflection"), "stressMPa": get("max-stress"), "minWallMm": get("min-wall"),
                       "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"]})
+    except _Done:
+        pass
     except Exception as e:  # noqa: BLE001 — a degenerate point is a measured outcome, not an optimiser failure
         point.update({"error": f"{type(e).__name__}: {str(e)[:240]}", "failed": ["build"]})
+        print(f"point {index} failed: {point['error']}", file=sys.stderr, flush=True)
     point["feasible"] = not point["failed"]
     if "error" in point:
         point["fidelity"] = "failed"
@@ -119,8 +177,14 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
     return point
 
 
+class _Done(Exception):
+    """Control flow: the remote branch has filled the point."""
+
+
 def run_batch(batch):
-    with ThreadPoolExecutor(max_workers=int(spec.get("parallel", 2))) as pool:
+    # Remote jobs run concurrently on Batch; locally the CPU bounds parallelism.
+    workers = (len(batch) or 1) if BACKEND == "batch" else int(spec.get("parallel", 2))
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         return list(pool.map(lambda b: measure(*b), batch))
 
 
@@ -259,6 +323,10 @@ def bo_candidates(r, q, pending=()):
 rounds = []
 next_index = len(points) + 1
 for r in range(1, budget["rounds"] + 1):
+    if sum(1 for p in points if "deflectionMm" in p) < 3:
+        # Too few solved points to fit any surrogate: stop and report what was measured (no fabricated ranking).
+        rounds.append({"round": r, "trainedOn": 0, "looMeanAbsError": {}, "surrogateTrials": 0, "screenedGeometry": 0, "proposed": [], "skipped": "fewer than 3 solved points"})
+        break
     models, loo, n = fit()  # scikit-learn GPs: leave-one-out error is reported for both strategies
     if STRATEGY == "botorch-qlognehvi":
         # Acquire, screen the B-Rep cheaply, and re-acquire after each geometry failure: the failed screen is a
