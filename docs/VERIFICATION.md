@@ -2,6 +2,18 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 签名发布与引擎升级（2026-10-03）
+
+| 检查 | 实际结果 |
+|---|---|
+| 引擎 | 执行器 `95215e6`（[PR #53](https://github.com/noteflowai/noteflow-agent-control/pull/53)）：Kiro CLI 2.27.1、acpx 0.19.4、Codex ACP 2.1.1、Claude ACP 0.85.1。各版本只在一处登记，执行器 176 个单元测试和 20 个 acpx 流程测试全部通过。托管站点的安装器报告 `kiro-cli-chat 2.27.1` |
+| pai.oneai.host（release `0d2de0a1…34ad5`）完整闭环 | MuJoCo 发现 75 % 速度下撞围栏，结论拒绝 → Kiro 主账号 2.27.1（claude-opus-5.5）引用 scene-1 和 version-1，把围栏退回 0.30 m，没有放宽任何要求 → 按原计划执行，复测 4 项全部通过 → 反馈用绑定的复测记录关闭 → 准入 5 项全部通过 → 批准发布 R1 |
+| 签名发布包 | 包含 8 个原生文件（MJCF、逐种子结果、GLB、检查结果）。清单由 KMS 密钥（ECDSA P-256）签名，固定公钥后核验为可信；改动发布标题后检测到“Manifest digest mismatch” |
+| 本地 | `npm run test:package`：12 个文件，篡改后返回 PACKAGE_FILE |
+| 基础设施 | ALB 规则 100/110/默认未变；WordPress 200；目标健康 |
+
+见 [回执](evidence/deployment-signing.json)。
+
 ## 物理层与 Agent 集成（2026-10-03）
 
 | 检查 | 实际结果 |
