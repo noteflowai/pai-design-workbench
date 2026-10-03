@@ -2,6 +2,18 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 演示 A、CAD → MJCF/OpenUSD、发布封存（2026-10-03 晚）
+
+| 检查 | 实际结果 |
+|---|---|
+| 演示 A（pai.oneai.host 实时录制） | MuJoCo：0/10 无碰撞 → Kiro 2.27.1（claude-opus-5.5）把围栏改为 0.30 m → 4.6 s，快 22 %，10/10 成功 → CalculiX 否决 t=3（0.095 mm）→ AI 种子物理寻优：19 个实测点、7 个可行，最轻可行 46.9 g / 0.058 mm → 正式复核 9/9 → 2 条反馈关闭 → R1 → 界面核验 KMS 签名。见 [physics-demo.json](evidence/physics-demo.json) |
+| 真实模型输出的契约问题 | 托管 Kiro 回复中写了 `"dependsOn": null`。现在可选字段的 null 视为缺省，展示性文字超长时截断，schema 错误会给出字段路径；结构字段仍严格校验 |
+| CAD → MuJoCo | `npm run test:robot`：参考支架 B-Rep 48.37 g，MuJoCo 精确网格 48.37 g。默认的凸包惯量会算成 110 g（零件实际 31.85 g），交叉核对能发现这类错误。MJCF 引用同目录的 `tool.stl`，不含本机路径；未通过的零件被拒绝（TOOL_NOT_ACCEPTED） |
+| OpenUSD 26.8 | `scene.usda`：8 个刚体、6 个转动关节、2 个固定关节和关节树根，经全部 28 个 `UsdValidation` 校验器（含 UsdPhysics 刚体/关节/关节树/碰撞体）检查，无错误 |
+| RFC 3161 | 单元测试用本地 TSA：时间戳绑定签名，换到另一个包上、信任链不符或伪造摘要都会被拒绝。实网：DigiCert 和 Sectigo 的时间戳令牌用系统 CA 验证通过。托管站点的 R1 封存后：KMS 签名可信，DigiCert 时间 `Oct 3 14:03:07 2026 GMT`，再次下载字节完全相同 |
+| S3 Object Lock | CDK 创建了版本化、COMPLIANCE 默认保留 365 天、全部阻止公开访问、强制 TLS 的桶；实例只有写入和读回权限，没有删除或绕过权限。归档写入的对象 365 天内任何人都无法删除，所以由 `PAI_ENABLE_PACKAGE_ARCHIVE=1` 显式开启（尚未开启）；逻辑由单元测试覆盖（锁模式、保留期回读、未版本化时失败） |
+| AgentForge（CodeBuild） | PR #548 `ec90a34`：rust、js、delivery、base-build-arm64 全部 SUCCEEDED，只推送了验证标签 `autoforge-agent:full-repro-202610031254`（`sha256:8117cdf0…`）；PR #549 `c17115f`：rust、js、delivery 全部 SUCCEEDED。推广到 `:full`、更新 `base-image.lock` 需维护者审查扫描结果后进行 |
+
 ## 签名发布与引擎升级（2026-10-03）
 
 | 检查 | 实际结果 |
