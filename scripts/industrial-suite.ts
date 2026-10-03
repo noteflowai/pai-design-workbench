@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { command } from "../src/adapters.js";
 import { createApp } from "../src/server.js";
-import { DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
+import { DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
 import { DEFAULT_FACTORY_CRITERIA, REVIEWED_SAMPLE, type FactoryCriteria, type FactoryReview } from "../src/factory.js";
 import { sha256 } from "../src/domain.js";
 import type { Project, Review } from "../src/contracts.js";
-import type { SceneReview } from "../src/scenes.js";
+import { ROBOT_REFERENCE, type SceneReview } from "../src/scenes.js";
 import type { AssistantPlan } from "../src/assistant.js";
 import type { CadSweep } from "../src/sweep.js";
 import type { Release } from "../src/release.js";
@@ -54,7 +54,8 @@ const scene = (variant: string, maxFootprintArea = 12) => ok<SceneReview>("POST"
 const COMPACT_LINE = { stations: 6, stationPitch: 4.5, aisleWidth: 2.4, guardSize: 4.2, rackRows: 2, cameraHeight: 2.8, agvs: 3 };
 const plant = (layout: typeof COMPACT_LINE) => ok<SceneReview>("POST", `${P}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant: "plant", layout,
   requirements: { maxFootprintArea: 650, minAisleWidth: 2.4, minGuardClearance: 0.5, requireCameraCoverage: true, maxEgressTravel: 25 } });
-const cad = (variant: string, requirements = DEFAULT_CAD_REQUIREMENTS) => ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant, requirements });
+const cad = (variant: string, requirements: typeof DEFAULT_CAD_REQUIREMENTS = DEFAULT_CAD_REQUIREMENTS, parameters?: unknown) =>
+  ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant, requirements, ...(parameters ? { parameters } : {}) });
 const template = await readFile(join(config.repository, "native/cad_template.py"), "utf8");
 const generated = (code: string) => ({ requestId: randomUUID(), projectRevision: 1, variant: "generated", requirements: DEFAULT_CAD_REQUIREMENTS, source: { language: "cadquery-2.8", code } });
 let sweep: CadSweep | undefined;
@@ -106,6 +107,23 @@ const cases: Case[] = [
       return { matched: s.verdict === "accepted-static-scene" && (m("aisle-clearance") ?? 0) >= 2.4 && (m("footprint-area") ?? 999) <= 650,
         actual: `${s.verdict}；通道净宽 ${m("aisle-clearance")} m；占地 ${m("footprint-area")} m²`, evidence: { sceneId: s.id } };
     } },
+  ...(config.physicsPython && config.ccx ? [{ id: "Y1", domain: "结构物理（FEA）", title: "几何最优 t = 3 mm 支架在 60 N 皮带载荷下", tool: "Gmsh C3D10 + CalculiX 2.21 + EvalArc",
+    rationale: "只看几何的扫描把 t = 3 mm 选为最轻可行点；加上刚度要求后，必须用求解器判断它是否仍然成立。",
+    expected: "rejected；几何 7 项全过，仅 max-deflection 失败；两级网格挠度差 < 5 %", run: async () => {
+      const c = await cad("parametric", { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL }, { thickness: 3, width: 60, plateHeight: 46, pilotBore: 22.5 });
+      const d = c.candidate?.checks.find(x => x.id === "max-deflection") as { observed?: number } | undefined;
+      return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["max-deflection"]' && (c.fea?.candidate?.convergence.axisDisplacement ?? 1) < 0.05,
+        actual: `${c.verdict}；失败 ${failed(c.candidate).join(",")}；挠度 ${d?.observed} mm；收敛 ${c.fea?.candidate?.convergence.axisDisplacement}`, evidence: { cadId: c.id } };
+    } }] as Case[] : []),
+  ...(config.physicsPython ? [{ id: "K1", domain: "机器人工作单元（MuJoCo）", title: "提速到 75 % 并把围栏内收到 0.12 m", tool: "MuJoCo 3.14 IK + 动力学 + 接触",
+    rationale: "为节拍提速同时压缩占地，机械臂肘部会扫到围栏；只有动力学仿真中的接触检测能发现。",
+    expected: "rejected；collision-free 失败；节拍 ≤ 5 s", run: async () => {
+      const s = await ok<SceneReview>("POST", `${P}/scenes`, { requestId: randomUUID(), projectRevision: 1, variant: "robot-cell",
+        cell: { ...ROBOT_REFERENCE, speedFraction: 0.75, guardClearance: 0.12 }, requirements: { maxCycleSeconds: 5, minSuccessRate: 0.9 } });
+      const cyc = s.candidate?.checks.find(x => x.id === "cycle-time") as { observed?: number; passed?: boolean } | undefined;
+      return { matched: s.verdict === "rejected" && failed(s.candidate).includes("collision-free") && cyc?.passed === true,
+        actual: `${s.verdict}；失败 ${failed(s.candidate).join(",")}；节拍 ${cyc?.observed} s`, evidence: { sceneId: s.id } };
+    } }] as Case[] : []),
   { id: "C1", domain: "机械零件（CAD）", title: "NEMA 17 电机支架基准设计", tool: "CadQuery 2.8 / OCCT 7.9 + EvalArc", rationale: "步进电机安装支架是自动化设备最常见的定制机加工件；接口、壁厚、孔边距、质量与装配干涉都在 B-Rep 上实测。",
     expected: "accepted-cad-part；STEP 重新导入体积一致", run: async () => {
       const c = await cad("reference");
