@@ -8,7 +8,7 @@ import { createApp } from "../src/server.js";
 import { authentication } from "../src/auth.js";
 
 const albAuth = {
-  albArn: "arn:aws:elasticloadbalancing:ap-northeast-1:820674626047:loadbalancer/app/ai-srv-alb/85690322c57d5d44",
+  albArn: "arn:aws:elasticloadbalancing:ap-northeast-1:123456789012:loadbalancer/app/example/0000000000000000",
   issuer: "https://cognito-idp.ap-northeast-1.amazonaws.com/test",
   clientId: "test-client",
 };
