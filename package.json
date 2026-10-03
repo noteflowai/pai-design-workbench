@@ -23,6 +23,7 @@
     "test:fea": "node --env-file-if-exists=.state/demo.env --import tsx scripts/fea-e2e.ts",
     "test:optimize": "node --env-file-if-exists=.state/demo.env --import tsx scripts/optimize-e2e.ts",
     "test:robot": "node --env-file-if-exists=.state/demo.env --import tsx scripts/robot-e2e.ts",
+    "test:package": "node --env-file-if-exists=.state/demo.env --import tsx scripts/release-package-e2e.ts",
     "verify:package": "node --import tsx scripts/verify-package.ts",
     "setup:physics": "python3.12 tools/setup_physics.py",
     "test:plant": "node --env-file-if-exists=.state/demo.env --import tsx scripts/plant-e2e.ts",
