@@ -4,7 +4,7 @@
   "result": "passed",
   "workbench": "local process; no local executor, ledger or Kiro keys",
   "sandbox": {
-    "arn": "arn:aws:bedrock-agentcore:ap-northeast-1:820674626047:runtime/pai_cad_sandbox-yaYcFw863K",
+    "arn": "<REDACTED_SANDBOX_RUNTIME_ARN>",
     "remote": {
       "bubblewrap": true,
       "internet": false,
@@ -31,7 +31,7 @@
     }
   },
   "agent": {
-    "arn": "arn:aws:bedrock-agentcore:ap-northeast-1:820674626047:runtime/pai_kiro_agent-fB9xO45g9m",
+    "arn": "<REDACTED_AGENT_RUNTIME_ARN>",
     "state": "done",
     "engine": "kiro-primary",
     "model": "claude-opus-5.5",
@@ -57,5 +57,12 @@
     }
   },
   "promptAndAnswerContentRecorded": false,
-  "physicalValidation": false
+  "physicalValidation": false,
+  "publicRedaction": {
+    "fields": [
+      "sandbox.arn",
+      "agent.arn"
+    ],
+    "reason": "Operator resource references removed for public distribution; recorded results unchanged; this is not a new run."
+  }
 }

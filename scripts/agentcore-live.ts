@@ -58,5 +58,9 @@ try {
     promptAndAnswerContentRecorded: false, physicalValidation: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence/agentcore-live.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
-  console.log(JSON.stringify(report, null, 2));
+  // Preserve the full private receipt, but stdout is safe for public evidence logs.
+  const publicReport = { ...report, sandbox: { ...report.sandbox, arn: "<REDACTED_SANDBOX_RUNTIME_ARN>" },
+    agent: { ...report.agent, arn: "<REDACTED_AGENT_RUNTIME_ARN>" },
+    publicRedaction: { fields: ["sandbox.arn", "agent.arn"], reason: "Operator references remain in the private receipt only." } };
+  console.log(JSON.stringify(publicReport, null, 2));
 } finally { await app.close(); }
