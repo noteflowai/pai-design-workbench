@@ -610,6 +610,7 @@ test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell wit
   await page.screenshot({ path: testInfo.outputPath("robot-cell.png") });
   await page.goto("/#/design?lane=cad");
   await page.getByRole("radio", { name: /紧凑化/ }).click();
+  await page.getByLabel("冻结结构要求并做 FEA").check();
   await expect(page.getByLabel("电机轴挠度上限", { exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 600_000 });

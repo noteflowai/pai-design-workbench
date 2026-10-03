@@ -112,7 +112,9 @@ function CadLane() {
   const [edge, setEdge] = useState(Number(q.get("edge") ?? defaults.edgeDistanceFactor));
   const [fit, setFit] = useState(defaults.requireNoInterference);
   const physics = c.data.capabilities.physics;
-  const [fea, setFea] = useState(Boolean(physics) && q.get("fea") !== "false");
+  // Structural requirements are a deliberate decision: off unless asked for (or already frozen by the latest part).
+  const latestCad = (c.data.cads ?? []).filter(x => x.projectId === c.project?.id).at(-1);
+  const [fea, setFea] = useState(Boolean(physics) && (q.get("fea") === "true" || (q.get("fea") !== "false" && Boolean(latestCad?.request.requirements.structural))));
   const [load, setLoad] = useState(Number(q.get("forceN") ?? (physics ? physics.defaultStructural.forceN : 60)));
   const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? (physics ? physics.defaultStructural.maxDeflectionMm : 0.06)));
   const structural = fea && physics ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
