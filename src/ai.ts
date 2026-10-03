@@ -190,12 +190,33 @@ export function buildPrompt(message: string, context: AiContext): string {
   ].join("\n");
 }
 
-function extractJson(text: string): unknown {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf("{"), end = body.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("没有 JSON 对象");
-  return JSON.parse(body.slice(start, end + 1));
+/** Every balanced top-level `{…}` in the text, string- and escape-aware. */
+function jsonObjects(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0, start = -1, inString = false, escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') { if (depth > 0) inString = true; continue; }
+    if (ch === "{") { if (depth++ === 0) start = i; }
+    else if (ch === "}" && depth > 0 && --depth === 0) out.push(text.slice(start, i + 1));
+  }
+  return out;
+}
+/**
+ * The model's reply object. Models sometimes add a sentence, a second example or several fenced blocks around the
+ * answer. Take the last complete JSON object that carries `kind` (the reply contract), preferring fenced blocks.
+ * Whatever is chosen is still validated by the same Zod contract; nothing here relaxes it.
+ */
+export function extractJson(text: string): unknown {
+  const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map(m => m[1]);
+  for (const source of [...fenced.reverse(), text]) {
+    const candidates = jsonObjects(source).reverse();
+    for (const c of candidates) {
+      try { const v = JSON.parse(c); if (v && typeof v === "object" && "kind" in v) return v; } catch { /* next candidate */ }
+    }
+  }
+  throw new Error("没有可解析的回复 JSON 对象（需要包含 kind）");
 }
 
 /** Re-validate one model plan with the server's contracts and compute the same diff as the rule parser. */
