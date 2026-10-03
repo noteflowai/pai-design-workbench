@@ -30,9 +30,10 @@ import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from ".
 import { admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
+import { agentAuthentication, agentRoute, rewriteAgentUrl, type AgentPrincipal } from "./agent-api.js";
 
 export async function createApp(config: Config, adapters: Adapters = new NativeAdapters(config)) {
-  const app = Fastify({ logger: false, bodyLimit: 4_000_000, requestTimeout: 120_000 });
+  const app = Fastify({ logger: false, bodyLimit: 4_000_000, requestTimeout: 120_000, rewriteUrl: rewriteAgentUrl });
   const release = await acquireRuntime(config.state);
   let store: Store;
   try { store = new Store(join(config.state, "workbench.sqlite")); } catch (error) { await release(); throw error; }
@@ -40,7 +41,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const live = new LiveBus();
   const workbench = new Workbench(store, adapters, config.state, live);
   const streams = new Set<() => void>();
-  const authenticated = authentication(config);
+  const authenticated = authentication(config), agentAuthenticated = agentAuthentication(config);
+  const principals = new WeakMap<object, AgentPrincipal>();
   const activeJobs = new Set<Promise<unknown>>();
   app.addHook("preClose", async () => { for (const end of [...streams]) end(); await Promise.allSettled([...activeJobs]); });
   app.addHook("onClose", async () => { store.close(); await release(); });
@@ -53,6 +55,16 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     reply.header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer");
     reply.header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
     if (config.publicOrigin) reply.header("Strict-Transport-Security", "max-age=31536000");
+    if (request.url === "/api/agent-not-found") return reply.code(404).send({ error: "NOT_FOUND" });
+    const agent = agentRoute(request.raw);
+    if (agent) {
+      // Agent routes: bearer token (hosted) or loopback; never the browser session, never a cross-origin browser.
+      if (request.headers.origin || request.headers.cookie) return reply.code(403).send({ error: "AGENT_ROUTE_BROWSER" });
+      const principal = await agentAuthenticated(request.headers, agent.scope);
+      if (!principal) return reply.code(401).send({ error: "AGENT_AUTHENTICATION_REQUIRED" });
+      principals.set(request.raw, principal);
+      return;
+    }
     if (!healthCheck && !await authenticated(request.headers)) return reply.code(401).send({ error: "AUTHENTICATION_REQUIRED" });
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.origin
         && ![`http://127.0.0.1:${config.port}`, `http://localhost:${config.port}`, ...(config.publicOrigin ? [config.publicOrigin] : [])].includes(request.headers.origin)) {
@@ -268,7 +280,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const handle = z.string().regex(/^(project|[a-z]+-[0-9]{1,3})$/).parse((request.params as { handle?: string }).handle);
     return resolveHandle(store, p, handle, lifecycle(p));
   });
-  app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle));
+  app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle, principals.get(request.raw)));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/preflight", async request =>
     preflightPlan(store, paramId(request.params), z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict().parse(request.body).planId));

@@ -10,7 +10,7 @@
  * reconciliation, release approval. Those stay with the human maintainer in the workbench.
  */
 import { randomUUID } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -19,23 +19,62 @@ import { z } from "zod";
 const VERSION = "0.8.0";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
-/** Only a loopback HTTP workbench: the MCP server never sends workspace data to another host. */
-export function workbenchUrl(raw = process.env.PAI_URL ?? "http://127.0.0.1:4317"): URL {
+/**
+ * A loopback HTTP workbench, or — only with agent credentials — an exact HTTPS workbench origin. The MCP
+ * server never sends workspace data anywhere else.
+ */
+export function workbenchUrl(raw = process.env.PAI_URL ?? "http://127.0.0.1:4317", credentials?: AgentCredentials): URL {
   const url = new URL(raw);
-  if (url.protocol !== "http:" || !LOOPBACK.has(url.hostname) || url.pathname !== "/" || url.search || url.username) {
-    throw new Error("PAI_URL must be a loopback workbench origin such as http://127.0.0.1:4317");
-  }
-  return url;
+  const exact = url.pathname === "/" && !url.search && !url.username && !url.password && !url.hash;
+  if (exact && url.protocol === "http:" && LOOPBACK.has(url.hostname)) return url;
+  if (exact && url.protocol === "https:" && credentials && url.origin === raw.replace(/\/$/, "")) return url;
+  throw new Error("PAI_URL must be a loopback workbench origin such as http://127.0.0.1:4317, or an exact HTTPS origin with PAI_AGENT_* credentials");
+}
+
+/** OAuth 2.0 client-credentials settings for a hosted workbench (Cognito resource server `pai-agent`). */
+export interface AgentCredentials { tokenUrl: URL; clientId: string; secret: string }
+export function agentCredentials(env = process.env): AgentCredentials | undefined {
+  const values = [env.PAI_AGENT_TOKEN_URL, env.PAI_AGENT_CLIENT_ID, env.PAI_AGENT_CLIENT_SECRET_FILE];
+  if (!values.some(Boolean)) return undefined;
+  if (!values.every(Boolean)) throw new Error("PAI_AGENT_TOKEN_URL, PAI_AGENT_CLIENT_ID and PAI_AGENT_CLIENT_SECRET_FILE are required together");
+  const tokenUrl = new URL(values[0]!);
+  if (tokenUrl.protocol !== "https:" || tokenUrl.username || tokenUrl.search) throw new Error("PAI_AGENT_TOKEN_URL must be an HTTPS token endpoint");
+  // The secret is read from an owner-only file, never from the environment or the command line.
+  const st = statSync(values[2]!);
+  if (!st.isFile() || (st.mode & 0o077) !== 0) throw new Error("PAI_AGENT_CLIENT_SECRET_FILE must be an owner-only file (chmod 600)");
+  const secret = readFileSync(values[2]!, "utf8").trim();
+  if (!secret || secret.length > 512) throw new Error("PAI_AGENT_CLIENT_SECRET_FILE is empty or invalid");
+  return { tokenUrl, clientId: values[1]!, secret };
+}
+const SCOPES = "pai-agent/read pai-agent/propose";
+function tokenSource(c: AgentCredentials) {
+  let cached: { token: string; until: number } | undefined;
+  return async () => {
+    if (cached && Date.now() < cached.until) return cached.token;
+    const r = await fetch(c.tokenUrl, { method: "POST", redirect: "error", signal: AbortSignal.timeout(15_000),
+      headers: { "content-type": "application/x-www-form-urlencoded", authorization: `Basic ${Buffer.from(`${c.clientId}:${c.secret}`).toString("base64")}` },
+      body: new URLSearchParams({ grant_type: "client_credentials", scope: SCOPES }) });
+    const data = await r.json().catch(() => ({})) as { access_token?: string; expires_in?: number };
+    if (!r.ok || typeof data.access_token !== "string") throw new ApiError(r.status, "AGENT_TOKEN", "无法获取工作台访问令牌（检查客户端凭据与 scope）");
+    cached = { token: data.access_token, until: Date.now() + Math.max(30, (data.expires_in ?? 300) - 60) * 1000 };
+    return cached.token;
+  };
 }
 
 type Fetch = (path: string, init?: { method?: "GET" | "POST"; body?: unknown }) => Promise<unknown>;
 class ApiError extends Error { constructor(readonly status: number, readonly code: string, message: string) { super(message); } }
 
-function client(base: URL): Fetch {
+const SESSION = /^[A-Za-z0-9._:-]{1,80}$/;
+/** Thin client of the workbench's agent API (`/api/agent/*`): the read-and-propose allowlist, nothing else. */
+function client(base: URL, credentials?: AgentCredentials, session = process.env.PAI_MCP_SESSION ?? process.env.AF_SESSION_ID): Fetch {
+  const token = credentials ? tokenSource(credentials) : undefined;
+  if (session !== undefined && !SESSION.test(session)) throw new Error("PAI_MCP_SESSION must match [A-Za-z0-9._:-]{1,80}");
   return async (path, init = {}) => {
-    const response = await fetch(new URL(`/api${path}`, base), {
-      method: init.method ?? "GET", redirect: "error", signal: AbortSignal.timeout(30_000),
-      headers: init.body === undefined ? {} : { "content-type": "application/json" },
+    const headers: Record<string, string> = init.body === undefined ? {} : { "content-type": "application/json" };
+    if (token) headers.authorization = `Bearer ${await token()}`;
+    if (session) headers["x-pai-agent-session"] = session;
+    const response = await fetch(new URL(`/api/agent${path}`, base), {
+      method: init.method ?? "GET", redirect: "error", signal: AbortSignal.timeout(30_000), headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
     const text = await response.text();
@@ -166,8 +205,9 @@ export function createMcpServer(api: Fetch, agentName?: string): McpServer {
 const entry = process.argv[1] ? realpathSync(process.argv[1]) : "";
 if (entry === realpathSync(fileURLToPath(import.meta.url))) {
   try {
-    const base = workbenchUrl();
-    const server = createMcpServer(client(base), process.env.PAI_MCP_AGENT);
+    const credentials = agentCredentials();
+    const base = workbenchUrl(undefined, credentials);
+    const server = createMcpServer(client(base, credentials), process.env.PAI_MCP_AGENT);
     await server.connect(new StdioServerTransport());
     console.error(`pai-mcp ${VERSION}: workbench ${base.origin}`);
   } catch (error) {

@@ -463,7 +463,8 @@ export const ExternalPlanInput = z.object({
   intent: z.string().trim().min(1).max(2000),
   output: ModelOutput,
 }).strict();
-export async function createExternalPlan(store: Store, config: Config, input: unknown, lifecycleOf: (p: Project) => Lifecycle): Promise<AssistantPlan> {
+export async function createExternalPlan(store: Store, config: Config, input: unknown, lifecycleOf: (p: Project) => Lifecycle,
+  principal?: { clientId: string; verified: boolean; session?: string }): Promise<AssistantPlan> {
   const request = ExternalPlanInput.parse(input);
   const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
   if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
@@ -479,7 +480,9 @@ export async function createExternalPlan(store: Store, config: Config, input: un
   }
   const record: AssistantPlan = { ...result, id: randomUUID(), requestId: request.requestId, projectId: project?.id, projectRevision: project?.revision,
     message: request.intent, createdAt: new Date().toISOString(), authority: "none", source: "external", state: "done",
-    external: { agent: request.agent, via: "mcp" },
+    // Provenance: the agent label is self-declared; a verified client id comes only from a checked access token.
+    external: { agent: request.agent, via: "mcp", verified: principal?.verified === true,
+      ...(principal?.verified ? { clientId: principal.clientId } : {}), ...(principal?.session ? { session: principal.session } : {}) },
     model: { used: false, reason: `外部 Agent「${request.agent}」通过 MCP 提出；PAI 没有调用模型，计划按同一套契约校验` },
     interpretation: result.interpretation.map(x => x.replace(/^已拒绝 AI 计划/, "已拒绝外部计划")), confirmations: [] };
   const claimed = store.claim(request.requestId, sha256(canonical({ kind: "assistant-external", request })), record, "assistant-plan");

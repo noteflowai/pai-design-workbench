@@ -35,7 +35,20 @@ The engine layer is the same component in both systems. Moving the PAI planner o
 | Live evidence for the remote backends | Live runtime conformance fails on every recent main commit because its configuration is missing | Actions: Live runtime conformance |
 | Portfolio direction | "Adopt a mature distributed workflow owner only when cross-host durability or availability requires one … Reuse acpx, SQLite, cron/systemd … instead of rebuilding them. Introduce Rust only for a measured native/performance need." | [NoteFlow ROADMAP](https://github.com/noteflowai/noteflow-agent-control/blob/main/ROADMAP.md) |
 
-## What is reused now
+## Adopted: AgentForge sessions use PAI through the governed MCP gateway
+
+AgentForge agents work *on* PAI without PAI handing them its planner or ledger. An operator installs
+[`integrations/agentforge/mcp-profile.json`](../integrations/agentforge/mcp-profile.json) as the `pai-workbench` MCP profile, and a session selects it by name. Every pai-mcp call then passes through AgentForge's existing gateway:
+- tools are allowed per session from an exact allowlist, and everything else is denied by default;
+- every call is audited and rate-limited;
+- the gateway session id reaches the workbench as `AF_SESSION_ID` and is shown on the proposal.
+
+The agent's own model calls are AgentForge's to budget. PAI calls no model for these proposals.
+
+A hosted workbench is reached through `/api/agent/*`, a read-and-propose allowlist. The client authenticates with an OAuth 2.0 client-credentials token (Cognito resource server `pai-agent`). The ALB checks the token with `jwt-validation`, and the workbench checks it again with the route's scope. Plans then carry the verified client id.
+
+A contract test (`tests/agentforge-contract.test.ts`) keeps the profile and the MCP tool set identical.
+
 
 - **acpx**, through the NoteFlow executor. Version currency is maintained at that layer. AgentForge's acpx moved from 0.15.1 to 0.19.4 in [PR #548](https://github.com/noteflowai/agentforge/pull/548), with its upstream guards re-measured. The NoteFlow executor pins 0.19.3, and that is its owner's upgrade to make.
 - **Bedrock AgentCore** for remote isolation ([AGENTCORE.md](AGENTCORE.md)). This is the managed service that AgentForge's AgentCore backend also targets.

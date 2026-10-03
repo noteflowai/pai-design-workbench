@@ -1,0 +1,31 @@
+{
+  "//": "Operator-approved AgentForge MCP profile for PAI Design Workbench. Install as one entry of AUTOFORGE_MCP_PROFILES_JSON (key: pai-workbench). Callers select it with mcp_profile=\"pai-workbench\"; they cannot change it. Replace /opt/pai-workbench with the pinned install path; for a hosted workbench add PAI_URL=https://<origin> and the PAI_AGENT_* client-credential variables (secret by file path only).",
+  "pai-workbench": {
+    "mcpServers": [
+      {
+        "name": "pai",
+        "command": "node",
+        "args": ["/opt/pai-workbench/dist/src/mcp.js"],
+        "env": { "PAI_URL": "http://127.0.0.1:4317", "PAI_MCP_AGENT": "agentforge" }
+      }
+    ],
+    "gateway": true,
+    "policy": {
+      "allow": [
+        "pai/pai_list_projects",
+        "pai/pai_get_workspace",
+        "pai/pai_get_record",
+        "pai/pai_get_admission",
+        "pai/pai_list_versions",
+        "pai/pai_get_plan",
+        "pai/pai_check_cad_code",
+        "pai/pai_propose_plan"
+      ],
+      "deny": ["*/*approve*", "*/*release*", "*/*confirm*", "*/*execute*", "*/*feedback*", "*/*reconcil*"],
+      "defaultAllow": false,
+      "denyHighRisk": true,
+      "analyzerHighAction": "deny",
+      "rateLimit": { "maxCalls": 120, "windowMs": 60000 }
+    }
+  }
+}

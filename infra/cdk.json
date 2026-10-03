@@ -4,6 +4,7 @@
     "domain": "pai.oneai.host",
     "availabilityZone": "ap-northeast-1a",
     "rulePriority": 120,
+    "agentRulePriority": 119,
     "bootstrapReleaseHash": "e144d4bb155bfcae06508a10bc8bb0b401975356b5d53c011fcba6e00b86c772",
     "bootstrapAssetKey": "7a39edd2dfd4d23a563b40f657e52afee2fa07dcc2084f37f80b1105dd181053.tgz"
   }

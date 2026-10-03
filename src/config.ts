@@ -14,6 +14,8 @@ export interface Config {
   aiProfiles?: string[];
   listenHost?: string; publicOrigin?: string;
   albAuth?: { albArn: string; issuer: string; clientId: string };
+  /** Machine agents (OAuth client credentials) for `/api/agent/*`; see src/agent-api.ts. */
+  agentAuth?: { userPoolId: string; clientIds: string[]; /** Pre-loaded JWKS (tests, air-gapped hosts); otherwise fetched from the pool. */ jwks?: unknown };
   authLogoutUrl?: string;
 }
 const ALL_PROFILES = ["kiro-primary", "kiro-backup", "kiro-backup2", "codex", "claude"];
@@ -35,6 +37,11 @@ export function configuration(): Config {
   const albValues = [process.env.PAI_AUTH_ALB_ARN, process.env.PAI_AUTH_ISSUER, process.env.PAI_AUTH_CLIENT_ID];
   if (albValues.some(Boolean) && !albValues.every(Boolean)) throw new Error("All ALB authentication settings are required");
   const albAuth = albValues.every(Boolean) ? { albArn: albValues[0]!, issuer: albValues[1]!, clientId: albValues[2]! } : undefined;
+  const agentPool = process.env.PAI_AGENT_USER_POOL_ID, agentClients = process.env.PAI_AGENT_CLIENT_IDS?.split(",").map(x => x.trim()).filter(Boolean);
+  if (Boolean(agentPool) !== Boolean(agentClients?.length)) throw new Error("PAI_AGENT_USER_POOL_ID and PAI_AGENT_CLIENT_IDS are required together");
+  if (agentPool && !/^[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]{1,64}$/.test(agentPool)) throw new Error("PAI_AGENT_USER_POOL_ID must be a Cognito user pool id");
+  if (agentClients?.some(c => !/^[a-z0-9]{1,128}$/.test(c))) throw new Error("PAI_AGENT_CLIENT_IDS must list Cognito app client ids");
+  const agentAuth = agentPool ? { userPoolId: agentPool, clientIds: agentClients! } : undefined;
   const listenHost = process.env.PAI_LISTEN_HOST ?? "127.0.0.1";
   if (listenHost !== "127.0.0.1" && (!publicOrigin || !albAuth)) throw new Error("Network binding requires HTTPS origin and ALB authentication");
   return {
@@ -54,7 +61,7 @@ export function configuration(): Config {
     agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
     agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),
     aiProfiles: aiProfiles(process.env.PAI_AI_PROFILES),
-    listenHost, publicOrigin, albAuth,
+    listenHost, publicOrigin, albAuth, agentAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,
   };
 }

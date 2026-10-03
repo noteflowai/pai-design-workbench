@@ -104,6 +104,10 @@ function openCitation(c: ReturnType<typeof useApp>, x: { kind: string; id: strin
 }
 function EngineMeta({ plan }: { plan: AssistantPlan }) {
   if (plan.source === "external") return <div className="meta"><span className="chip info" title={plan.model.reason}>外部 Agent · {plan.external?.agent ?? "MCP"}</span>
+    {plan.external?.verified
+      ? <span className="chip ok" title={`访问令牌已验证 · 客户端 ${plan.external.clientId}`}>已验证客户端 {plan.external.clientId?.slice(0, 8)}</span>
+      : <span className="chip muted" title="名称由 Agent 自报；本机回环接口不验证身份">本机 · 名称自报</span>}
+    {plan.external?.session && <span className="chip muted" title="Agent 会话标识（由调用方提供，用于对照其网关审计）">会话 {plan.external.session}</span>}
     <span className="chip muted">经 MCP · PAI 未调用模型</span><span className="chip muted">权限：无</span></div>;
   if (plan.source !== "model") return <div className="meta"><span className="chip muted">规则解析 · 无模型调用</span><span className="chip muted">权限：无</span></div>;
   const [label, tone] = STATE_CHIP[plan.state ?? "done"] ?? [plan.state ?? "", "muted"];

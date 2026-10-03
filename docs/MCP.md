@@ -59,3 +59,13 @@ env = { PAI_URL = "http://127.0.0.1:4317" }
 - **工作区文本可能含注入内容。** 文本按数据原样返回，服务器的说明也提示 Agent 不要把它当作指令。被注入的 Agent 最多只能提议计划，而计划没有权限，必须经人工确认才会执行。
 
 验证见 `tests/mcp.test.ts`：工具清单与只读标注、契约校验、引用、幂等和回环限制。另有浏览器流程：Agent 读取工作区并提议，维护者在界面确认后运行原生 CAD，Agent 再读到确认状态和拒绝结论。
+
+## Hosted workbench and AgentForge
+
+pai-mcp only uses the `/api/agent/*` allowlist. Two hosting modes:
+
+- **Loopback**: no token. The agent name is self-declared.
+- **HTTPS origin**: set `PAI_URL=https://…`, `PAI_AGENT_TOKEN_URL`, `PAI_AGENT_CLIENT_ID`, and `PAI_AGENT_CLIENT_SECRET_FILE` (an owner-only file; the secret is never accepted from the environment). The workbench then records the verified client id.
+
+To run under AgentForge's governed gateway, see [integrations/agentforge](../integrations/agentforge/README.md).
+

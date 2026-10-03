@@ -12,7 +12,8 @@ import { createApp } from "../src/server.js";
 import type { Adapters } from "../src/adapters.js";
 import type { AssistantPlan } from "../src/assistant.js";
 import { DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
-import { workbenchUrl } from "../src/mcp.js";
+import { agentCredentials, workbenchUrl } from "../src/mcp.js";
+import { chmod, writeFile } from "node:fs/promises";
 
 const task = { title: "Bracket", intendedDecision: "Lighten the bracket without losing wall or interface",
   requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } };
@@ -125,3 +126,22 @@ test("MCP server only talks to a loopback workbench", () => {
     assert.throws(() => workbenchUrl(bad), /loopback/, bad);
   }
 });
+
+test("a hosted HTTPS workbench needs owner-only client credentials; the secret never comes from the environment", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pai-mcp-cred-"));
+  try {
+    const file = join(dir, "secret"); await writeFile(file, "s3cr3t\n");
+    const env = { PAI_AGENT_TOKEN_URL: "https://pai-auth.example/oauth2/token", PAI_AGENT_CLIENT_ID: "client1", PAI_AGENT_CLIENT_SECRET_FILE: file };
+    await chmod(file, 0o644);
+    assert.throws(() => agentCredentials(env), /owner-only/);
+    await chmod(file, 0o600);
+    const c = agentCredentials(env)!;
+    assert.equal(c.secret, "s3cr3t"); assert.equal(c.clientId, "client1");
+    assert.equal(workbenchUrl("https://pai.example", c).origin, "https://pai.example");
+    for (const bad of ["https://pai.example/api", "https://user@pai.example", "http://pai.example", "https://pai.example?x=1"]) assert.throws(() => workbenchUrl(bad, c), /origin/, bad);
+    assert.throws(() => agentCredentials({ PAI_AGENT_CLIENT_ID: "client1" }), /together/);
+    assert.throws(() => agentCredentials({ ...env, PAI_AGENT_TOKEN_URL: "http://pai-auth.example/oauth2/token" }), /HTTPS/);
+    assert.equal(agentCredentials({}), undefined);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+

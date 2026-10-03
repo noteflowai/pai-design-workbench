@@ -57,6 +57,22 @@ export class WorkbenchStack extends cdk.Stack {
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
       preventUserExistenceErrors: true,
     });
+    // Machine agents (e.g. AgentForge sessions through pai-mcp): OAuth 2.0 client credentials on a resource
+    // server with read/propose scopes only. There is no scope for confirming, executing or releasing.
+    const agentApi = pool.addResourceServer("AgentApi", { identifier: "pai-agent", userPoolResourceServerName: "PAI agent API",
+      scopes: [new cognito.ResourceServerScope({ scopeName: "read", scopeDescription: "Read the grounded workspace" }),
+        new cognito.ResourceServerScope({ scopeName: "propose", scopeDescription: "Propose typed plans for human confirmation" })] });
+    const agentClient = pool.addClient("AgentClient", {
+      generateSecret: true, authFlows: {}, accessTokenValidity: cdk.Duration.hours(1), enableTokenRevocation: true,
+      oAuth: { flows: { clientCredentials: true }, scopes: ["read", "propose"].map(s =>
+        cognito.OAuthScope.custom(`pai-agent/${s}`)) },
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+    });
+    agentClient.node.addDependency(agentApi);
+    const agentSecret = new secrets.Secret(this, "AgentClientSecret", {
+      description: "OAuth client secret for PAI machine agents (client credentials); read by the operator only",
+      secretStringValue: agentClient.userPoolClientSecret,
+    });
     const authDomain = pool.addDomain("LoginDomain", {
       cognitoDomain: { domainPrefix: `pai-design-${this.account}` },
     });
@@ -150,6 +166,19 @@ export class WorkbenchStack extends cdk.Stack {
         next: elbv2.ListenerAction.forward([targetGroup]),
       }),
     });
+    // Agent API: the ALB verifies the access token (jwt-validation, RS256, issuer, token_use, client_id) before
+    // forwarding; the workbench verifies it again with the route's scope. Narrower than the browser rule and
+    // evaluated first; existing listener rules are untouched.
+    const issuer = `https://cognito-idp.${this.region}.amazonaws.com/${pool.userPoolId}`;
+    new elbv2.CfnListenerRule(this, "PaiAgentRoute", {
+      listenerArn: context("listenerArn"), priority: Number(context("agentRulePriority")),
+      conditions: [{ field: "host-header", hostHeaderConfig: { values: [domain] } }, { field: "path-pattern", pathPatternConfig: { values: ["/api/agent/*"] } }],
+      actions: [
+        { type: "jwt-validation", order: 1, jwtValidationConfig: { jwksEndpoint: `${issuer}/.well-known/jwks.json`, issuer,
+          additionalClaims: [{ format: "single-string", name: "token_use", values: ["access"] }, { format: "single-string", name: "client_id", values: [agentClient.userPoolClientId] }] } },
+        { type: "forward", order: 2, targetGroupArn: targetGroup.targetGroupArn },
+      ],
+    });
     const vault = new backup.BackupVault(this, "Backups", { removalPolicy: cdk.RemovalPolicy.RETAIN });
     const plan = new backup.BackupPlan(this, "BackupPlan");
     plan.addRule(new backup.BackupPlanRule({
@@ -173,6 +202,7 @@ export class WorkbenchStack extends cdk.Stack {
       description: "PAI deployment verification and private admin credential retrieval",
     });
     secret.grantRead(operator);
+    agentSecret.grantRead(operator);
     operator.addToPolicy(new iam.PolicyStatement({ actions: ["secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"], resources: [aiKeys.secretArn] }));
     operator.addToPolicy(new iam.PolicyStatement({
       actions: ["ssm:SendCommand"], resources: [
@@ -190,6 +220,10 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "OperatorRoleArn", { value: operator.roleArn });
     new cdk.CfnOutput(this, "UserPoolId", { value: pool.userPoolId });
     new cdk.CfnOutput(this, "UserPoolClientId", { value: client.userPoolClientId });
+    new cdk.CfnOutput(this, "AgentUserPoolId", { value: pool.userPoolId });
+    new cdk.CfnOutput(this, "AgentClientId", { value: agentClient.userPoolClientId });
+    new cdk.CfnOutput(this, "AgentClientSecretArn", { value: agentSecret.secretArn });
+    new cdk.CfnOutput(this, "AgentTokenUrl", { value: `https://${authDomain.domainName}.auth.${this.region}.amazoncognito.com/oauth2/token` });
     new cdk.CfnOutput(this, "ReleaseHash", { value: createHash("sha256").update(readFileSync(releasePath)).digest("hex") });
     new cdk.CfnOutput(this, "ReleaseBucket", { value: asset.s3BucketName });
     new cdk.CfnOutput(this, "ReleaseKey", { value: asset.s3ObjectKey });

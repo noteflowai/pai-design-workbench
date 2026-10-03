@@ -44,6 +44,11 @@ fi
 if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
   bash "$RELEASE/infra/install_ai.sh"
 fi
+# Machine-agent API settings come from stack outputs; keep the file's other lines unchanged.
+if [ -n "${PAI_AGENT_USER_POOL_ID:-}" ] && [ -n "${PAI_AGENT_CLIENT_ID:-}" ]; then
+  sed -i '/^PAI_AGENT_USER_POOL_ID=/d;/^PAI_AGENT_CLIENT_IDS=/d' /etc/pai/runtime.env
+  printf 'PAI_AGENT_USER_POOL_ID=%s\nPAI_AGENT_CLIENT_IDS=%s\n' "$PAI_AGENT_USER_POOL_ID" "$PAI_AGENT_CLIENT_ID" >> /etc/pai/runtime.env
+fi
 PREVIOUS=$(readlink -f /opt/pai/current)
 systemctl stop pai-workbench.service
 ln -sfn "$RELEASE" /opt/pai/current.next
