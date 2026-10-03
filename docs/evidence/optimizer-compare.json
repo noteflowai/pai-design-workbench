@@ -1,0 +1,140 @@
+{
+  "schema": "pai-optimizer-compare-1",
+  "budget": {
+    "initial": 8,
+    "rounds": 3,
+    "perRound": 3
+  },
+  "requirements": {
+    "maxMassG": 80,
+    "minWallMm": 3,
+    "edgeDistanceFactor": 1.5,
+    "requireNoInterference": true,
+    "maxEnvelopeMm": [
+      80,
+      40,
+      60
+    ],
+    "structural": {
+      "forceN": 60,
+      "leverMm": 50,
+      "safetyFactor": 2,
+      "maxDeflectionMm": 0.06
+    }
+  },
+  "seeds": [
+    3,
+    7,
+    11
+  ],
+  "runs": [
+    {
+      "strategy": "gp-nsga2",
+      "seed": 3,
+      "seconds": 185,
+      "solverCalls": 12,
+      "screens": 10,
+      "feasible": 4,
+      "lightestMassG": 47.94,
+      "lightestDeflectionMm": 0.0573,
+      "hypervolume": 0.5223,
+      "calibrationMedian": 0.0189
+    },
+    {
+      "strategy": "botorch-qlognehvi",
+      "seed": 3,
+      "seconds": 804,
+      "solverCalls": 15,
+      "screens": 16,
+      "feasible": 10,
+      "lightestMassG": 48.368,
+      "lightestDeflectionMm": 0.0478,
+      "hypervolume": 1.0393,
+      "calibrationMedian": 0.0197
+    },
+    {
+      "strategy": "gp-nsga2",
+      "seed": 7,
+      "seconds": 142,
+      "solverCalls": 17,
+      "screens": 3,
+      "feasible": 7,
+      "lightestMassG": 47.312,
+      "lightestDeflectionMm": 0.0586,
+      "hypervolume": 0.4583,
+      "calibrationMedian": 0.0098
+    },
+    {
+      "strategy": "botorch-qlognehvi",
+      "seed": 7,
+      "seconds": 541,
+      "solverCalls": 16,
+      "screens": 12,
+      "feasible": 9,
+      "lightestMassG": 45.393,
+      "lightestDeflectionMm": 0.0515,
+      "hypervolume": 1.051,
+      "calibrationMedian": 0.0074
+    },
+    {
+      "strategy": "gp-nsga2",
+      "seed": 11,
+      "seconds": 189,
+      "solverCalls": 16,
+      "screens": 0,
+      "feasible": 8,
+      "lightestMassG": 45.347,
+      "lightestDeflectionMm": 0.059,
+      "hypervolume": 0.4662,
+      "calibrationMedian": 0.0075
+    },
+    {
+      "strategy": "botorch-qlognehvi",
+      "seed": 11,
+      "seconds": 489,
+      "solverCalls": 16,
+      "screens": 15,
+      "feasible": 11,
+      "lightestMassG": 45.959,
+      "lightestDeflectionMm": 0.0506,
+      "hypervolume": 1.0767,
+      "calibrationMedian": 0.0085
+    }
+  ],
+  "summary": {
+    "gp-nsga2": {
+      "runs": 3,
+      "meanLightestMassG": 46.87,
+      "meanHypervolume": 0.4823,
+      "meanSolverCalls": 15.0
+    },
+    "botorch-qlognehvi": {
+      "runs": 3,
+      "meanLightestMassG": 46.57,
+      "meanHypervolume": 1.0557,
+      "meanSolverCalls": 15.7
+    }
+  },
+  "paired": [
+    {
+      "seed": 3,
+      "lighterBy": "gp-nsga2",
+      "massDeltaG": 0.43,
+      "hypervolumeDelta": 0.517
+    },
+    {
+      "seed": 7,
+      "lighterBy": "botorch-qlognehvi",
+      "massDeltaG": -1.92,
+      "hypervolumeDelta": 0.5927
+    },
+    {
+      "seed": 11,
+      "lighterBy": "gp-nsga2",
+      "massDeltaG": 0.61,
+      "hypervolumeDelta": 0.6105
+    }
+  ],
+  "note": "Native measurements only (CadQuery B-Rep + CalculiX fine mesh). A small paired panel; not a statistical claim beyond these seeds.",
+  "conclusion": "Same budget, same three seeds, no AI seeds. BoTorch qLogNEHVI roughly doubled the measured feasible-front hypervolume on every seed (mean 1.056 vs 0.482) with about the same solver calls (15.7 vs 15.0). The lightest feasible mass was a tie (46.57 vs 46.87 g mean; NSGA-II lighter on seeds 3 and 11, BoTorch on seed 7). BoTorch took 3-4x the wall time locally (geometry prior plus acquisition on CPU). Use gp-nsga2 for 'lightest feasible' and botorch-qlognehvi to map the mass-stiffness trade-off."
+}

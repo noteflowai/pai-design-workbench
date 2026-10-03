@@ -137,3 +137,37 @@ same.
 
 The first local run used the same budget as the default test: 20 points, 7 solved and 5 feasible. BoTorch's three
 proposals had surrogate errors of 4–8 %. In that budget the AI seed was still the lightest feasible point.
+
+## Scale-out on AWS Batch (`solver: "batch"`)
+
+The `PAISolver` stack (`infra/solver.ts`) runs each solved optimisation point as its own Batch job on Fargate.
+Geometry-only screens stay on the host because they take seconds.
+
+- **Image.** `Dockerfile.solver` runs the same `cad_point.py` and `fea_bracket.py` with the same pins: CadQuery from
+  its hash lock, Gmsh / NumPy / boto3 from `native/solver-requirements.txt` (constrained to the physics lock), and
+  CalculiX 2.21 from the signed Ubuntu archive. CodeBuild builds it from a content-hashed source asset into an
+  immutable ECR tag.
+- **Job contract.** The job reads `jobs/<run>/<index>/input.json` (parameters and requirements only) and writes
+  `point.json`, `fea.json`, `part.step` and `result.json` (file digests, tool versions, image tag). The optimiser
+  re-hashes every file and requires gmsh 4.15.2, ccx 2.21 and CadQuery 2.8.0. Anything else is a failed measurement.
+- **Failures.** One attempt per job and a 30-minute timeout. A lost or failed job is recorded and never resubmitted.
+- **Activation.** Deploy with `PAI_ENABLE_SOLVER_BATCH=1 python3 tools/aws_operator.py apply-release`. Requests may
+  set `solver: "local"`; batch is the default whenever it is configured.
+
+On the hosted site the reference bracket gave 0.0478 mm in a Batch job, the same value as the local run. A full
+optimisation completed with 5 Batch jobs ([solver-batch.json](evidence/solver-batch.json)).
+
+## Strategy comparison
+
+`python3 tools/compare_optimizers.py <dir>` runs both strategies on the same budget and seeds, without AI seeds. On
+seeds 3, 7 and 11 ([optimizer-compare.json](evidence/optimizer-compare.json)):
+
+| | GP + NSGA-II | BoTorch qLogNEHVI |
+|---|---|---|
+| Mean hypervolume of the measured feasible front (reference 80 g, 0.06 mm) | 0.482 | 1.056 |
+| Mean lightest feasible mass | 46.87 g | 46.57 g |
+| Mean solver calls | 15.0 | 15.7 |
+| Wall time per run (local) | 142–189 s | 489–804 s |
+
+On every seed BoTorch maps a much wider mass–stiffness front. NSGA-II reaches the lightest feasible design just as
+well, in about a quarter of the time. This is a three-seed panel and not a statistical claim.

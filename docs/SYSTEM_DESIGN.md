@@ -82,7 +82,7 @@ flowchart TB
 | MCP 网关 | AgentForge 会话 → PAI 读取和提议工具 | 底座示例 PR #549：用底座自己的 `mcp-gateway/policy.mjs` 核验，8 个工具放行，审批/执行类工具拒绝 | `examples/pai-workbench`、`integrations/agentforge` |
 | 托管身份 | OAuth 客户端凭据 → ALB jwt-validation → 工作台按 scope 再验一次 | 已上线（规则 119） | `src/agent-api.ts` |
 | AgentCore | 两边都对接同一个托管服务 | PAI 的 sandbox 和 agent 两个 runtime 已在用 | [AGENTCORE.md](AGENTCORE.md) |
-| CI/CD | 底座用 CodePipeline（`autoforge-unified`），PAI 用 GitHub Actions | 只读查看流水线；手动启动 CodeBuild 验证 PR 分支 | `deploy/codepipeline` |
+| CI/CD | 底座用 CodePipeline（`autoforge-unified`），PAI 用 GitHub Actions | 先在 CodeBuild 上验证 PR 分支，再合并（#547、#548、#549 已合并）；Deploy 仍要经过人工审批 | `deploy/codepipeline` |
 | Host 会话通道 | PAI 的规划器暂不迁到 Host | 六个闸门尚未全部满足 | [AGENT_RUNTIME.md](AGENT_RUNTIME.md) |
 
 计划中的下一批接缝（见[规划](ROADMAP.md) M2）：
@@ -126,6 +126,7 @@ flowchart TB
 | 本机 / 桌面 | 一条命令安装固定版本工具（`setup:*`）；Electron 共用同一服务 |
 | 托管 pai.oneai.host | EC2 + 加密 EBS + 每日备份；CDK 管理；发布用 SSM 原子切换，保留上一版 |
 | AgentCore | arm64 BYOC；sandbox 无出网；agent 的账本在 EFS |
+| 求解扩展（PAISolver） | AWS Batch on Fargate（amd64，Gmsh 没有 aarch64 包）；专用 VPC，只有公有子网，没有 NAT，没有固定成本；不允许入站，只允许 HTTPS 出站；作业桶只开放 jobs/ 前缀，30 天后过期；每个点一个作业，不重试 |
 | 底座 | AgentForge CodePipeline（ap-southeast-1）；基础镜像先推验证标签，看过扫描再推广 |
 
 ## 8. 决策记录

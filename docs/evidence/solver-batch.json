@@ -1,0 +1,74 @@
+{
+  "schema": "pai-solver-batch-1",
+  "checkedAt": "2026-10-03T16:52:00Z",
+  "site": "https://pai.oneai.host",
+  "hostedRelease": "355d755bfe34d8320a96c30d26d62c357c13732eaebbc1ae2e8ff0a751109230",
+  "stack": "PAISolver (AWS Batch, Fargate linux/amd64, 2 vCPU / 4 GiB per job, maxvCpus 32, one attempt per job)",
+  "image": "pai-solver:fea-fc58a742f6198340",
+  "imageDigest": "sha256:4685fc3d0bf20aa7ad3983c17a7e5bf83f7cae14580b98c61031d3abc161fc85",
+  "probe": {
+    "parameters": {
+      "thickness": 4.0,
+      "width": 60.0,
+      "plateHeight": 46.0
+    },
+    "status": "measured",
+    "versions": {
+      "gmsh": "4.15.2",
+      "ccx": "2.21",
+      "cadquery": "2.8.0"
+    },
+    "deflectionMm": 0.0478,
+    "localDeflectionMm": 0.0478,
+    "jobSeconds": 10.0
+  },
+  "optimisation": {
+    "solver": "batch",
+    "budget": {
+      "initial": 4,
+      "rounds": 1,
+      "perRound": 3
+    },
+    "wallSeconds": 220,
+    "batchJobs": 5,
+    "geometryScreensLocal": 6,
+    "feasible": 1,
+    "points": [
+      [
+        1,
+        "reference",
+        48.368,
+        0.0478
+      ],
+      [
+        2,
+        "initial",
+        39.064,
+        0.1905
+      ],
+      [
+        3,
+        "initial",
+        91.59,
+        0.0243
+      ],
+      [
+        4,
+        "initial",
+        34.886,
+        0.0884
+      ],
+      [
+        11,
+        "explore",
+        67.552,
+        0.0098
+      ]
+    ],
+    "note": "Every solved point ran as its own Batch job; files were re-hashed against the job's result.json and tool versions checked against the pins."
+  },
+  "issues": [
+    "First submit was denied: SubmitJob by job-definition name is authorised against the unversioned ARN, which the policy now includes; IAM propagation took about a minute.",
+    "With zero solved points the optimiser used to crash fitting the GP; it now stops the rounds and reports the measured failures."
+  ]
+}
