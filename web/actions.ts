@@ -90,16 +90,23 @@ export const nextStatus = (f: Feedback) => ({ received: "reproducible", "needs-c
   assigned: f.evidenceKind === "factory-twin" ? "no-change-with-reason" : "fix-proposed", rechecked: "closed" } as Record<string, string>)[f.status];
 export const feedbackAction = (f: Feedback, generated = false) => ({ received: "记录复现", "needs-context": "补充并复现", reproducible: "分配处理",
   assigned: f.evidenceKind === "factory-twin" ? "记录保留原因" : "提出回退方案",
-  "fix-proposed": f.evidenceKind === "blender-scene" ? "移除遮挡并复测" : f.evidenceKind === "cad-part" ? (generated ? "修订代码并复测" : "恢复基准参数并复测") : "回退基准并复测", "no-change-with-reason": "复测保留方案",
+  "fix-proposed": f.evidenceKind === "blender-scene" ? "按修正方案复测" : f.evidenceKind === "cad-part" ? (generated ? "修订代码并复测" : "恢复基准参数并复测") : "回退基准并复测", "no-change-with-reason": "复测保留方案",
   rechecked: "关闭已复测反馈" } as Record<string, string>)[f.status];
 export const defaultReason = (f: Feedback, generated = false) => ({
   received: "已按原始证据复现该失败案例。", "needs-context": "补充上下文后已复现。", reproducible: "分配给维护者处理。",
   assigned: f.evidenceKind === "factory-twin" ? "上游数据未变化：保留失败并记录为已知限制，等待上游以新参数重跑。"
-    : f.evidenceKind === "blender-scene" ? "保持原几何约束，移除遮挡物并重新生成场景。"
+    : f.evidenceKind === "blender-scene" ? "要求保持不变：采用已通过的修正方案（或移除遮挡物），重新执行原生检查。"
     : f.evidenceKind === "cad-part" && generated ? "修订生成代码以满足约束，零件要求不变，在沙箱中重新建模并检查。"
-    : f.evidenceKind === "cad-part" ? "恢复满足约束的基准参数（4 mm 板厚、Ø22.5 止口、完整安装板），零件要求不变，重新生成并检查。" : "回退到基准设置并重新执行原生检查。",
+    : f.evidenceKind === "cad-part" ? "零件要求不变：采用已通过的修正候选（没有则恢复基准参数），重新生成并检查。" : "回退到基准设置并重新执行原生检查。",
   "fix-proposed": "按记录的处理方案重新执行原生检查，并绑定新回执。", "no-change-with-reason": "按保留说明在原标准下重新评估，并绑定新回执。",
   rechecked: "新复测回执已核对；关闭反馈，原失败记录保留。" } as Record<string, string>)[f.status] ?? "";
+
+/** The latest accepted candidate of the same kind and frozen requirements created after the failure (the proposed fix). */
+function acceptedFix<T extends { id: string; createdAt: string; projectId: string; verdict?: string; state: string; request: { requirements: unknown } }>(
+  items: T[], original: T, sameRecipe: (x: T) => boolean): T | undefined {
+  return items.filter(x => x.projectId === original.projectId && x.state === "completed" && x.verdict?.startsWith("accepted") && x.createdAt > original.createdAt
+    && sameRecipe(x) && JSON.stringify(x.request.requirements) === JSON.stringify(original.request.requirements)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
 
 export function advanceFeedback(c: Ctx, f: Feedback, reason: string) {
   const next = nextStatus(f), p = c.project!;
@@ -117,12 +124,22 @@ export function advanceFeedback(c: Ctx, f: Feedback, reason: string) {
     let r: { id: string; state: string; error?: string };
     if (f.evidenceKind === "blender-scene") {
       const original = c.data.scenes.find(s => s.id === f.runId)!;
-      r = await c.track(requestId, "Blender 反馈复测", "blender-scene", () => api<SceneReview>(`/projects/${p.id}/scenes`,
-        { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "clear", requirements: original.request.requirements, feedbackId: f.id }));
+      const legacy = original.request.variant === "clear" || original.request.variant === "occluded";
+      // The fix is the accepted candidate of the same recipe and frozen requirements (e.g. the AI-proposed layout),
+      // re-run natively and bound to this feedback. Only the static workcell recipe has a built-in fix (remove the occluder).
+      const fix = keep || legacy ? undefined : acceptedFix(c.data.scenes, original, x => x.request.variant === original.request.variant);
+      if (!keep && !legacy && !fix) throw new Error("先提交并通过一个修正方案（可在失败的检查上“问 AI”），再复测这条反馈。");
+      const { requestId: _r, feedbackId: _f, ...base } = (fix ?? original).request as SceneReview["request"] & { feedbackId?: string };
+      r = await c.track(requestId, "原生反馈复测", "blender-scene", () => api<SceneReview>(`/projects/${p.id}/scenes`,
+        legacy ? { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "clear", requirements: original.request.requirements, feedbackId: f.id }
+          : { ...base, requestId, projectRevision: p.revision, feedbackId: f.id }));
     } else if (f.evidenceKind === "cad-part") {
       const original = (c.data.cads ?? []).find(x => x.id === f.runId)!;
-      r = await c.track(requestId, "CAD 反馈复测", "cad-part", () => api<CadReview>(`/projects/${p.id}/cad`,
-        { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "reference", requirements: original.request.requirements, feedbackId: f.id }));
+      const fix = keep ? undefined : acceptedFix(c.data.cads ?? [], original, () => true);
+      const { requestId: _r, feedbackId: _f, fromSweep: _s, fromOptimize: _o, ...base } = (fix ?? original).request;
+      r = await c.track(requestId, "CAD 反馈复测", "cad-part", () => api<CadReview>(`/projects/${p.id}/cad`, fix
+        ? { ...base, requestId, projectRevision: p.revision, feedbackId: f.id }
+        : { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "reference", requirements: original.request.requirements, feedbackId: f.id }));
     } else if (f.evidenceKind === "factory-twin") {
       const original = (c.data.factoryReviews ?? []).find(x => x.id === f.runId)!;
       r = await c.track(requestId, "工厂孪生反馈复测", "factory-twin", () => api<FactoryReview>(`/projects/${p.id}/factory-reviews`,

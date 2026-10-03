@@ -70,7 +70,7 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
   for (const sc of latestBy(s.scenes.filter(x => x.state === "completed" && !x.feedbackId), x => sceneKey(x.request))) {
     for (const check of sc.baseline?.checks ?? []) {
       if (check.passed && sc.candidate?.checks.find(c => c.id === check.id)?.passed === false) {
-        cases.push(bind({ kind: "blender-scene", runId: sc.id, seed: null, checkId: check.id, label: `Blender ${SCENE_CHECK[check.id] ?? check.id}：基准通过，候选失败` }));
+        cases.push(bind({ kind: "blender-scene", runId: sc.id, seed: null, checkId: check.id, label: `${sc.request.variant === "robot-cell" ? "MuJoCo" : "Blender"} ${SCENE_CHECK[check.id] ?? check.id}：基准通过，候选失败` }));
       }
     }
   }

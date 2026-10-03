@@ -123,7 +123,7 @@ test("native Blender scene from the professional form: rejection, evidence files
   await expect(page.getByRole("link", { name: "下载可编辑 .blend" })).toBeVisible();
   await expect(page.locator(".data-table tbody tr")).toHaveCount(7);
   await page.getByRole("button", { name: /记录反馈：Blender 相机可见性/ }).click();
-  await advance(page, ["记录复现", "分配处理", "提出回退方案", "移除遮挡并复测", "关闭已复测反馈"], 150_000);
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "按修正方案复测", "关闭已复测反馈"], 150_000);
   const latest = await (await page.request.get("/api/state")).json();
   const mine = latest.scenes.filter((s: { projectId: string }) => s.projectId === latest.projects.at(-1).id);
   expect(mine.map((s: { verdict: string }) => s.verdict).sort()).toEqual(["accepted-static-scene", "rejected"]);
@@ -620,5 +620,48 @@ test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell wit
   await page.screenshot({ path: testInfo.outputPath("fea-view.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
+  expect(errors).toEqual([]);
+});
+
+test("robot cell closed loop in the UI: MuJoCo rejection, fixed cell, feedback recheck, release and a signed package", async ({ page }, testInfo) => {
+  test.setTimeout(900_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.physics) throw new Error("The pinned physics toolchain is required for this integration check");
+  await createProject(page);
+  const runCell = async (guard: string) => {
+    await page.goto("/#/design?lane=robotcell");
+    await page.getByLabel("关节速度", { exact: true }).fill("75");
+    await page.getByLabel("围栏离最远工位", { exact: true }).fill(guard);
+    await page.getByLabel("节拍上限", { exact: true }).fill("5");
+    await page.getByRole("button", { name: "仿真并检查工作单元" }).click();
+  };
+  await runCell("0.12");
+  await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible({ timeout: 300_000 });
+  await page.getByRole("button", { name: /记录反馈：MuJoCo 运动无碰撞/ }).click();
+  await expect(page.getByRole("heading", { name: "反馈复测", level: 1 })).toBeVisible();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案"]);
+  // No accepted fix yet: the recheck refuses instead of inventing one.
+  await page.getByRole("button", { name: "按修正方案复测", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("先提交并通过一个修正方案");
+  await page.getByRole("alert").getByRole("button", { name: "关闭通知" }).click();
+  await runCell("0.3");
+  await expect(page.getByRole("heading", { name: "静态场景检查通过" })).toBeVisible({ timeout: 300_000 });
+  await rail(page, /反馈复测/).click();
+  await page.locator(".run-list .run").first().click();
+  await advance(page, ["按修正方案复测", "关闭已复测反馈"], 300_000);
+  await rail(page, /发布交付/).click();
+  await expect(page.getByLabel("发布准入检查").locator(".check-item.pass")).toHaveCount(5);
+  await page.getByRole("button", { name: "创建发布候选" }).click();
+  await page.getByRole("button", { name: "批准发布 R1" }).click();
+  await expect(page.getByRole("button", { name: /成熟度：R1 已发布/ })).toBeVisible();
+  const link = page.getByRole("link", { name: "下载签名发布包" });
+  await expect(link).toBeVisible();
+  const pkg = await (await page.request.get(await link.getAttribute("href") as string)).json();
+  const key = await (await page.request.get("/api/signing/public-key")).json();
+  const verified = await (await page.request.post("/api/packages/verify", { data: { package: pkg, trustedPublicKeyPem: key.publicKeyPem } })).json();
+  expect(verified.valid).toBe(true); expect(verified.signer.trusted).toBe(true);
+  expect(Object.keys(pkg.files)).toContain("candidate/scene.xml");
+  await page.screenshot({ path: testInfo.outputPath("robot-release.png") });
   expect(errors).toEqual([]);
 });
