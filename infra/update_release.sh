@@ -35,6 +35,7 @@ if ! python3 -c "import ensurepip" 2>/dev/null; then
 fi
 runuser -u pai -- python3 tools/setup_cadquery.py
 # Physics lane (Gmsh, CalculiX from the signed Ubuntu archive, Optuna, scikit-learn, MuJoCo); idempotent, no root needed.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 >/dev/null
 runuser -u pai -- python3 tools/setup_physics.py
 # OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
 if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi

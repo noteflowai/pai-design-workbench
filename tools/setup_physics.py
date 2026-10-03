@@ -32,6 +32,8 @@ if not (venv / "bin/pip").exists():
 subprocess.run([str(python), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-input",
                 "--require-hashes", "--no-deps", "--only-binary", ":all:", "-r", str(lock)], check=True)
 
+# Shared libraries the Gmsh wheel links against (headless use still loads them); not bundled in the wheel.
+SYSTEM_LIBS = ["libglu1-mesa", "libgl1", "libopengl0", "libxcursor1", "libxft2", "libxinerama1", "libfontconfig1", "libgomp1"]
 DEBS = ["calculix-ccx", "libarpack2t64", "libspooles2.2t64", "libgfortran5", "libblas3", "liblapack3"]
 debs = {}
 if not (ccx_root / "usr/bin/ccx").exists():
@@ -55,7 +57,10 @@ wrapper.chmod(0o755)
 
 probe = subprocess.run([str(python), "-c", "import gmsh, optuna, sklearn, mujoco, numpy, scipy, json;"
     "print(json.dumps({'gmsh': gmsh.__version__, 'optuna': optuna.__version__, 'sklearn': sklearn.__version__, 'mujoco': mujoco.__version__, 'numpy': numpy.__version__}))"],
-    check=True, capture_output=True, text=True)
+    capture_output=True, text=True)
+if probe.returncode != 0:
+    raise SystemExit("Physics import self-check failed. Gmsh needs the OpenGL/X11 runtime libraries "
+                     f"({' '.join(SYSTEM_LIBS)}); install them with apt-get.\n{probe.stderr[-1500:]}")
 versions = json.loads(probe.stdout)
 # ccx prints its version banner when run without an input deck.
 banner = subprocess.run([str(wrapper), "-v"], capture_output=True, text=True, timeout=30)
