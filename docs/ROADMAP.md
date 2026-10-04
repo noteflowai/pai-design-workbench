@@ -43,6 +43,20 @@
 | DFM / CAM | F21 | ✓ 三轴铣削 DFM 已纳入 CAD 检查和准入。待做：用 FreeCAD Path 或 CAM CLI 做刀路仿真，校准加工时间 |
 | 第二个零件族 | F22 | 夹爪指或相机支架，同样有 B-Rep、FEA 和 MuJoCo 装配 |
 
+## 层级状态（对齐外部分析）
+
+| 层 | 状态（只写跑过的结果） | 下一步 |
+|---|---|---|
+| 0 意图 → 类型化需求 | 完成：Zod 计划、MCP、AgentForge 网关与集成包、客户端凭据 Agent API | — |
+| 1 概念 | 未做 | 等出现明确的造型需求（Hunyuan3D / TRELLIS） |
+| 2 工程几何 | 一个零件族 + 生成代码；Ahmed 车身配方 | 第二个零件族（F22） |
+| 3 高保真求解 | CalculiX（两级网格）；OpenFOAM v2512（两级网格）；两者都能在 AWS Batch 上跑 | 加 CFD 边界层网格和更细的网格 |
+| 4 物理 AI 代理模型 | GP 只负责排序，带校准；用求解数据集预热（46.3 → 44.1 g） | 有场级数据后再做 PhysicsNeMo |
+| 5 优化 | NSGA-II、BoTorch qLogNEHVI，做过配对比较 | — |
+| 6 系统 / 机器人 | MuJoCo 工作单元、CAD 装到机械臂、MJCF/OpenUSD（28 个校验器） | Isaac Lab 策略 |
+| 7 可制造性 | 三轴铣削 DFM（装夹、孔、成本估算） | 用 CAM 刀路校准加工时间 |
+| 8 证据 | KMS 签名、RFC 3161 时间戳、只封存一次；Object Lock 桶已就绪 | 需确认保留期后开启归档 |
+
 ## 风险与对策
 
 | 风险 | 对策 |

@@ -22,29 +22,4 @@ Promotion starts with a draft that includes native artifacts and the rejected co
 
 Go/no-go after 3 independent tasks: at least 2 can be reproduced from supplied evidence; no critical missing artifacts; at least 1 owner uses it a second time. These are proposed pilot criteria, not observed results.
 
-## AI-native design → physics verification (status 2026-10-03)
-
-The model proposes and the native solvers decide. This layer table follows the external gap analysis; each row states only what has been run.
-
-| Layer | Status | Evidence / next step |
-|---|---|---|
-| 0 Intent → typed requirement | Done | Zod plans, MCP, AgentForge governed gateway and client-credentials agent API |
-| 2 Engineering geometry | Done (one part family + generated code) | Next: FreeCAD/build123d families and Fusion/Onshape MCP; tolerance stack-up; drawings with GD&T |
-| 3 High-fidelity solve | Structural done: Gmsh C3D10 + CalculiX, two-mesh convergence, in reviews and in the release gate | Next: OpenFOAM for flow; scale-out of solves on AWS Batch / ParallelCluster |
-| 4 Physics-AI surrogate | Partial: GP surrogate trained only on our own solver results, ranks candidates only, calibration and leave-one-out error reported | Next: PhysicsNeMo (Transolver / GeoTransolver) once a solver dataset exists (Batch-generated FEA; DrivAerML for aero) |
-| 5 Optimisation | Done: Optuna NSGA-II on the surrogate, multi-fidelity B-Rep screen, explore/exploit, solver re-measurement, formal review of the pick | Next: BoTorch qNEHVI for expensive multi-objective; topology optimisation |
-| 6 System / robot | Done: MuJoCo workcell (IK, dynamics, contacts, cycle time over paired seeds); accepted CAD parts mounted on the arm with exact-mesh mass/inertia cross-checked against the B-Rep; portable MJCF and OpenUSD (UsdPhysics bodies, joints, colliders; all 28 UsdValidation validators clean) | Next: Isaac Lab policy success on the exported USD; grasp physics instead of kinematic attachment |
-| 7 Manufacturability | Geometry rules (wall, hole edge, envelope) | Next: CAM/slicer CLI checks and cost |
-| 8 Evidence | Done: hash-bound bundles, EvalArc, release admission, KMS-signed release packages sealed once with an RFC 3161 time-stamp (DigiCert on the hosted site), in-UI and offline verification; S3 Object Lock archive bucket provisioned | Next: switch archiving on after the retention period is agreed (COMPLIANCE objects cannot be deleted early) |
-
-The model's physical reasoning is a measured quantity here, not a claim. Each AI seed in `cad-optimize` carries the model's first-principles estimate, and the solver's result scores it.
-
-The next demo (A in the analysis) can now be built from existing lanes:
-
-1. Faster cycle target.
-2. MuJoCo detects the guard collision.
-3. AI proposes the cell fix and the bracket redesign.
-4. CalculiX rejects the geometry-only optimum; physics-aware optimisation finds the lightest stiff bracket.
-5. Blender re-checks the plant layout.
-6. Evidence bundle.
-
+Layer-by-layer status against the external gap analysis: [ROADMAP.md](ROADMAP.md#层级状态对齐外部分析).
