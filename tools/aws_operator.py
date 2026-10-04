@@ -55,8 +55,9 @@ elif args.action in ("send", "apply-release"):
                      "PAI_PACKAGE_ARCHIVE_BUCKET": outputs.get("PackageArchiveBucket", "") if os.environ.get("PAI_ENABLE_PACKAGE_ARCHIVE") == "1" else "",
                      "PAI_PACKAGE_RETENTION_DAYS": outputs.get("PackageRetentionDays", ""),
                      "PAI_TSA_URL": os.environ.get("PAI_TSA_URL", "http://timestamp.digicert.com")}
-        if os.environ.get("PAI_PHYSICS_BOTORCH") == "1":
-            variables["PAI_PHYSICS_BOTORCH"] = "1"
+        for opt_in in ("PAI_PHYSICS_BOTORCH", "PAI_PHYSICS_NEWTON"):
+            if os.environ.get(opt_in) == "1":
+                variables[opt_in] = "1"
         # FEA scale-out on AWS Batch (PAISolver stack; fixed names, see infra/solver.ts). Opt in per deployment.
         if os.environ.get("PAI_ENABLE_SOLVER_BATCH") == "1":
             account = boto3.client("sts").get_caller_identity()["Account"]

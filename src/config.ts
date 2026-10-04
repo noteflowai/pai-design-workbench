@@ -8,6 +8,8 @@ export interface Config {
   port: number; controllerEntrypoint?: string; controllerDatabase?: string; blender?: string; cadquery?: string; repository: string;
   /** Pinned physics toolchain (npm run setup:physics): Python with Gmsh/Optuna/scikit-learn/MuJoCo, and CalculiX ccx. */
   physicsPython?: string; ccx?: string;
+  /** Newton (setup:physics -- --with-newton): cross-engine check of the exported OpenUSD robot cell. */
+  newtonPython?: string;
   /** AWS KMS asymmetric key (ECC_NIST_P256) that signs release packages; local Ed25519 when unset. */
   signingKmsKeyId?: string;
   /** RFC 3161 time-stamping authority for release seals (only a SHA-256 digest is sent) and its CA bundle. */
@@ -71,7 +73,7 @@ export function configuration(): Config {
     controllerDatabase: process.env.PAI_CONTROLLER_DATABASE,
     blender: process.env.PAI_BLENDER,
     cadquery: process.env.PAI_CADQUERY_PYTHON,
-    physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX,
+    physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX, newtonPython: process.env.PAI_NEWTON_PYTHON || undefined,
     signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
     tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
     openfoamImage: /^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$/.test(process.env.PAI_OPENFOAM_IMAGE ?? "") ? process.env.PAI_OPENFOAM_IMAGE : undefined,

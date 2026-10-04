@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -92,7 +93,9 @@ export interface SceneReview {
   /** Robot cells with a CAD end-effector: provenance and the native mass cross-check. */
   tool?: { cadReviewId: string; stlSha256: string; brepMassG: number; mujocoMassG?: number; payloadKg: number; motorAxisMm: number };
   /** OpenUSD export summary (UsdPhysics bodies, joints, validators run). */
-  usd?: { usdVersion: string; rigidBodies: number; joints: string[]; validators: number };
+  usd?: { usdVersion: string; rigidBodies: number; joints: string[]; validators: number;
+    /** Cross-engine conformance of the exported USD: Newton imports it and matches the MJCF kinematics and masses. */
+    newton?: { version: string; passed: boolean; configurations: number; fkPositionM: number; fkOrientationDeg: number; checks: { id: string; passed: boolean }[] } | { error: string } };
 }
 export type PlantLayoutValue = z.infer<typeof PlantLayout>;
 export type PlantRequirementsValue = z.infer<typeof PlantRequirements>;
@@ -242,8 +245,10 @@ export async function reviewScene(store: Store, config: Config, project: Project
         if (toolInput && (m.tool?.stlSha256 !== toolInput.sha256)) throw new DomainError("SCENE_CONTEXT", "Native simulation mounted a different tool");
         if (toolInput && name === "candidate") record.tool = { ...record.tool!, mujocoMassG: m.tool!.mujocoMassG };
         if (m.usd) record.usd = { usdVersion: m.usd.usdVersion, rigidBodies: m.usd.rigidBodies, joints: m.usd.joints, validators: m.usd.validators };
+        if (name === "candidate" && config.newtonPython && record.usd) record.usd.newton = await newtonCheck(config, record, target, request.requestId, publish);
       }
-      for (const file of robot ? ["robot.json", "scene.xml", "scene.usda", "robot.glb", "checks.json", ...(toolInput ? ["tool.stl"] : [])] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
+      for (const file of robot ? ["robot.json", "scene.xml", "scene.usda", "robot.glb", "checks.json", ...(toolInput ? ["tool.stl"] : []),
+          ...(name === "candidate" && record.usd?.newton && "passed" in record.usd.newton ? ["newton.json"] : [])] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
         record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       }
       store.put("scene-review", record);
@@ -264,3 +269,28 @@ export async function reviewScene(store: Store, config: Config, project: Project
   publish(request.requestId, { kind: "done", state: record.state, recordId: record.id, verdict: record.verdict, detail: record.error });
   return record;
 }
+
+/**
+ * Export conformance, not a design check: the candidate's OpenUSD is imported by Newton (the engine behind Isaac Lab's
+ * Newton backend) and compared with the MJCF PAI simulated (articulation, masses, FK at 33 configurations). The result
+ * is recorded with a receipt; it never changes the verdict, and a failure is shown, not hidden.
+ */
+async function newtonCheck(config: Config, record: SceneReview, target: string, requestId: string, publish: LiveBus["publish"]) {
+  const script = join(config.repository, "native/usd_newton_check.py"), label = "Newton 交叉校验 OpenUSD（关节树、质量、33 个构型的正运动学）";
+  publish(requestId, { kind: "step", id: "newton-usd", label, status: "running", which: "candidate" });
+  const args = [script, "--usd", join(target, "scene.usda"), "--mjcf", join(target, "scene.xml"), "--output", join(target, "newton.json")];
+  const r = await command(config.newtonPython!, args, tmpdir(), undefined, 300_000);
+  record.receipts.push({ adapter: "newton-usd", command: ["python", "usd_newton_check.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
+    stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)), lock: sha256(await readFile(join(config.repository, "native/newton-requirements.txt"))) } });
+  if (r.exitCode !== 0) {
+    publish(requestId, { kind: "step", id: "newton-usd", label, status: "failed", which: "candidate", detail: `exit ${r.exitCode}` });
+    return { error: `Newton could not import the USD (exit ${r.exitCode}): ${r.stderr.trim().split("\n").at(-1)?.slice(0, 200) ?? ""}` };
+  }
+  const j = JSON.parse(await readFile(join(target, "newton.json"), "utf8")) as { newton: string; passed: boolean; configurations: number; checks: { id: string; passed: boolean; observed: unknown }[] };
+  const obs = (id: string) => Number(j.checks.find(c => c.id === id)?.observed);
+  publish(requestId, { kind: "step", id: "newton-usd", label, status: j.passed ? "done" : "failed", which: "candidate",
+    detail: `Newton ${j.newton} · 位置偏差 ${(obs("fk-position") * 1000).toFixed(4)} mm` });
+  return { version: j.newton, passed: j.passed, configurations: j.configurations, fkPositionM: obs("fk-position"), fkOrientationDeg: obs("fk-orientation"),
+    checks: j.checks.map(c => ({ id: c.id, passed: c.passed })) };
+}
+

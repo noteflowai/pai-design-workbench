@@ -113,6 +113,29 @@ review of the same project and checks the STL against the digest that review rec
 portable, that the USD has the physics joints and articulation root, and that a part that is not accepted is refused
 (`TOOL_NOT_ACCEPTED`).
 
+### Newton cross-check of the exported USD
+
+The USD is what Isaac Lab and Newton users receive, so passing `UsdValidation` is not enough: it must be the same
+robot PAI simulated. With `npm run setup:physics -- --with-newton` (Newton 1.6, hash-locked
+`native/newton-requirements.txt`, own venv because Newton pins its own MuJoCo; CPU Warp, no GPU needed),
+`native/usd_newton_check.py` imports the candidate's `scene.usda` into Newton and loads `scene.xml` into MuJoCo:
+
+- one articulation with 6 revolute joints and no orphan joints, and the same body masses;
+- forward kinematics at the authored pose and 32 seeded configurations inside the joint limits: every body within
+  0.1 mm and 0.01°; the authored body Xforms equal Newton FK at the authored pose.
+
+The first run found two real export bugs that every UsdValidation validator had passed:
+
+1. The articulation root sat on `base`, which is not an ancestor of the (flat) bodies, so Newton refused all joints
+   as orphans. The root now sits on `/Workcell`.
+2. Joint frames were taken at the pick pose, so joint angle 0 and the limits in USD meant something else than in
+   MuJoCo. They now come from the model constants (parent-relative body offset at qpos 0).
+
+After the fix: 33 configurations, worst position error 0.45 µm, orientation 3.1·10⁻⁵ °, masses within 0.5 mg, 4.8 s
+([newton-usd.json](evidence/newton-usd.json)). The result is recorded as `newton.json` with a `newton-usd` receipt and
+shown under the USD export; it is export conformance and never changes the verdict. Kinematics and mass only; it
+says nothing about dynamics agreement between the engines.
+
 ## BoTorch strategy (`strategy: "botorch-qlognehvi"`)
 
 This strategy is optional. Install it with `npm run setup:physics -- --with-botorch`, which installs the hash-locked

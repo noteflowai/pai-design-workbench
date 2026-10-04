@@ -41,5 +41,11 @@
       "license": "NVIDIA Open Model Agreement (commercial use permitted)"
     },
     "note": "Advisory aerodynamic prescreen only (native/cfd_prescreen.py); needs an NVIDIA GPU. The revision equals DOMINO_PACKAGE_ROOT in physicsnemo-cfd builtin_packages.py."
+  },
+  "newton": {
+    "version": "1.6.0",
+    "lock": "native/newton-requirements.txt (hash-locked; newton[sim], usd-core 26.3, newton-usd-schemas)",
+    "python": "3.12",
+    "note": "Cross-engine conformance of the exported OpenUSD robot cell (native/usd_newton_check.py); CPU Warp, no GPU needed. Opt in: setup:physics -- --with-newton or PAI_PHYSICS_NEWTON=1."
   }
 }

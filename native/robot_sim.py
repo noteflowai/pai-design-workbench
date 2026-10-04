@@ -382,9 +382,10 @@ def write_usd(path: Path, q):
         if parent > 0:
             joint.CreateBody0Rel().SetTargets([paths[parent]])
         joint.CreateBody1Rel().SetTargets([paths[child]])
-        Rp, Rc = data.xmat[parent].reshape(3, 3), data.xmat[child].reshape(3, 3)
-        anchor = data.xpos[child] + Rc @ model.jnt_pos[j]
-        joint.CreateLocalPos0Attr(Gf.Vec3f(*map(float, Rp.T @ (anchor - data.xpos[parent])))); joint.CreateLocalRot0Attr(quat(Rp.T @ Rc))
+        # Joint frames from the model constants (parent-relative body offset at qpos = 0), so joint angle 0 and the
+        # limits mean the same as in MuJoCo; the bodies are still placed at pose q.
+        off = np.zeros(9); mujoco.mju_quat2Mat(off, model.body_quat[child]); off = off.reshape(3, 3)
+        joint.CreateLocalPos0Attr(Gf.Vec3f(*map(float, model.body_pos[child] + off @ model.jnt_pos[j]))); joint.CreateLocalRot0Attr(quat(off))
         joint.CreateLocalPos1Attr(Gf.Vec3f(*map(float, model.jnt_pos[j]))); joint.CreateLocalRot1Attr(Gf.Quatf(1, 0, 0, 0))
         lo, hi = model.jnt_range[j]
         joint.CreateLowerLimitAttr(float(math.degrees(lo))); joint.CreateUpperLimitAttr(float(math.degrees(hi)))
@@ -395,12 +396,15 @@ def write_usd(path: Path, q):
         if model.body_jntnum[b] == 0 and parent > 0 and model.body_mass[b] > 0 and model.body_mass[parent] > 0:
             fixed = UsdPhysics.FixedJoint.Define(stage, f"/Workcell/Joints/fixed_{name(b)}")
             fixed.CreateBody0Rel().SetTargets([paths[parent]]); fixed.CreateBody1Rel().SetTargets([paths[b]])
-            Rp, Rc = data.xmat[parent].reshape(3, 3), data.xmat[b].reshape(3, 3)
-            fixed.CreateLocalPos0Attr(Gf.Vec3f(*map(float, Rp.T @ (data.xpos[b] - data.xpos[parent])))); fixed.CreateLocalRot0Attr(quat(Rp.T @ Rc))
+            off = np.zeros(9); mujoco.mju_quat2Mat(off, model.body_quat[b])
+            fixed.CreateLocalPos0Attr(Gf.Vec3f(*map(float, model.body_pos[b]))); fixed.CreateLocalRot0Attr(quat(off))
             fixed.CreateLocalPos1Attr(Gf.Vec3f(0, 0, 0)); fixed.CreateLocalRot1Attr(Gf.Quatf(1, 0, 0, 0))
             joints.append(f"fixed_{name(b)}")
-    UsdPhysics.ArticulationRootAPI.Apply(stage.GetPrimAtPath(paths[model.body("base").id]))
-    stage.GetRootLayer().customLayerData = {"generator": "pai-mujoco", "mujoco": mujoco.__version__, "pose": "pick"}
+    # The articulation root must be an ancestor of every body in it (UsdPhysics); the bodies are flat under /Workcell.
+    # Newton and Isaac Lab reject joints outside an articulation, so the root sits on the common ancestor.
+    UsdPhysics.ArticulationRootAPI.Apply(root.GetPrim())
+    stage.GetRootLayer().customLayerData = {"generator": "pai-mujoco", "mujoco": mujoco.__version__, "pose": "pick",
+                                            "poseJointRadians": Vt.DoubleArray([float(x) for x in q[:6]])}
     stage.GetRootLayer().Save()
     reopened = Usd.Stage.Open(str(path))
     # Every registered OpenUSD validator, including usdPhysics RigidBody / PhysicsJoint / Articulation / Collider checks.

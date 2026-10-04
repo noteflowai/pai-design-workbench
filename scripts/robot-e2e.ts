@@ -61,6 +61,12 @@ try {
     assert.match(mjcf.body, /<mesh name="cad-tool" file="tool.stl"/); assert.doesNotMatch(String(mjcf.body), /\/home\/|\/var\//, "portable MJCF without local paths");
     const usda = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/scene.usda`, headers: { host } });
     assert.match(usda.body, /^#usda 1\.0/); assert.match(usda.body, /PhysicsRevoluteJoint/); assert.match(usda.body, /PhysicsArticulationRootAPI/);
+    if (config.newtonPython) {
+      // The exported USD is what Newton / Isaac Lab users receive: one articulation, same masses and kinematics as the MJCF.
+      const n = mounted.usd!.newton!;
+      assert.ok("passed" in n && n.passed, JSON.stringify(n));
+      assert.ok(n.fkPositionM < 1e-4 && mounted.files["candidate/newton.json"]);
+    }
     const stl = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/tool.stl`, headers: { host } });
     assert.equal(stl.statusCode, 200);
     const refused = await app.inject({ method: "POST", url: `/api/projects/${project.id}/scenes`, headers: { host, "content-type": "application/json" },

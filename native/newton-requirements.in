@@ -1,0 +1,5 @@
+newton[sim]==1.6.0
+usd-core==26.3
+newton-usd-schemas
+scipy
+trimesh

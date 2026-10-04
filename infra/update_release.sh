@@ -37,8 +37,8 @@ fi
 runuser -u pai -- python3 tools/setup_cadquery.py
 # Physics lane (Gmsh, CalculiX from the signed Ubuntu archive, Optuna, scikit-learn, MuJoCo); idempotent, no root needed.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64 >/dev/null
-# BoTorch strategy (CPU PyTorch, hash-locked) only when the operator opts in.
-runuser -u pai -- env PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" python3 tools/setup_physics.py
+# BoTorch strategy (CPU PyTorch, hash-locked) and Newton USD conformance (CPU Warp) only when the operator opts in.
+runuser -u pai -- env PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" PAI_PHYSICS_NEWTON="${PAI_PHYSICS_NEWTON:-}" python3 tools/setup_physics.py
 # OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
 if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
 # Ubuntu 24.04 restricts unprivileged user namespaces; grant them to bwrap only (per-application AppArmor profile).

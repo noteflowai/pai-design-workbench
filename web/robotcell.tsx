@@ -107,7 +107,10 @@ export function RobotDetail({ scene, Receipts }: { scene?: RobotScene; Receipts:
         <a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/scene.usda`}>下载 OpenUSD（UsdPhysics）</a>
         <a className="button secondary" href={`/api/scenes/${scene.id}/files/candidate/robot.json`}>下载逐种子结果</a></div>
       {(scene.tool || scene.usd) && <p className="muted">{scene.tool && <>末端工装：CAD 零件 STL {scene.tool.stlSha256.slice(0, 12)}…，B-Rep {scene.tool.brepMassG} g / MuJoCo 网格 {scene.tool.mujocoMassG ?? "—"} g，负载 {scene.tool.payloadKg} kg。</>}
-        {scene.usd && <>OpenUSD {scene.usd.usdVersion}：{scene.usd.rigidBodies} 个刚体、{scene.usd.joints.length} 个关节，{scene.usd.validators} 个 UsdValidation 校验器无错误，可导入 Isaac Sim / Omniverse。</>}</p>}
+        {scene.usd && <>OpenUSD {scene.usd.usdVersion}：{scene.usd.rigidBodies} 个刚体、{scene.usd.joints.length} 个关节，{scene.usd.validators} 个 UsdValidation 校验器无错误。</>}
+        {scene.usd?.newton && ("passed" in scene.usd.newton
+          ? <> Newton {scene.usd.newton.version} 交叉校验{scene.usd.newton.passed ? "通过" : "未通过"}：导入为一个关节树，质量一致，{scene.usd.newton.configurations} 个构型的正运动学与 MJCF 相差 {(scene.usd.newton.fkPositionM * 1000).toFixed(4)} mm / {scene.usd.newton.fkOrientationDeg.toFixed(4)}°（<a href={`/api/scenes/${scene.id}/files/candidate/newton.json`}>newton.json</a>）。只校验运动学和质量，不代表动力学一致。</>
+          : <span className="warning"> Newton 无法导入该 USD：{scene.usd.newton.error}</span>)}</p>}
       <Receipts value={{ request: scene.request, requirementDigest: scene.requirementDigest, receipts: scene.receipts, files: scene.files }} />
     </>}
   </>;

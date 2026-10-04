@@ -1,0 +1,62 @@
+{
+  "schema": "pai-usd-newton-1",
+  "newton": "1.6.0",
+  "warp": "1.17.0",
+  "mujoco": "3.12.0",
+  "usdSha256": "031f8465894007490f283db42dadba9c04f1ec14b90d92aad10a90b9b7f996a2",
+  "mjcfSha256": "edb6e1f1dfa581eb49573638d44adefb7dc3304e4c7d082f05edbef9533e39dd",
+  "bodies": [
+    "shoulder",
+    "upper",
+    "fore",
+    "w1",
+    "w2",
+    "w3",
+    "gripper",
+    "cad_tool"
+  ],
+  "configurations": 33,
+  "checks": [
+    {
+      "id": "articulation",
+      "passed": true,
+      "observed": {
+        "articulations": 1,
+        "revolute": 6,
+        "joints": 8
+      }
+    },
+    {
+      "id": "body-mass",
+      "passed": true,
+      "observed": 4.7e-07,
+      "required": 0.0001,
+      "unit": "kg"
+    },
+    {
+      "id": "fk-position",
+      "passed": true,
+      "observed": 4.52e-07,
+      "required": 0.0001,
+      "unit": "m"
+    },
+    {
+      "id": "fk-orientation",
+      "passed": true,
+      "observed": 3.1e-05,
+      "required": 0.01,
+      "unit": "deg"
+    },
+    {
+      "id": "authored-pose",
+      "passed": true,
+      "observed": 1.32e-07,
+      "required": 0.0001,
+      "unit": "m"
+    }
+  ],
+  "passed": true,
+  "seconds": 4.8,
+  "scope": "kinematics-and-mass-conformance",
+  "physicalValidation": false
+}

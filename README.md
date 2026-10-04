@@ -49,7 +49,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 只提议�
 | 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
 | 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟）；NVIDIA DoMINO 预筛在 GPU 上并行给出参考 Cd，按校准门禁决定能否参与排序（目前未通过） | [AERO.md](docs/AERO.md) |
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
-| 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器） | [PHYSICS.md](docs/PHYSICS.md) |
+| 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器；Newton 1.6 交叉校验关节树、质量和正运动学） | [PHYSICS.md](docs/PHYSICS.md) |
 | 产线与场景 | Blender 5.2：工作单元与 6 工位产线，BVH 射线实测通道、围栏、相机覆盖 | [PLANT.md](docs/PLANT.md) |
 | 可制造性 | 三轴铣削 DFM：最少装夹方向、孔深径比、单件成本估算（车间参数已审查） | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
 | 证据 | EvalArc 基准对照、发布准入 5 项；AWS KMS 签名，加 RFC 3161 时间戳，只封存一次；界面内和离线核验 | [VERIFICATION.md](docs/VERIFICATION.md) |
