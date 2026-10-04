@@ -76,3 +76,21 @@ When `PAI_SOLVER_CFD_JOB_DEFINITION` is configured, as on the hosted site, each 
 The 12.5° review on pai.oneai.host took 9 minutes in 4 jobs; locally on 8 cores it took 94 minutes. The drag
 coefficients equal the local ones: reference 0.23406, candidate 0.22926 against 0.22945 locally. See
 [aero-batch.json](evidence/aero-batch.json).
+
+## Boundary-layer experiment (not used by reviews)
+
+`cfd_case.py --layers N` adds snappyHexMesh prism layers. On the 12.5° body:
+
+| Variant | Level 3 Cd | Level 4 Cd | Two-level change |
+|---|---|---|---|
+| No layers (the review setting) | 0.2537 | 0.2295 | 10.6 % |
+| 3 relative layers (expansion 1.2, final 0.5; 80 % thickness coverage) | 0.3059 | 0.2454 | 24.7 % |
+| 3 absolute layers (first cell for y+ ≈ 50) | 0.2547 (28 % coverage) | diverged (floating-point exception, iteration 9) | — |
+
+Prism layers alone increase the mesh dependence. A layered setup that converges needs four things together:
+- a y+ study per level;
+- a `potentialFoam` initialisation and a first-order start;
+- finer surface refinement so the layers can grow;
+- the 16-vCPU Batch runner, because each case costs 10–30 minutes.
+
+Until that study is done, reviews keep the verified no-layer setup and state its 10 % mesh dependence.

@@ -20,7 +20,7 @@ p.add_argument("--iterations", type=int, default=1200)
 p.add_argument("--frontal-area", type=float, required=True, help="full-body frontal area, m2")
 p.add_argument("--length", type=float, required=True)
 p.add_argument("--processors", type=int, default=4)
-p.add_argument("--layers", type=int, default=0, help="prism layers on the body (0 = none)")
+p.add_argument("--layers", type=int, default=0, help="experimental: prism layers on the body (0 = none; reviews use 0, see docs/AERO.md)")
 a = p.parse_args()
 case = Path(a.out)
 for d in ("system", "constant/triSurface", "0"):
