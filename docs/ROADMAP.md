@@ -65,7 +65,7 @@
 | M6 代理模型预筛 | PhysicsNeMo-CFD（DoMINO / Transolver），为 OpenFOAM 做混合初始化 | 同一车身上迭代次数减少，Cd 与冷启动一致；代理模型只负责排序和给初值 |
 | M7 USD → 机器人策略 | Newton / Isaac Lab（L40S）、NVIDIA/skills 挂到 AgentForge、LeRobot + GR00T N1.7 | 导出的 USD 在 Isaac Lab 或 Newton 上加载并跑出策略成功率，作为新的检查项 |
 | M8 设计到制造与实测回流 | ocp-freecad-cam / OpenCAMLib 出 G-code；ros-mcp-server、asyncua、BaSyx 第一阶段只读；硬件三道闸 | G-code 经仿真校验；三坐标或应变实测回写证据，只有这一级才把 `physicalValidation` 标为 true |
-| 多模态评审 | 顶级模型的视觉能力；执行器需要支持图像输入 | Cycles 渲染图、FEA 云图、流场图进入评审，结果与求解器结论对照 |
+| 多模态评审（✓ 第一版） | 顶级模型的视觉能力；执行器 PR #60 支持按摘要绑定图像 | ✓ 渲染图已能进入评审；待做：执行器 PR 合并后更新固定版本；把 FEA 云图和流场图导出为 PNG；按图像得出的结论要与求解器结论对照打分 |
 
 ## 风险与对策
 

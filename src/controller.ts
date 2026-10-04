@@ -82,6 +82,8 @@ export async function readAttempts(stateDir: string, runId: string): Promise<Con
 
 export async function runController(config: Config, directory: string, runId: string, prompt: string, options: {
   profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
+  /** Optional images for visual review (PNG/JPEG bytes); copied privately and pinned by SHA-256 in the request. */
+  images?: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[];
 }): Promise<ControllerResult> {
   if (!controllerConfigured(config)) throw new DomainError("CONTROLLER_NOT_CONFIGURED", "Configure the native flow entrypoint and the reviewed admission ledger", 503);
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) throw new DomainError("INVALID_RUN_ID", "Run identity does not match the executor contract", 422);
@@ -91,9 +93,18 @@ export async function runController(config: Config, directory: string, runId: st
   if (controllerTransport(config) === "agentcore") return runRemote(config, directory, runId, prompt, options);
   const state = join(directory, "native-state");
   await writePrivate(join(directory, "prompt.txt"), prompt);
+  const images = options.images ?? [];
+  if (images.length > 3 || images.some(i => i.data.length > 1_500_000)) throw new DomainError("IMAGES_TOO_LARGE", "At most 3 images of up to 1.5 MB each", 422);
+  const attached = [];
+  for (const [i, image] of images.entries()) {
+    const path = join(directory, `attach-${i}.${image.mediaType === "image/png" ? "png" : "jpg"}`);
+    await writePrivate(path, image.data);
+    attached.push({ path, media_type: image.mediaType, sha256: sha256(image.data) });
+  }
   await writePrivate(join(directory, "request.json"), JSON.stringify({
     schema_version: 1, kind: "text-proposal", run_id: runId, prompt_file: join(directory, "prompt.txt"),
     profiles: options.profiles, timeout_seconds: options.timeoutSeconds, max_attempts: options.profiles.length, cost_bounds_microusd: null,
+    ...(attached.length ? { images: attached } : {}),
   }, null, 2));
   // Poll the executor's receipts only to present progress; nothing here influences routing.
   const seen = new Set<string>();

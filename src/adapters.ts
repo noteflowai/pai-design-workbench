@@ -114,7 +114,7 @@ export class NativeAdapters implements Adapters {
     }
   }
 }
-export async function writePrivate(path: string, content: string) {
+export async function writePrivate(path: string, content: string | Buffer) {
   await mkdir(resolve(path, ".."), { recursive: true, mode: 0o700 });
   await writeFile(path, content, { mode: 0o600, flag: "wx" });
 }

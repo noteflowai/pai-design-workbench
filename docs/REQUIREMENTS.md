@@ -44,7 +44,7 @@
 
 | F23 | 有边界的自主：维护者签发授权（工具、次数、有效期），autopilot 在授权内多轮执行"提议 → 原生检查 → 修改"；放宽要求、修改需求一律拒绝；不能验收或发布 | `tests/autonomy.test.ts`；本机实测：Kiro 2.27.1 写 CadQuery 代码，第 1 轮通过（40.59 g） | 已验证（本机） |
 | F24 | 外部 Agent 在授权内触发原生求解：`pai_list_grants`、`pai_run_plan`；托管站点用单独的 `pai-agent/run` scope | 真实 AgentForge Host 会话（Kiro + acpx 0.19.4 + 治理网关）：提议 → 执行 → 读取结论，整条链跑通 | 已验证（本机）；托管站点待部署 |
-| F25 | 多模态评审：渲染图、应力云图、流场图交给模型做视觉评审，结论仍以求解器为准 | 待定 | 待做（受控执行器目前只处理文本） |
+| F25 | 多模态评审：已记录的原生图像（渲染图、检查视图）随文本上下文发给模型，结论仍以求解器为准 | `POST /api/assistant/ai` 加 `attachments`（只接受记录里登记过、摘要一致的 PNG/JPEG，最多 3 张）；执行器 PR [noteflow-agent-control#60](https://github.com/noteflowai/noteflow-agent-control/pull/60) 让图像按摘要绑定；本机实测：Kiro 2.27.1 看出遮挡工作单元渲染图里挡住视线的块体 | 部分：本机已验证；托管站点要等执行器 PR 合并、更新固定版本后，再设 `PAI_EXECUTOR_IMAGES=1` 开启。应力云图、流场图还需先导出为 PNG |
 | F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测通过的那一级才把 `physicalValidation` 标为 true；写操作经硬件三道闸 | 待定 | 待做 |
 
 ## N. 非功能需求

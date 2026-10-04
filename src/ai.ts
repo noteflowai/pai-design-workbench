@@ -31,6 +31,9 @@ import type { Lifecycle } from "./lifecycle.js";
 export const AiInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
+  /** Visual review: recorded native images (renders, inspection views) sent to the model with the text context. */
+  attachments: z.array(z.object({ recordKind: z.enum(["scene-review", "cad-review", "aero-review"]), recordId: Id,
+    which: z.enum(["baseline", "candidate"]), file: z.string().regex(/^[a-z0-9-]{1,40}\.(png|jpg)$/) }).strict()).max(3).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
 export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "aero-body", "factory-criteria", "factory-review"] as const;
@@ -503,8 +506,25 @@ async function screenCode(config: Config, result: Pick<AssistantPlan, "interpret
 
 const STATE: Record<string, NonNullable<AssistantPlan["state"]>> = { done: "done", "deferred-budget": "deferred", "blocked-policy": "blocked", "blocked-engine": "blocked" };
 
+/** Recorded native images only: the file must be listed in the record with a digest, and still match it. */
+async function attachedImages(store: Store, config: Config, list: NonNullable<z.infer<typeof AiInput>["attachments"]>) {
+  const DIR: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad", "aero-review": "aero" };
+  const out: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[] = [];
+  for (const a of list) {
+    const record = store.get<{ files?: Record<string, string>; state?: string }>(a.recordKind, a.recordId);
+    const name = `${a.which}/${a.file}`;
+    if (!record?.files?.[name]) throw new DomainError("ATTACHMENT_NOT_RECORDED", `${name} is not a recorded file of that record`, 422);
+    const data = await readFile(join(config.state, DIR[a.recordKind], a.recordId, a.which, a.file));
+    if (sha256(data) !== record.files[name]) throw new DomainError("ATTACHMENT_CHANGED", `${name} differs from its recorded digest`, 422);
+    out.push({ mediaType: a.file.endsWith(".png") ? "image/png" : "image/jpeg", data });
+  }
+  return out;
+}
+
 export async function createAiPlan(store: Store, config: Config, input: unknown, lifecycleOf: (p: Project) => Lifecycle, live?: LiveBus): Promise<AssistantPlan> {
   const request = AiInput.parse(input);
+  // Only executors that accept digest-bound images get attachments; an older one would refuse, so refuse before any claim.
+  if (request.attachments?.length && process.env.PAI_EXECUTOR_IMAGES !== "1") throw new DomainError("VISUAL_REVIEW_NOT_AVAILABLE", "The pinned executor does not accept images (set PAI_EXECUTOR_IMAGES=1 with an executor that does)", 503);
   if (!controllerConfigured(config)) throw new DomainError("CONTROLLER_NOT_CONFIGURED", "未配置受控执行器与经审查的尝试账本；AI 引擎不可用", 503);
   const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
   if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
@@ -538,7 +558,9 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
     step("engine", `调用 AI 引擎（${profiles.map(p => PROFILE_LABEL[p]).join(" → ")}）`, "running");
     const onAttempt = (a: ControllerAttempt) => step(`attempt-${a.profile}`, PROFILE_LABEL[a.profile] ?? a.profile,
       a.status === "succeeded" ? "done" : "failed", a.status === "succeeded" ? `${a.model ?? "模型未知"} · 已返回` : ERROR_LABEL[a.errorKind ?? ""] ?? a.errorKind ?? a.status);
-    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, timeoutSeconds: 60, onAttempt });
+    const images = await attachedImages(store, config, request.attachments ?? []);
+    if (images.length) step("context", `附加 ${images.length} 张原生图像做视觉评审`, "done", (request.attachments ?? []).map(a => `${a.which}/${a.file}`).join("、"));
+    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, timeoutSeconds: 60, onAttempt, images });
     record.ai = { action: r.action, reason: r.reason, effects: r.effects, reportSha256: r.reportSha256, engine: r.engine,
       attempts: r.attempts.map(a => ({ profile: a.profile, provider: a.provider, status: a.status, errorKind: a.errorKind, model: a.model })) };
     record.state = STATE[r.action] ?? "reconcile";

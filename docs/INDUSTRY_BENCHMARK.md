@@ -47,7 +47,7 @@ PAI 需要的通用能力基本都有成熟的开源实现，没必要从头做�
 | 优化实验管理 | — | Ax（Meta，基于 BoTorch）做多目标、约束和实验管理；需要多学科耦合时再引入 OpenMDAO（NASA） | 已有 BoTorch / Optuna；Ax 待评估 |
 | 没有对接 OpenUSD 和物理 AI 工具链 | NVIDIA 技能包，CAD → SimReady → Isaac Sim | Newton（Linux 基金会托管，NVIDIA、DeepMind、Disney 联合开发，基于 Warp 和 OpenUSD，兼容 MuJoCo Playground 和 Isaac Lab）；Isaac Sim 6.0.1 / Isaac Lab；NVIDIA/skills 作为 AgentForge 技能挂载 | 已能导出 MJCF 和通过校验的 OpenUSD；东京开发机的 L40S 可以跑 Isaac Sim（M6） |
 | 机器人策略与 VLA | Siemens 人形机器人进厂 | LeRobot v0.6（部署 → 失败样本 → 再训练闭环）与 GR00T N1.7（开放权重、可商用，已集成进 LeRobot）；PAI 只输出机器人模型和场景 | 待做（M6） |
-| AI 只看文本和数字 | Neural CAD、GeomAI | 先用顶级模型的视觉能力评审渲染图、应力云图和流场 | 待做：受控执行器目前只处理文本（M7） |
+| AI 只看文本和数字 | Neural CAD、GeomAI | 先用顶级模型的视觉能力评审渲染图、应力云图和流场 | 第一版完成：已记录的图像按摘要绑定后发给模型（执行器 PR #60），本机已实测 |
 | 加工停留在估算 | — | ocp-freecad-cam（把 CadQuery / build123d 形体直接交给 FreeCAD Path 生成刀路）；OpenCAMLib | DFM 估算已完成（✓）；G-code 待做（M5） |
 | 停留在仿真 | 视觉质检、人形机器人进厂 | ros-mcp-server（只加 rosbridge，不改机器人代码）；OPC UA 用 asyncua / open62541；资产数字孪生用 Eclipse BaSyx（AAS，有 Python SDK）；写操作采用灵犀硬件 AI-DLC 的三道闸（顺序、权限、证据） | 第一阶段只开放读取和仿真；实测通过的那一级才把 `physicalValidation` 标为 true（M8） |
 

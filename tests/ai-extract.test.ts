@@ -34,3 +34,13 @@ test("null on an optional property means absent (the hosted Kiro reply wrote dep
   assert.ok(out.interpretation.some(x => /已拒绝 AI 计划 p1/.test(x)), "the plan itself is still judged by its tool contract");
   assert.throws(() => interpretOutput(JSON.stringify({ kind: null }), ctx));
 });
+
+test("visual review is refused before any claim when the executor does not accept images", async () => {
+  const { createAiPlan } = await import("../src/ai.js");
+  const prev = process.env.PAI_EXECUTOR_IMAGES; delete process.env.PAI_EXECUTOR_IMAGES;
+  try {
+    await assert.rejects(createAiPlan({} as never, { controllerEntrypoint: "/x", controllerDatabase: "/y" } as never,
+      { requestId: crypto.randomUUID(), message: "look at this", attachments: [{ recordKind: "scene-review", recordId: crypto.randomUUID(), which: "candidate", file: "preview.png" }] }, () => ({}) as never),
+      /VISUAL_REVIEW_NOT_AVAILABLE|not accept images/);
+  } finally { if (prev !== undefined) process.env.PAI_EXECUTOR_IMAGES = prev; }
+});
