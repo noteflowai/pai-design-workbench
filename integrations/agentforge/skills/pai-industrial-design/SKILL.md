@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.2.0"
+version: "1.3.0"
 ---
 
 # PAI industrial design
@@ -40,9 +40,19 @@ trials, and EvalArc compares a candidate against its baseline. You **propose**; 
   from the exact mesh and are cross-checked against the B-Rep. Each run exports MJCF and validated OpenUSD.
 - `aero-body`: an Ahmed-type body solved by OpenFOAM v2512 on two meshes (on AWS Batch when hosted). Reason about
   slant-angle separation before proposing. Steady RANS under-predicts drag at 25–35°, so trust the solver's ranking,
-  not absolute values.
+  not absolute values. A record may also carry `prescreen` (NVIDIA DoMINO surrogate on the same STL): it is
+  advisory, out of distribution for this body and not calibrated for ranking unless `calibration.admittedForRanking`
+  is true. Never cite it as a drag result.
 - `requirements.dfm` on a CAD review: 3-axis milling setups, hole drillability and a unit-cost estimate measured on
   the B-Rep. It is an estimate, not a quote.
+- `pai_get_solver_dataset`: every native measurement as one row (inputs, solver outputs, solver version, record).
+  Use it to ground estimates and seeds. `advisory` fields are AI predictions kept as calibration pairs, never
+  measurements.
+- `pai_list_grants` / `pai_run_plan`: if a maintainer issued a grant (tools, run count, expiry), you may run your
+  own confirmed-shape plan inside it and then read the verdict. Grants never cover requirement changes,
+  relaxations, approval, release or feedback; a refused run is not retried with a looser plan.
+- Visual review happens in the workbench (recorded renders and stress plots sent to the model by digest). Image
+  judgements are advisory; quote the native check that decides.
 - A released package is signed (KMS) and time-stamped (RFC 3161). Cite its release number. Never describe it as
   physical validation.
 
