@@ -310,7 +310,7 @@ const cases: Case[] = [
     } },
   { id: "M1", domain: "外部 Agent（MCP）", title: "外部 Agent 读证据、自查代码、提议计划", tool: "stdio MCP（官方 SDK）",
     rationale: "企业里的 AI 客户端各不相同；开放读取与提议，但不开放执行、验收与发布。",
-    expected: "8 个工具，无执行/发布类；代码自查发现 import os；提议后未执行；确认后可读到确认状态", run: async () => {
+    expected: "9 个工具（含只读求解数据集），无执行/发布类；代码自查发现 import os；提议后未执行；确认后可读到确认状态", run: async () => {
       const client = new Client({ name: "Suite Agent", version: "1.0.0" });
       await client.connect(new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", join(config.repository, "src/mcp.ts")],
         env: { PATH: process.env.PATH ?? "", PAI_URL: `http://127.0.0.1:${port}` }, stderr: "pipe", cwd: config.repository }));
@@ -325,7 +325,7 @@ const cases: Case[] = [
         await ok("POST", `/api/assistant/plans/${prop.planId}/confirmations`, { planId: "p1", recordKind: "cad-review", recordId: c.id });
         const done = await tool("pai_get_plan", { planId: prop.planId });
         const forbidden = names.filter(n => /approve|release|confirm|execute|feedback|reconcil/.test(n));
-        return { matched: names.length === 8 && forbidden.length === 0 && check.ok === false && check.violations.some((v: string) => v.includes("os")) && prop.authority === "none"
+        return { matched: names.length === 9 && names.includes("pai_get_solver_dataset") && forbidden.length === 0 && check.ok === false && check.violations.some((v: string) => v.includes("os")) && prop.authority === "none"
             && pending.steps[0].confirmed === null && done.steps[0].confirmed?.match === "as-proposed" && c.verdict === "rejected",
           actual: `${names.length} 个工具；禁用类 ${forbidden.length}；自查违规 ${check.violations.length}；确认前 ${pending.steps[0].confirmed}；确认后 ${done.steps[0].confirmed?.match}；${c.verdict}`, evidence: { planId: prop.planId } };
       } finally { await client.close(); }
