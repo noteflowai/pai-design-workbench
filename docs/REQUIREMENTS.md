@@ -39,7 +39,7 @@
 | F18 | FEA 批量扩展到 AWS Batch，每个点一个作业，结果同样经摘要核验 | 托管寻优：5 个 Batch 作业，摘要与版本核对；单点与本机结果一致（0.0478 mm），见 [solver-batch.json](evidence/solver-batch.json) | 已验证 |
 | F19 | 流体通道：OpenFOAM v2512（固定 digest 的官方 OpenCFD 镜像）+ CadQuery 生成 Ahmed 型车身；snappyHexMesh 两级网格 + simpleFoam k-ω SST；检查阻力、网格收敛、迭代收敛、网格质量 | `npm run test:aero`；角度扫描与 Ahmed 1984 实验对照，见 [AERO.md](AERO.md) | 已验证：本机，以及托管站点经 AWS Batch 跑（16 vCPU，9 分钟，本机 94 分钟；Cd 与本机一致，见 [aero-batch.json](evidence/aero-batch.json)） |
 | F20 | 物理 AI 代理模型 PhysicsNeMo：用自己积累的求解数据训练，只负责排序 | 留出集误差 + 实测复核 | 已验证（标量设计空间部分）：求解数据集直接给寻优的 GP 预热，最轻可行质量从 46.33 g 降到 44.14 g，求解次数从 16.5 次降到 14.5 次，见 [warm-start.json](evidence/warm-start.json)。PhysicsNeMo 是有意不用：标量数据量小，GP 足够；等有场级数据（DrivAerML 或 CFD 场）再做 |
-| F21 | 可制造性：三轴铣削 DFM，在 B-Rep 上实测最少装夹方向（精确覆盖）、孔深径比、单件成本估算（车间参数放在 `native/dfm-shop.json`，经审查）；作为可选冻结要求进入 CAD 检查和 EvalArc | `npm run test:cad`：2 次装夹；参考件 17.22 EUR 超出 16 EUR 目标，紧凑型 14.69 EUR 达标 | 已验证（估算，不是报价；未做 CAM 刀路仿真） |
+| F21 | 可制造性：三轴铣削 DFM，在 B-Rep 上实测最少装夹方向（精确覆盖，孔只算无遮挡的钻削通道）、孔深径比、紧固件可装配性（DFA，ISO 4762 螺钉头空间）、单件成本估算（车间参数放在 `native/dfm-shop.json`，经审查）；作为可选冻结要求进入 CAD 检查和 EvalArc | `npm run test:cad`：2 次装夹；参考件 17.22 EUR 超出 16 EUR 目标；紧凑型 14.69 EUR 但 2 个 M5 孔被加强筋压住，螺钉装不进，结论为拒绝 | 已验证（估算，不是报价；未做 CAM 刀路仿真） |
 | F22 | 第二个零件族，以及 FreeCAD / build123d 文档 | 原生 e2e | 待做 |
 
 | F23 | 有边界的自主：维护者签发授权（工具、次数、有效期），autopilot 在授权内多轮执行"提议 → 原生检查 → 修改"；放宽要求、修改需求一律拒绝；不能验收或发布 | `tests/autonomy.test.ts`；本机实测：Kiro 2.27.1 写 CadQuery 代码，第 1 轮通过（40.59 g） | 已验证（本机） |

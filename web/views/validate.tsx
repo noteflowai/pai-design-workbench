@@ -121,6 +121,10 @@ function cadRows(checks: { id: string; passed: boolean; observed?: unknown; requ
       const v = x.observed as { pilotBore: number; boltHoles: number[]; pitch: number[] };
       return { id: x.id, title, passed: x.passed, observed: `Ø${v.pilotBore} · 4×Ø${v.boltHoles[0] ?? "—"} · ${v.pitch.join("/")}`, required: "≥ Ø22.2 · 4×Ø3.4 · 31", unit: "mm", margin: ge(v.pilotBore, 22.2) };
     }
+    if (x.id === "machining-setups") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "次", margin: le(o, r), note: "三轴主方向集合覆盖；孔按无遮挡钻削通道" };
+    if (x.id === "hole-drillability") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "深径比", margin: le(o, r), note: "孔深/孔径，且至少一端钻削通道无遮挡" };
+    if (x.id === "fastener-access") return { id: x.id, title, passed: x.passed, observed: String(o), required: "0", unit: "个孔", note: "ISO 4762 螺钉头与内六角扳手在落座侧的空间" };
+    if (x.id === "unit-cost") return { id: x.id, title, passed: x.passed, observed: o.toFixed(2), required: Number.isFinite(r) ? `≤ ${r}` : "—", unit: "EUR", margin: Number.isFinite(r) ? le(o, r) : undefined, note: "估算，不是报价" };
     return { id: x.id, title, passed: x.passed, observed: String(x.observed), required: "1", unit: "实体", note: "OCCT BRepCheck" };
   });
 }

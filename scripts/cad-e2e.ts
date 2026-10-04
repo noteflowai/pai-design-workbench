@@ -93,8 +93,12 @@ try {
   assert.equal(dfmCheck("candidate", "machining-setups").observed, 2, "the bracket needs two setups (+Y face, +Z base)");
   assert.equal(dfmCheck("baseline", "unit-cost").passed, false, "the larger reference bracket is over the 16 EUR target");
   assert.equal(dfmCheck("candidate", "unit-cost").passed, true, "the compact bracket is under the 16 EUR target");
+  // DFA: with W = 50 the side ribs (x ≥ 21) overhang the fixed M5 base holes (x = ±20, Ø5.5), so an M5 head cannot seat.
+  assert.equal(dfmCheck("baseline", "fastener-access").passed, true, "the reference bracket seats its M5 and M3 screws");
+  assert.equal(dfmCheck("candidate", "fastener-access").observed, 2, "both M5 base holes of the compact bracket are covered by the ribs");
+  assert.equal(dfmRun.verdict, "rejected");
   assert.ok(dfmRun.files["candidate/dfm.json"]);
-  const dfmReport = { setups: dfmCheck("candidate", "machining-setups").observed, unitCostEur: { reference: dfmCheck("baseline", "unit-cost").observed, compact: dfmCheck("candidate", "unit-cost").observed },
+  const dfmReport = { setups: dfmCheck("candidate", "machining-setups").observed, blockedFastenerHoles: { reference: dfmCheck("baseline", "fastener-access").observed, compact: dfmCheck("candidate", "fastener-access").observed }, unitCostEur: { reference: dfmCheck("baseline", "unit-cost").observed, compact: dfmCheck("candidate", "unit-cost").observed },
     verdict: dfmRun.verdict };
   const report = { schema: "pai-cad-e2e-1", checkedAt: new Date().toISOString(), result: "passed",
     cadquery: fixed.candidate!.cadquery, ocp: fixed.candidate!.ocp, part: "NEMA 17 motor-mount bracket (6061 aluminium, nominal)",

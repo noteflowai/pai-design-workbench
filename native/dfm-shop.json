@@ -3,7 +3,7 @@
   "process": "3-axis CNC milling from rectangular 6061-T6 bar stock",
   "stockAllowanceMm": 2.0,
   "materialEurPerKg": 6.5,
-  "densityGPerCm3": 2.70,
+  "densityGPerCm3": 2.7,
   "machineEurPerHour": 75.0,
   "setupMinutes": 15.0,
   "roughingCm3PerMin": 20.0,
@@ -11,5 +11,21 @@
   "drillSecondsPerHole": 20.0,
   "minToolDiameterMm": 3.0,
   "maxDrillDepthToDiameter": 4.0,
-  "batch": 50
+  "batch": 50,
+  "drillAccessMm": 30.0,
+  "fasteners": {
+    "3.4": {
+      "thread": "M3",
+      "headDiameterMm": 5.5,
+      "headHeightMm": 3.0,
+      "keyAccessMm": 15.0
+    },
+    "5.5": {
+      "thread": "M5",
+      "headDiameterMm": 8.5,
+      "headHeightMm": 5.0,
+      "keyAccessMm": 20.0
+    }
+  },
+  "fastenersNote": "Keys: clearance hole diameter (ISO 273 medium). Head: ISO 4762 socket head cap screw dk / k; keyAccessMm: straight hex-key engagement above the head."
 }

@@ -22,7 +22,7 @@ export const GEOMETRY_CHECKS = ["solid-valid", "nema17-interface", "motor-interf
 /** Structural checks from the native FEA (Gmsh + CalculiX); present only when structural requirements are frozen. */
 export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
 /** 3-axis milling DFM (native/cad_dfm.py on the B-Rep, shop assumptions in native/dfm-shop.json); opt-in like FEA. */
-export const DFM_CHECKS = ["machining-setups", "hole-drillability", "unit-cost"] as const;
+export const DFM_CHECKS = ["machining-setups", "hole-drillability", "fastener-access", "unit-cost"] as const;
 export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS] as const;
 export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000) }).strict();
 export type DfmRequirements = z.infer<typeof DfmRequirements>;
@@ -346,7 +346,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
           stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(native("cad_dfm.py"))), shop: sha256(await readFile(native("dfm-shop.json"))) } });
         publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM（${name === "baseline" ? "基准" : "候选"}）`, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: r.stdout.trim().slice(0, 160) });
         if (r.exitCode !== 0) throw new DomainError("DFM_FAILED", "Native DFM analysis failed; retain receipts", 422);
-        const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(3) }).passthrough()
+        const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(DFM_CHECKS.length) }).passthrough()
           .parse(JSON.parse(await readFile(join(target, "dfm.json"), "utf8")));
         checks.checks.push(...measured.checks as typeof checks.checks);
       }
