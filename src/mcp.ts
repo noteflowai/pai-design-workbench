@@ -156,6 +156,13 @@ export function createMcpServer(api: Fetch, agentName?: string): McpServer {
     inputSchema: { projectId: ProjectId },
   }, guard(async ({ projectId }) => api(`/projects/${projectId}/versions`)));
 
+  server.registerTool("pai_get_solver_dataset", {
+    title: "求解数据集", annotations: READ,
+    description: "工作区内全部原生求解实测（CalculiX 结构 FEA、OpenFOAM RANS），每行含设计参数、实测结果、求解器版本与来源记录；带内容摘要。"
+      + "用来校准你自己的物理估算（先估再对照），或为 cad-optimize 种子选点。只有实测值，没有插值；结论仍以新的原生检查为准。",
+    inputSchema: { domain: z.enum(["structural-fea", "aero-rans"]).optional() },
+  }, guard(async ({ domain }) => api(`/dataset/solver${domain ? `?domain=${domain}` : ""}`)));
+
   server.registerTool("pai_propose_plan", {
     title: "提议计划（需人工确认）",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

@@ -51,7 +51,7 @@ test("MCP exposes reads and proposals only; read tools are annotated read-only",
   try {
     const { tools } = await s.client.listTools();
     const names = tools.map(t => t.name).sort();
-    assert.deepEqual(names, ["pai_check_cad_code", "pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_workspace", "pai_list_projects", "pai_list_versions", "pai_propose_plan"]);
+    assert.deepEqual(names, ["pai_check_cad_code", "pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_solver_dataset", "pai_get_workspace", "pai_list_projects", "pai_list_versions", "pai_propose_plan"]);
     assert.ok(!names.some(n => /approve|release|confirm|execute|feedback|reconcil|run_/.test(n)), "no authority-bearing tool");
     for (const t of tools.filter(t => t.name !== "pai_propose_plan")) assert.equal(t.annotations?.readOnlyHint, true, t.name);
     const propose = tools.find(t => t.name === "pai_propose_plan")!;

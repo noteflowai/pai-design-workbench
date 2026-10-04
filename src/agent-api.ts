@@ -22,6 +22,7 @@ const ROUTES: { method: "GET" | "POST"; pattern: RegExp; scope: Scope }[] = [
   { method: "GET", pattern: /^\/assistant\/plans\/[0-9a-f-]{36}$/, scope: "read" },
   { method: "GET", pattern: /^\/projects\/[0-9a-f-]{36}\/records\/[a-z0-9-]{1,24}$/, scope: "read" },
   { method: "GET", pattern: /^\/projects\/[0-9a-f-]{36}\/versions$/, scope: "read" },
+  { method: "GET", pattern: /^\/dataset\/solver(\?domain=(structural-fea|aero-rans))?$/, scope: "read" },
   { method: "GET", pattern: /^\/projects\/[0-9a-f-]{36}\/admission\?kind=[a-z-]{1,24}&runId=[0-9a-f-]{36}$/, scope: "read" },
   { method: "POST", pattern: /^\/cad\/code-check$/, scope: "read" },
   { method: "POST", pattern: /^\/assistant\/external-plans$/, scope: "propose" },

@@ -11,6 +11,7 @@
 | `pai_get_record` | 按句柄读取完整记录：原生检查、实测值、回执 | 是 |
 | `pai_get_admission` | 某条检查能否作为发布候选（只读，不会创建发布） | 是 |
 | `pai_list_versions` | 只追加的需求版本与需求哈希 | 是 |
+| `pai_get_solver_dataset` | 原生求解实测数据集（结构 FEA、RANS），带摘要；用来校准物理估算 | 是 |
 | `pai_propose_plan` | 把类型化计划放进工作台 AI 助手，等待维护者确认 | 否，但不执行任何操作 |
 | `pai_check_cad_code` | 用沙箱静态策略检查 CadQuery 代码（只解析，不执行），用于提议 `cad-code` 计划前自查 | 是 |
 | `pai_get_plan` | 查看计划是否已被确认执行，以及产生的记录 | 是 |

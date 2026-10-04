@@ -208,7 +208,13 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
     return verifySealedPackage(body.package, body.trustedPublicKeyPem, config.tsaCaFile);
   });
-  app.get("/api/dataset/solver", async () => solverDataset(store));
+  app.get("/api/dataset/solver", async request => {
+    const { domain } = z.object({ domain: z.enum(["structural-fea", "aero-rans"]).optional() }).parse(request.query);
+    const d = solverDataset(store);
+    if (!domain) return d;
+    const data = d.data.filter(r => r.domain === domain);
+    return { ...d, rows: data.length, data, sha256: sha256(JSON.stringify(data)), domain };
+  });
   app.get("/api/state", async () => ({
     releases: store.list("release"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
