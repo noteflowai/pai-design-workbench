@@ -7,6 +7,7 @@
 面向 Physical AI 和工业设计的**可验证设计决策系统**。要做到的是：每一个被采用的设计，都能追溯到冻结的需求、原生求解器的实测，以及签名后不可篡改的证据。
 
 | 原则 | 含义 | 在系统里如何保证 |
+| 做减法 | 每个概念只出现一次：一个来源、一个固定值、一个入口 | 集成内容只在工作台维护；底座只做安装；审批脚本两份合并成一份 |
 |---|---|---|
 | AI 只提议，求解器裁决 | 模型输出只能成为计划或种子，结论来自原生工具 | 计划 `authority: none`；验收只看原生检查 + EvalArc；代理模型只排序 |
 | 需求先冻结 | 每次评审绑定需求版本和哈希；放宽要求会生成新版本 | `project-version` 只追加；计划差异标出收紧或放宽 |
@@ -80,10 +81,11 @@ flowchart TB
 | 接缝 | 方向 | 现状 | 依据 |
 |---|---|---|---|
 | 引擎层 acpx | 共用同一组件，版本各自固定 | 底座 PR #548 升到 acpx 0.19.4（CodeBuild 4 条全过）；执行器 PR #53 | `base-image.lock`、`engine-pins.json` |
+| 集成包（唯一来源） | 工作台 `integrations/agentforge` 维护内容（配置、技能、评测题）和 `bundle.json`；底座 `examples/pai-workbench` 只做安装：一个摘要锁定全部文件，各部分交给底座已有的机制 | 一个固定值、一条安装命令；底座不保留副本（只留测试用快照） | PR #551 |
 | MCP 网关 | AgentForge 会话 → PAI 读取和提议工具 | 底座示例 PR #549：用底座自己的 `mcp-gateway/policy.mjs` 核验，8 个工具放行，审批/执行类工具拒绝 | `examples/pai-workbench`、`integrations/agentforge` |
 | 托管身份 | OAuth 客户端凭据 → ALB jwt-validation → 工作台按 scope 再验一次 | 已上线（规则 119） | `src/agent-api.ts` |
 | AgentCore | 两边都对接同一个托管服务 | PAI 的 sandbox 和 agent 两个 runtime 已在用 | [AGENTCORE.md](AGENTCORE.md) |
-| CI/CD | 底座用 CodePipeline（`autoforge-unified`），PAI 用 GitHub Actions | 先在 CodeBuild 上验证 PR 分支，再合并（#547、#548、#549 已合并）；Deploy 仍要经过人工审批 | `deploy/codepipeline` |
+| CI/CD | 底座用 CodePipeline（`autoforge-unified`），PAI 用 GitHub Actions | 先在 CodeBuild 上验证 PR 分支再合并；生产环境的 Approve 阶段由审批 Agent 按证据判断（`scripts/approval-agent.py`，取代 drain-approvals.sh），只放行 main 顶端且部署前各阶段全部成功的提交；`:full` 已推广到 acpx 0.19.4 | `deploy/codepipeline` |
 | Host 会话通道 | PAI 的规划器暂不迁到 Host | 六个闸门尚未全部满足 | [AGENT_RUNTIME.md](AGENT_RUNTIME.md) |
 
 计划中的下一批接缝（见[规划](ROADMAP.md) M2）：
