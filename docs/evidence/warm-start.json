@@ -71,5 +71,25 @@
     }
   },
   "lesson": "A first warm start that carried only deflection/stress/mass made seed 7 worse (48.4 g): without wall and hole-edge observations the geometry surrogates sent 11 candidates into the infeasible region. Prior rows now carry the measured min wall and hole-edge distance.",
-  "note": "Prior points train the surrogate only; every recommended point is measured in the run itself and then formally reviewed. Two paired seeds; not a statistical claim."
+  "note": "Prior points train the surrogate only; every recommended point is measured in the run itself and then formally reviewed. Two paired seeds; not a statistical claim.",
+  "hosted": {
+    "site": "https://pai.oneai.host",
+    "release": "cdd00b8aba95f75734b8e54cecebf0ac3e60b4f2e676673bbef7a2b567ae9479",
+    "priorPoints": 37,
+    "priorSources": 5,
+    "extraRounds": 1,
+    "solved": 11,
+    "batchJobs": 11,
+    "minutes": 7.0,
+    "feasible": 7,
+    "lightest": {
+      "origin": "exploit",
+      "thickness": 3.67,
+      "width": 58.48,
+      "plateHeight": 49.25,
+      "massG": 45.473,
+      "deflectionMm": 0.0567
+    },
+    "comparison": "Demo A on the same site, cold: 19 measured points, lightest feasible 46.9 g"
+  }
 }
