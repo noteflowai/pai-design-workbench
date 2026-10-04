@@ -2,6 +2,15 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 底座 `:full` 推广、审批 Agent、集成包统一（2026-10-04）
+
+| 检查 | 实际结果 |
+|---|---|
+| 基础镜像 | 用合并后的 `9594430` 构建 `full-repro-202610032341`（arm64）。ECR 没有开启基础扫描，改在底座构建项目里用 Trivy v0.75.0（核对过发布校验和）扫描：新镜像 CRITICAL 0、HIGH 11，旧 `:full` CRITICAL 1、HIGH 23，新镜像的发现全部是旧镜像已有的。下载 npm 安装层核对 blob 摘要，确认 acpx 0.19.4 带 `--suppress-reads` 和 `--auth-policy`。推广前先核对两个 digest，旧 `:full` 备份为 `full-backup-20261004`，再把新镜像打成 `:full`（`sha256:9ad43928…`）；`base-image.lock` 随 PR #550 一起更新 |
+| 审批 Agent | `scripts/approval-agent.py` 取代 `drain-approvals.sh`。首次运行驳回 18 个已被取代的执行，批准 `9594430`（该执行的 Source、4 条 Test、Build、PackageSignVSIX 全部成功），Deploy 成功。每个决定写一行 JSON 日志 |
+| 集成包统一 | 工作台 `integrations/agentforge/bundle.json`（8 个文件，摘要 `239f93e3…`）是唯一来源。底座 PR #551 删掉 4 个模块、2 个安装器和全部副本，只保留 `pai.mjs` 和 `install.mjs`，净减 79 行。从实际提交 `be11e86` 安装：底座的 `skills-config.mjs` 分发了 1.2.0，评测自测通过 |
+| 底座 PR | #550 `92a677b`、#551 `4bd745f`，合并前 CodeBuild 的 rust、js、delivery 三条全部 SUCCEEDED |
+
 ## OpenFOAM 上 Batch、DFM、求解数据集（2026-10-04 晨）
 
 | 检查 | 实际结果 |
