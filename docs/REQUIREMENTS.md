@@ -25,7 +25,7 @@
 | F5 | AI 生成 CadQuery 代码，在三层沙箱中运行；结论用同一套检查 | `test:cad-code`；AgentCore microVM | 已验证 |
 | F6 | 结构 FEA：Gmsh C3D10 + CalculiX，两级网格；挠度和应力纳入准入 | `test:fea` | 已验证 |
 | F7 | 物理寻优：AI 种子（附估算）+ Sobol → 代理模型排序 → 几何筛查 → 求解器实测 → 正式复核 | `test:optimize`；演示 A | 已验证 |
-| F7b | 优化策略可选 BoTorch qLogNEHVI：约束批量采集 + 几何多保真先验 | `PAI_OPTIMIZE_STRATEGY=botorch-qlognehvi npm run test:optimize`（本机：7 次求解，5 个可行，代理模型校准误差 4–8 %，正式复核通过） | 已验证（本机；三个种子配对比较见 [optimizer-compare.json](evidence/optimizer-compare.json)：超体积约为 NSGA-II 的 2.2 倍，最轻质量持平；托管站点尚未安装） |
+| F7b | 优化策略可选 BoTorch qLogNEHVI：约束批量采集 + 几何多保真先验 | `PAI_OPTIMIZE_STRATEGY=botorch-qlognehvi npm run test:optimize`（本机：7 次求解，5 个可行，代理模型校准误差 4–8 %，正式复核通过） | 已验证（本机；三个种子配对比较见 [optimizer-compare.json](evidence/optimizer-compare.json)：超体积约为 NSGA-II 的 2.2 倍，最轻质量持平；托管站点已安装 BoTorch 0.18.1（`PAI_PHYSICS_BOTORCH=1`，哈希锁定）：一次寻优 12 次求解全部跑在 Batch 上，其中 8 个是 BoTorch 提出的点，9 个可行，代理模型误差 < 2 %） |
 | F8 | MuJoCo 工作单元：IK、500 Hz 动力学、碰撞、节拍、10 个种子配对 | `test:robot` | 已验证 |
 | F9 | 已通过的 CAD 零件装到机械臂末端（精确网格质量与 B-Rep 差值 ≤ 3 %）；导出 MJCF 与 OpenUSD（28 个校验器） | `test:robot` | 已验证 |
 | F10 | Blender 工作单元和产线布局，射线实测通道、围栏、相机覆盖 | `test:blender`、`test:plant` | 已验证 |
