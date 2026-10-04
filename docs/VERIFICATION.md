@@ -8,7 +8,7 @@
 |---|---|
 | Newton 交叉校验 OpenUSD（本机） | `npm run test:robot`：候选工作单元导出的 `scene.usda` 被 Newton 1.6.0 导入为一个关节树（6 个转动关节 + 2 个固定关节），质量差 0.47 mg，33 个构型的正运动学与 MJCF 相差 0.45 µm / 3.1·10⁻⁵ °，4.8 s。首次运行查出两个 UsdValidation 28 个校验器都没发现的导出错误（关节树根节点位置、关节坐标系取在抓取姿态），已修复。见 [newton-usd.json](evidence/newton-usd.json) |
 | Newton 交叉校验（托管站点） | 以 `PAI_PHYSICS_NEWTON=1` 部署后，在主机上对新生成的工作单元执行：通过，0.40 µm，UsdValidation 28 个校验器无错误 |
-| DoMINO 预筛 | 固定提交安装，DrivAerML run_1 自检 Cd 0.307（参考 0.3035）；Ahmed 车身上校准未通过（见 [AERO.md](AERO.md)），界面和记录中标为"仅供参考" |
+| DoMINO 预筛 | 固定提交安装，DrivAerML run_1 自检 Cd 0.307（参考 0.3035）；Ahmed 车身上 12 个车身校准未通过，Spearman −0.35（见 [AERO.md](AERO.md)），界面和记录中标为"仅供参考" |
 
 ## 多模态视觉评审（2026-10-04 晚）
 

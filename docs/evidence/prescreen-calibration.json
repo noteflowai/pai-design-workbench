@@ -1,6 +1,6 @@
 {
   "schema": "pai-prescreen-calibration-1",
-  "checkedAt": "2026-10-04T13:30:53+00:00",
+  "checkedAt": "2026-10-04T15:56:44+00:00",
   "model": {
     "name": "DoMINO DrivAerML surface",
     "checkpoint": "DoMINO.0.501.mdlus",
@@ -11,6 +11,34 @@
   },
   "scale": 4.4,
   "points": [
+    {
+      "parameters": {
+        "slantAngleDeg": 25.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.24
+      },
+      "stlSha256": "25a871b3781d6fe92707ea03166b2107fd0b91d21849ca8ca8d8abafe1d95fe3",
+      "openfoamCd": 0.25702,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.44608,
+      "prescreenSeconds": 74.0,
+      "openfoamSeconds": 842.0
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 25.0,
+        "noseRadius": 0.05,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "62ef2b51f3f51626e448153f024bc269dd19f5ad50e2d1d34eaba8480e4c53a0",
+      "openfoamCd": 0.31767,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.43905,
+      "prescreenSeconds": 71.3,
+      "openfoamSeconds": 1063.9
+    },
     {
       "parameters": {
         "slantAngleDeg": 0.0,
@@ -27,17 +55,45 @@
     },
     {
       "parameters": {
+        "slantAngleDeg": 10.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "684e77710ecdfed086c34a0dd147f2c4aff69fab814af82b9af10d69c0f5e944",
+      "openfoamCd": 0.2298,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.55061,
+      "prescreenSeconds": 70.6,
+      "openfoamSeconds": 6923.2
+    },
+    {
+      "parameters": {
         "slantAngleDeg": 12.5,
         "noseRadius": 0.1,
         "length": 1.044,
         "height": 0.288
       },
       "stlSha256": "7d505d8bbc5881788f5d39fcdb76c24e60d8d033a06e1277fce1ab8aa1b2b003",
-      "openfoamCd": 0.22945,
+      "openfoamCd": 0.22958,
       "openfoamLevel": 4,
       "prescreenCd": 0.54357,
       "prescreenSeconds": 102.2,
-      "openfoamSeconds": 2664.6
+      "openfoamSeconds": 378.1
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 20.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "3428ef13365096df1e2e19d9cf1257aab89e0cd1db4bfabc24268e72922a7115",
+      "openfoamCd": 0.23766,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.49837,
+      "prescreenSeconds": 77.3,
+      "openfoamSeconds": 631.3
     },
     {
       "parameters": {
@@ -47,11 +103,25 @@
         "height": 0.288
       },
       "stlSha256": "f0ad1fcb765147afb36c7ab07cfe925707eff3349293bd76baf3abb2ef8aae08",
-      "openfoamCd": 0.23412,
+      "openfoamCd": 0.23406,
       "openfoamLevel": 4,
       "prescreenCd": 0.47889,
       "prescreenSeconds": 113.5,
-      "openfoamSeconds": 2931.7
+      "openfoamSeconds": 416.0
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 30.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "2ffb57e5226c1ba5ac70d95d5d521d0327b1230b4b1cb9f85e39f72e6a0a927e",
+      "openfoamCd": 0.23751,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.46694,
+      "prescreenSeconds": 71.2,
+      "openfoamSeconds": 711.6
     },
     {
       "parameters": {
@@ -61,16 +131,58 @@
         "height": 0.288
       },
       "stlSha256": "68d864c0cfbc75d403367b34f65cac51550e3ae140744a4a8ea68ca2cd0f6bd3",
-      "openfoamCd": 0.24885,
+      "openfoamCd": 0.24898,
       "openfoamLevel": 4,
       "prescreenCd": 0.47357,
       "prescreenSeconds": 108.9,
-      "openfoamSeconds": 2981.9
+      "openfoamSeconds": 507.6
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 40.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "8a9792f953fd57fffe7296749aef64ee8bfab9fbf93d804efabe2797d37db2fa",
+      "openfoamCd": 0.46843,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.49179,
+      "prescreenSeconds": 71.2,
+      "openfoamSeconds": 801.1
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 12.5,
+        "noseRadius": 0.1,
+        "length": 1.3,
+        "height": 0.288
+      },
+      "stlSha256": "e66979ba0c43cd56dbd8d7e8467675c683a74c8b2ca9ae77651c97d8c0fd7c8d",
+      "openfoamCd": 0.23531,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.45654,
+      "prescreenSeconds": 68.6,
+      "openfoamSeconds": 1303.9
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 25.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.34
+      },
+      "stlSha256": "88e57b7367054dcda741b280af07fbc981ccb84d5ab98f4f911b723946bc6c6e",
+      "openfoamCd": 0.25975,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.51287,
+      "prescreenSeconds": 73.9,
+      "openfoamSeconds": 963.0
     }
   ],
-  "n": 4,
-  "spearman": -0.4,
-  "meanRatio": 2.184,
+  "n": 12,
+  "spearman": -0.35,
+  "meanRatio": 1.939,
   "gate": {
     "minPoints": 6,
     "minSpearman": 0.8,

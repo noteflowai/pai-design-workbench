@@ -97,19 +97,31 @@ pins (SHA-256 of every file checked; NVIDIA Open Model Agreement, commercial use
   it as a *ranking* signal only with ≥ 6 bodies and Spearman ≥ 0.8 against fine-mesh OpenFOAM Cd. The result is
   [prescreen-calibration.json](evidence/prescreen-calibration.json); the UI and the record carry its status.
 
-| Slant | OpenFOAM Cd (level 4) | DoMINO Cd |
+12 bodies (slant 0–40°, nose radius, length, height), each solved natively (5 locally, 7 on AWS Batch) and
+prescreened on the exact STL:
+
+| Body (slant, R, L, H) | OpenFOAM Cd (level 4) | DoMINO Cd |
 |---|---|---|
-| 0° | 0.2473 | 0.598 |
-| 12.5° | 0.2295 | 0.544 |
-| 25° | 0.2341 | 0.479 |
-| 35° | 0.2489 | 0.474 |
+| 0°, 0.1, 1.044, 0.288 | 0.2473 | 0.598 |
+| 10° | 0.2298 | 0.551 |
+| 12.5° | 0.2296 | 0.544 |
+| 20° | 0.2377 | 0.498 |
+| 25° (reference) | 0.2341 | 0.479 |
+| 30° | 0.2375 | 0.467 |
+| 35° | 0.2490 | 0.474 |
+| 40° | 0.4684 | 0.492 |
+| 25°, R 0.05 | 0.3177 | 0.439 |
+| 25°, H 0.24 | 0.2570 | 0.446 |
+| 25°, H 0.34 | 0.2598 | 0.513 |
+| 12.5°, L 1.3 | 0.2353 | 0.457 |
 
 Sanity check in distribution: DrivAerML run_1 gives 0.307 against 0.3035 (1.1 %; run_1 may be a training sample, so
 this checks the installation only). On the Ahmed body the surrogate is out of distribution (no wheels or cabin, other
-Reynolds number): it overestimates Cd by about 2.2× and falls monotonically with slant, while OpenFOAM shows the
-known Ahmed minimum near 12.5° and the rise towards 30–35°. Spearman so far −0.4 on 4 bodies: **not admitted**; the
-prescreen is shown as a reference only. More native points are being solved; fine-tuning on our own OpenFOAM fields
-(upstream recipe `domino_nim_finetuning`) is the route to admission, not tuning the adapter.
+Reynolds number). It overestimates Cd by about 1.9× and falls roughly monotonically with slant. It misses what decides
+an Ahmed design: the low-drag basin around 10–12.5°, the jump to 0.47 at 40° (the high-drag flow regime beyond the
+critical slant) and the 36 % penalty of a sharp nose (R 0.05). Spearman −0.35 on 12 bodies: **not admitted**. The
+prescreen is shown as a reference only. Tuning the adapter would not fix that. The route to admission is fine-tuning on
+our own OpenFOAM fields (upstream recipe `domino_nim_finetuning`); the 12 solves above are its first training set.
 
 Hybrid initialisation (upstream `hybrid_initialization_example`) needs the volume checkpoint and a transient case; it is
 not used until the surface prescreen passes its gate on our geometry.
