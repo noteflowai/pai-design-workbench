@@ -20,6 +20,7 @@ p.add_argument("--iterations", type=int, default=1200)
 p.add_argument("--frontal-area", type=float, required=True, help="full-body frontal area, m2")
 p.add_argument("--length", type=float, required=True)
 p.add_argument("--processors", type=int, default=4)
+p.add_argument("--layers", type=int, default=0, help="prism layers on the body (0 = none)")
 a = p.parse_args()
 case = Path(a.out)
 for d in ("system", "constant/triSurface", "0"):
@@ -55,7 +56,7 @@ body.stl { extractionMethod extractFromSurface; includedAngle 150; subsetFeature
 """)
 L = a.level
 w("system/snappyHexMeshDict", H("dictionary", "snappyHexMeshDict") + f"""
-castellatedMesh true; snap true; addLayers false;
+castellatedMesh true; snap true; addLayers {"true" if a.layers else "false"};
 geometry
 {{
     body.stl {{ type triSurfaceMesh; name body; }}
@@ -73,7 +74,7 @@ castellatedMeshControls
     allowFreeStandingZoneFaces true;
 }}
 snapControls {{ nSmoothPatch 3; tolerance 2.0; nSolveIter 50; nRelaxIter 5; nFeatureSnapIter 10; implicitFeatureSnap false; explicitFeatureSnap true; multiRegionFeatureSnap false; }}
-addLayersControls {{ relativeSizes true; layers {{}}; expansionRatio 1.2; finalLayerThickness 0.5; minThickness 0.1; nGrow 0; featureAngle 60; nRelaxIter 3;
+addLayersControls {{ relativeSizes true; layers {{ {"body { nSurfaceLayers %d; }" % a.layers if a.layers else ""} }}; expansionRatio 1.2; finalLayerThickness 0.5; minThickness 0.1; nGrow 0; featureAngle 60; nRelaxIter 3;
     nSmoothSurfaceNormals 1; nSmoothNormals 3; nSmoothThickness 10; maxFaceThicknessRatio 0.5; maxThicknessToMedialRatio 0.3; minMedialAxisAngle 90; nBufferCellsNoExtrude 0; nLayerIter 50; }}
 meshQualityControls {{ #includeEtc "caseDicts/meshQualityDict" nSmoothScale 4; errorReduction 0.75; }}
 mergeTolerance 1e-6;
@@ -135,4 +136,4 @@ field("omega", "volScalarField", "[0 0 -1 0 0 0 0]", omega, f"type fixedValue; v
 field("nut", "volScalarField", "[0 2 -1 0 0 0 0]", "0", "type calculated; value uniform 0;", "type calculated; value uniform 0;",
       "type nutkWallFunction; value uniform 0;", "type nutkWallFunction; value uniform 0;")
 (case / "case.json").write_text(json.dumps({"level": L, "speedMs": U, "iterations": a.iterations, "frontalAreaM2": a.frontal_area, "lengthM": a.length,
-                                            "turbulence": "kOmegaSST", "half": True, "processors": a.processors}, indent=2))
+                                            "turbulence": "kOmegaSST", "layers": a.layers, "half": True, "processors": a.processors}, indent=2))
