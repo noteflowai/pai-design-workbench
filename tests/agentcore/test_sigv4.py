@@ -62,5 +62,20 @@ class Contract(unittest.TestCase):
         self.assertFalse(server.RUN_ID.match("../etc"))
 
 
+class Images(unittest.TestCase):
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+
+    def item(self, data, media="image/png", digest=None):
+        return {"media_type": media, "sha256": digest or server.sha(data), "data": server.base64.b64encode(data).decode()}
+
+    def test_digest_bound_images_only(self):
+        self.assertEqual(server.images_of({}), [])
+        self.assertEqual(server.images_of({"images": [self.item(self.PNG)]})[0][1], server.sha(self.PNG))
+        for bad in ([self.item(self.PNG)] * 4, [self.item(self.PNG, digest="0" * 64)], [self.item(self.PNG, media="image/jpeg")],
+                    [self.item(b"GIF89a" + b"\0" * 8)], [{**self.item(self.PNG), "path": "/etc/passwd"}]):
+            with self.assertRaises(server.Refused):
+                server.images_of({"images": bad})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@
 | 工作台 | `attachments` 只接受记录里登记过、摘要一致的文件；执行器不支持图像时，在占用请求之前就拒绝（`VISUAL_REVIEW_NOT_AVAILABLE`），有单元测试覆盖 |
 | 本机实测 | 遮挡变体的工作单元：原生射线检查判定相机看不到目标，结论为拒绝。把候选渲染图交给 Kiro 2.27.1（claude-opus-5.5），经共享账本单次调用，模型回答"一个大型浅灰色竖直块体占满画面中央到右侧，遮住了目标"，并引用 scene-1。注意：上下文里有变体名 `occluded`，所以这次不是严格的盲测 |
 | 盲测对照（`scripts/visual-blind.ts`） | 6 张已记录的检测相机预览图（3 张通视、3 张遮挡，按摘要确定性选取并打乱），提示词里只有字母 A–C，没有变体名、记录、检查结果或路径；分 2 次调用，经共享账本，不重试。以同一记录的 BVH 射线检查 `camera-visibility` 为真值：6/6 正确，遮挡判断精确率 1.0、召回率 1.0。回执见 [visual-review.json](evidence/visual-review.json)。局限：样本小，而且预览图就是检测相机自己的视角，遮挡物占满画面，属于容易的情形；模型判断只作参考，结论仍以射线检查为准 |
+| 固定版本执行器与 AgentCore | 执行器固定到 `bf438e4`（含 PR #60）后重跑盲测：本机 6/6；AgentCore 通道（arm64 microVM，镜像 `c4e0d6baf6c5de47`，图像以 base64 传入后在运行时内核对摘要、大小和文件头再写入请求）同样 6/6，用了 AgentCore 账本 2 次 |
 | 应力云图 | 配置 Blender 时，FEA 用 `native/render_glb.py` 把 `fea.glb` 渲染成 `fea.png`（等轴测和正视两个视图；Cycles CPU 渲染，无 GPU 的 CI 也能跑；顶点颜色按不受光照的自发光输出，Standard 视图变换，不做色调映射），按摘要登记，带 `blender-render` 回执，可作为 `attachments` 发给模型；`npm run test:fea` 覆盖。渲染失败不影响结论 |
 
 ## 有边界的自主与真实 AgentForge 会话（2026-10-04 下午）

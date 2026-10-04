@@ -347,6 +347,28 @@ def credentials():
     return {"key": d["AccessKeyId"], "secret": d["SecretAccessKey"], "token": d.get("Token")}
 
 
+IMAGE_MAGIC = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
+
+
+def images_of(body):
+    """Optional digest-bound images (executor accepts.images): at most 3, each <= 1.5 MB, PNG/JPEG by magic bytes."""
+    raw = body.get("images") or []
+    if not isinstance(raw, list) or len(raw) > 3:
+        raise Refused(400, "INVALID_INPUT", "images: at most 3")
+    out = []
+    for i in raw:
+        if not isinstance(i, dict) or set(i) != {"media_type", "sha256", "data"} or i["media_type"] not in IMAGE_MAGIC:
+            raise Refused(400, "INVALID_INPUT", "images[]: {media_type: image/png|image/jpeg, sha256, data (base64)}")
+        try:
+            data = base64.b64decode(i["data"], validate=True)
+        except (ValueError, TypeError):
+            raise Refused(400, "INVALID_INPUT", "images[].data is not base64")
+        if len(data) > 1_500_000 or not data.startswith(IMAGE_MAGIC[i["media_type"]]) or sha(data) != i["sha256"]:
+            raise Refused(400, "INVALID_INPUT", "image exceeds 1.5 MB, is not the declared type or differs from its digest")
+        out.append((i["media_type"], i["sha256"], data))
+    return out
+
+
 def op_text_proposal(body):
     run_id, prompt = body.get("run_id"), body.get("prompt")
     if not isinstance(run_id, str) or not RUN_ID.match(run_id):
@@ -356,6 +378,7 @@ def op_text_proposal(body):
     profiles = body.get("profiles") or PROFILES
     if not isinstance(profiles, list) or any(p not in PROFILES for p in profiles):
         raise Refused(422, "AI_PROFILE_NOT_ENABLED", "this runtime enables only " + ",".join(PROFILES))
+    images = images_of(body)
     timeout = int(body.get("timeout_seconds", 60))
     if not 1 <= timeout <= 60:
         raise Refused(400, "INVALID_INPUT", "timeout_seconds must be 1–60")
@@ -369,11 +392,17 @@ def op_text_proposal(body):
     prompt_file, request_file = run_dir / "prompt.txt", run_dir / "request.json"
     if not request_file.exists():
         prompt_file.write_text(prompt); os.chmod(prompt_file, 0o600)
+        attached = []
+        for k, (media, digest, data) in enumerate(images):
+            path = run_dir / f"attach-{k}.{'png' if media == 'image/png' else 'jpg'}"
+            path.write_bytes(data); os.chmod(path, 0o600)
+            attached.append({"path": str(path), "media_type": media, "sha256": digest})
         request = {"schema_version": 1, "kind": "text-proposal", "run_id": run_id, "prompt_file": str(prompt_file), "profiles": profiles,
-                   "timeout_seconds": timeout, "max_attempts": len(profiles), "cost_bounds_microusd": None}
+                   "timeout_seconds": timeout, "max_attempts": len(profiles), "cost_bounds_microusd": None, **({"images": attached} if attached else {})}
         request_file.write_text(json.dumps(request)); os.chmod(request_file, 0o600)
-    elif sha(prompt_file.read_bytes()) != sha(prompt.encode()):
-        raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt")
+    elif sha(prompt_file.read_bytes()) != sha(prompt.encode()) or \
+            [x["sha256"] for x in json.loads(request_file.read_text()).get("images", [])] != [d for _, d, _ in images]:
+        raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt or images")
     entry = EXECUTOR / ".runtime/compiled/flows/execute.js"
     r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470, cwd=str(EXECUTOR))
     lines = [l for l in r["stdout"].strip().splitlines() if l.strip()]

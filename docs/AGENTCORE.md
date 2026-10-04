@@ -83,3 +83,11 @@ python3 tools/agentcore_operator.py invoke --runtime sandbox --payload '{"op":"p
 - 联调：本机工作台在没有执行器和密钥的情况下，经 AgentCore 完成一次真实 Kiro 调用（主账号完成，生成 1 个 cad-code 计划），确认后该代码在 AgentCore 沙箱中建模并通过全部检查。
 - 账本：在新会话中重放同一 `run_id`，执行器返回已保存的答案，额度不变；运行时版本更新后，账本中已完成的尝试仍是 1。
 - 共消耗 1 次真实尝试。
+
+## Visual review over AgentCore
+
+`text-proposal` accepts optional `images` (at most 3, each ≤ 1.5 MB): `{media_type, sha256, data}` with base64 data.
+The runtime decodes each image and checks its size, PNG/JPEG magic bytes and digest. It then writes the image privately
+into the run directory and passes it to the pinned executor by path and digest. Reusing a `run_id` with other images is
+refused (`RUN_ID_REUSED`). Verified live with the blind line-of-sight control: 6/6, see [VERIFICATION.md](VERIFICATION.md).
+

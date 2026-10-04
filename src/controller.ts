@@ -130,14 +130,17 @@ export async function runController(config: Config, directory: string, runId: st
 /** Same request on the AgentCore agent runtime; its report goes through the same checks as a local run. */
 async function runRemote(config: Config, directory: string, runId: string, prompt: string, options: {
   profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
+  images?: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[];
 }): Promise<ControllerResult> {
   if (options.profiles.some(p => !REMOTE_PROFILES.includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "AgentCore 执行器只启用 Kiro 三个账号", 422);
   await writePrivate(join(directory, "prompt.txt"), prompt);
   const Remote = z.object({ exitCode: z.number().nullable(), timedOut: z.boolean(), report: z.string(),
     attempts: z.array(z.object({ profile: z.string(), status: z.string().nullable(), errorKind: z.string().nullable(), model: z.string().nullable(),
       engineVersion: z.string().nullable(), effects: z.string().nullable(), workStarted: z.boolean().nullable().optional() }).passthrough()) }).passthrough();
+  const images = (options.images ?? []).map(i => ({ media_type: i.mediaType, sha256: sha256(i.data), data: i.data.toString("base64") }));
+  if (images.length > 3 || (options.images ?? []).some(i => i.data.length > 1_500_000)) throw new DomainError("IMAGES_TOO_LARGE", "At most 3 images of up to 1.5 MB each", 422);
   const raw = await invokeRuntime<unknown>(config.agentcoreAgentArn!, { op: "text-proposal", run_id: runId, prompt, profiles: options.profiles,
-    timeout_seconds: options.timeoutSeconds }, { timeoutMs: 600_000 });
+    timeout_seconds: options.timeoutSeconds, ...(images.length ? { images } : {}) }, { timeoutMs: 600_000 });
   const error = z.object({ error: z.string(), message: z.string().optional() }).safeParse(raw);
   if (error.success) throw new DomainError(error.data.error, `AgentCore 执行器拒绝：${error.data.message ?? error.data.error}`, 502);
   const r = Remote.parse(raw);
