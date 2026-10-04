@@ -46,7 +46,7 @@ export function agentCredentials(env = process.env): AgentCredentials | undefine
   if (!secret || secret.length > 512) throw new Error("PAI_AGENT_CLIENT_SECRET_FILE is empty or invalid");
   return { tokenUrl, clientId: values[1]!, secret };
 }
-const SCOPES = "pai-agent/read pai-agent/propose";
+const SCOPES = "pai-agent/read pai-agent/propose pai-agent/run";
 function tokenSource(c: AgentCredentials) {
   let cached: { token: string; until: number } | undefined;
   return async () => {
