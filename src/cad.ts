@@ -353,6 +353,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : [])];
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
       for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
+      if (structural) await readFile(join(target, "fea.png")).then(b => { record.files[`${name}/fea.png`] = sha256(b); }, () => undefined);
       store.put("cad-review", record);
     }
     publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选零件", status: "running" });
@@ -396,7 +397,23 @@ async function runFea(config: Config, publish: LiveBus["publish"], record: CadRe
   if (canonical(fea.load) !== canonical({ forceN: structural.forceN, leverMm: structural.leverMm, description: fea.load.description })) {
     throw new DomainError("FEA_CONTEXT", "FEA load differs from the frozen structural requirements");
   }
+  await renderResult(config, record, join(target, "fea.glb"), join(target, "fea.png"));
   return fea;
+}
+
+/**
+ * Picture of a native result (vertex-coloured GLB → PNG) for visual review, rendered by native Blender when it is
+ * configured. Presentation evidence: recorded by digest, never part of a verdict. A render failure is recorded and
+ * leaves the review unaffected.
+ */
+export async function renderResult(config: Config, record: { receipts: Receipt[] }, glb: string, png: string) {
+  if (!config.blender) return false;
+  const script = join(config.repository, "native/render_glb.py");
+  const r = await command(config.blender, ["--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "2", "--python", script, "--", "--input", glb, "--output", png],
+    config.repository, undefined, 180_000);
+  record.receipts.push({ adapter: "blender-render", command: ["blender", "render_glb.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
+    stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)) } });
+  return r.exitCode === 0;
 }
 
 /** Layer 1 (static policy) as a fast pre-check; never executes the code. Returns the violations. */

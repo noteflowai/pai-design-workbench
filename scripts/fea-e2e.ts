@@ -43,6 +43,14 @@ try {
   }
   const glb = await app.inject({ url: `/api/cad/${thin.id}/files/candidate/fea.glb`, headers: { host } });
   assert.equal(glb.rawPayload.subarray(0, 4).toString(), "glTF");
+  if (config.blender) {
+    // Result picture for visual review: native Blender render of the solver's colour field, recorded by digest.
+    assert.ok(thin.files["candidate/fea.png"], "fea.png is a recorded file when Blender is configured");
+    const png = await app.inject({ url: `/api/cad/${thin.id}/files/candidate/fea.png`, headers: { host } });
+    assert.equal(png.statusCode, 200); assert.equal(png.headers["content-type"], "image/png");
+    assert.equal(png.rawPayload.subarray(1, 4).toString(), "PNG");
+    assert.ok(thin.receipts.some(r => r.adapter === "blender-render" && r.exitCode === 0));
+  }
   const report = { schema: "pai-fea-e2e-1", checkedAt: new Date().toISOString(), result: "passed", seconds: Math.round((Date.now() - t0) / 1000),
     solver: thin.fea!.candidate!.solver, mesher: thin.fea!.candidate!.mesher,
     baseline: { deflectionMm: check({ candidate: thin.baseline } as CadReview, "max-deflection").observed, stressMPa: check({ candidate: thin.baseline } as CadReview, "max-stress").observed },
