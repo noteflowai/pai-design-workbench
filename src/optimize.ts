@@ -8,6 +8,7 @@ import { Id, type Project, type Receipt } from "./contracts.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
+import { solverDataset } from "./dataset.js";
 import { CadParameters, CadRequirements, type CadRequirements as CadReq } from "./cad.js";
 
 /**
@@ -50,6 +51,8 @@ export const OptimizeRequest = z.object({
   strategy: z.enum(OPTIMIZE_STRATEGIES).default("gp-nsga2"),
   /** Where solved points run: this host, or one AWS Batch job per point (default when configured). */
   solver: z.enum(["local", "batch"]).optional(),
+  /** Reuse earlier solver measurements of the same recipe and load to train the surrogate (ranking only). */
+  warmStart: z.boolean().default(true),
 }).strict();
 
 const Point = z.object({
@@ -65,7 +68,7 @@ const Point = z.object({
   estimate: z.object({ expectedDeflectionMm: z.number().optional(), expectedMassG: z.number().optional(), rationale: z.string().optional() }).strict().optional(),
 }).strict();
 export const OptimizeResult = z.object({
-  schema: z.literal("pai-cad-optimize-1"), optuna: z.string(), strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
+  schema: z.literal("pai-cad-optimize-1"), warmStart: z.object({ points: z.number().int(), extraRounds: z.number().int(), lightestPriorMassG: z.number().nullable() }).strict().nullable().optional(), optuna: z.string(), strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
   budget: z.object({ initial: z.number(), rounds: z.number(), perRound: z.number() }).strict(), axes: z.array(z.string()), bounds: z.record(z.string(), z.array(z.number())),
   points: z.array(Point).min(1).max(80), feasibleCount: z.number().int(), lightestFeasible: z.number().int().nullable(), pareto: z.array(z.number().int()),
   rounds: z.array(z.object({ round: z.number().int(), trainedOn: z.number().int(), looMeanAbsError: z.record(z.string(), z.number()),
@@ -82,6 +85,8 @@ export interface CadOptimization {
   scope: "parametric-part-geometry-and-linear-static-fea"; physicalValidation: false;
   /** local: solved on this host; batch: one AWS Batch job per solved point (digests and tool versions checked). */
   solver?: "local" | "batch";
+  /** Earlier solver measurements (same recipe and load) that trained the surrogate; they are not results of this run. */
+  warmStart?: { points: number; sources: string[] };
 }
 
 export async function optimizeCad(store: Store, config: Config, project: Project, input: unknown, live?: LiveBus): Promise<CadOptimization> {
@@ -105,6 +110,16 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     const scripts = ["cad_optimize.py", "cad_point.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const before = await digests();
+    // Warm start from the solver dataset: same recipe (pilot bore 22.5 mm), same load and lever, fine-mesh FEA.
+    const s = request.requirements.structural!;
+    const rows = request.warmStart ? solverDataset(store).data.filter(r => r.domain === "structural-fea" && r.inputs.forceN === s.forceN && r.inputs.leverMm === s.leverMm
+      && r.inputs.pilotBore === 22.5 && Number.isFinite(r.outputs.stressMPa) && r.outputs.deflectionMm > 0) : [];
+    const seen = new Set<string>();
+    const prior = rows.filter(r => { const k = `${r.inputs.thickness}:${r.inputs.width}:${r.inputs.plateHeight}`; return !seen.has(k) && (seen.add(k), true); })
+      .slice(-60).map(r => ({ parameters: { thickness: r.inputs.thickness, width: r.inputs.width, plateHeight: r.inputs.plateHeight },
+        deflectionMm: r.outputs.deflectionMm, stressMPa: r.outputs.stressMPa, mass: r.outputs.massG,
+        ...(Number.isFinite(r.outputs.minWallMm) && Number.isFinite(r.outputs.holeEdgeMm) ? { minWallMm: r.outputs.minWallMm, holeEdgeMm: r.outputs.holeEdgeMm } : {}), source: r.recordId }));
+    record.warmStart = { points: prior.length, sources: [...new Set(prior.map(p => p.source))] };
     const solver = request.solver ?? (config.solverBatch ? "batch" : "local");
     if (solver === "batch" && !config.solverBatch) throw new DomainError("SOLVER_NOT_CONFIGURED", "AWS Batch solver is not configured (PAI_SOLVER_QUEUE, PAI_SOLVER_JOB_DEFINITION, PAI_SOLVER_BUCKET)", 503);
     record.solver = solver;
@@ -116,7 +131,7 @@ export async function optimizeCad(store: Store, config: Config, project: Project
       "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))),
       ccx: sha256(await readFile(config.ccx)) };
     const inputFile = join(directory, "input.json");
-    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2,
+    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2, prior,
       ...(solver === "batch" ? { backend: "batch", batch: { ...config.solverBatch!, run: record.id, timeoutSeconds: 1800 } } : {}) }));
     const total = request.budget.initial + 1 + request.budget.rounds * request.budget.perRound;
     publish({ kind: "step", id: "optimize", label: `物理寻优：约 ${total} 次 CalculiX 求解 + 代理模型排序`, status: "running" });

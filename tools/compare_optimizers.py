@@ -15,6 +15,15 @@ py, cq, ccx = env["PAI_PHYSICS_PYTHON"], env["PAI_CADQUERY_PYTHON"], env["PAI_CC
 out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 seeds = [int(s) for s in (sys.argv[2] if len(sys.argv) > 2 else "3,7,11").split(",")]
 strategies = (sys.argv[3] if len(sys.argv) > 3 else "gp-nsga2,botorch-qlognehvi").split(",")
+# Optional warm start: solved points of earlier runs (optimize.json files under this directory) train the surrogate.
+warm_dir = Path(sys.argv[4]) if len(sys.argv) > 4 else None
+prior = []
+if warm_dir:
+    for f in sorted(warm_dir.glob("*/optimize.json")):
+        for q in json.loads(f.read_text())["points"]:
+            if q.get("fidelity") == "fea" and "deflectionMm" in q and "stressMPa" in q:
+                prior.append({"parameters": {k: q["parameters"][k] for k in ("thickness", "width", "plateHeight")}, "deflectionMm": q["deflectionMm"],
+                              "stressMPa": q["stressMPa"], "mass": q["mass"], "minWallMm": q["minWallMm"], "holeEdgeMm": q["holeEdgeMm"]})
 req = {"maxMassG": 80, "minWallMm": 3, "edgeDistanceFactor": 1.5, "requireNoInterference": True, "maxEnvelopeMm": [80, 40, 60],
        "structural": {"forceN": 60, "leverMm": 50, "safetyFactor": 2, "maxDeflectionMm": 0.06}}
 budget = {"initial": 8, "rounds": 3, "perRound": 3}
@@ -37,7 +46,7 @@ for seed in seeds:
         if not (d / "optimize.json").exists():
             d.mkdir(parents=True, exist_ok=True)
             (d / "input.json").write_text(json.dumps({"cadquery": cq, "ccx": ccx, "requirements": req, "budget": budget, "seeds": [], "strategy": strategy,
-                                                      "seed": seed, "parallel": 2}))
+                                                      "seed": seed, "parallel": 2, "prior": prior}))
             t0 = time.monotonic()
             r = subprocess.run([py, "-I", str(root / "native/cad_optimize.py"), "--input", str(d / "input.json"), "--output", str(d)], capture_output=True, text=True)
             (d / "stderr.log").write_text(r.stderr[-20000:])
@@ -61,7 +70,7 @@ for s in strategies:
                   "meanHypervolume": round(sum(r["hypervolume"] for r in rs) / max(1, len(rs)), 4),
                   "meanSolverCalls": round(sum(r["solverCalls"] for r in rs) / max(1, len(rs)), 1)}
 pairs = [(a, b) for a in runs for b in runs if a["seed"] == b["seed"] and a["strategy"] == strategies[0] and b["strategy"] == strategies[-1] and "error" not in a and "error" not in b]
-report = {"schema": "pai-optimizer-compare-1", "budget": budget, "requirements": req, "seeds": seeds, "runs": runs, "summary": summary,
+report = {"schema": "pai-optimizer-compare-1", "warmStartPoints": len(prior), "budget": budget, "requirements": req, "seeds": seeds, "runs": runs, "summary": summary,
           "paired": [{"seed": a["seed"], "lighterBy": strategies[-1] if (b["lightestMassG"] or 1e9) < (a["lightestMassG"] or 1e9) else strategies[0],
                       "massDeltaG": round((b["lightestMassG"] or 0) - (a["lightestMassG"] or 0), 2), "hypervolumeDelta": round(b["hypervolume"] - a["hypervolume"], 4)} for a, b in pairs],
           "note": "Native measurements only (CadQuery B-Rep + CalculiX fine mesh). A small paired panel; not a statistical claim beyond these seeds."}

@@ -171,3 +171,31 @@ seeds 3, 7 and 11 ([optimizer-compare.json](evidence/optimizer-compare.json)):
 
 On every seed BoTorch maps a much wider mass–stiffness front. NSGA-II reaches the lightest feasible design just as
 well, in about a quarter of the time. This is a three-seed panel and not a statistical claim.
+
+## Warm start from the solver dataset
+
+Every optimisation reuses earlier solver measurements of the same recipe and load as training data for the
+surrogate. `warmStart: true` is the default. The rows come from `GET /api/dataset/solver`, the measured fine-mesh FEA
+points and reviews. Each row carries deflection, stress, mass, minimum wall and hole-edge distance.
+
+Prior points rank candidates and never become results. They are not recommended, and the lightest feasible point is
+always measured in the run itself and then formally reviewed. With a warm start the run spends fewer solves on Sobol
+space filling; the saved budget becomes extra surrogate rounds, so the total number of solves stays the same.
+
+The record keeps `warmStart.points` and the source record ids.
+
+Paired comparison on seeds 7 and 11 with gp-nsga2 and the same budget
+([warm-start.json](evidence/warm-start.json)):
+
+| | Cold | Warm (27 prior points) |
+|---|---|---|
+| Mean lightest feasible mass | 46.33 g | 44.14 g |
+| Mean solver calls | 16.5 | 14.5 |
+
+The first version carried only deflection, stress and mass, and made seed 7 worse (48.4 g). Without wall and
+hole-edge observations, the geometry surrogates sent 11 candidates into the infeasible region. Prior rows now include
+the measured geometry outputs.
+
+A deep surrogate such as PhysicsNeMo is not used here on purpose. The dataset is about 80 scalar rows over a
+3-parameter recipe, and a GP is the appropriate model for that. PhysicsNeMo fits field-level problems (meshes,
+DrivAerML-scale aero data); see ROADMAP.

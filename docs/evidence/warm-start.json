@@ -1,0 +1,75 @@
+{
+  "schema": "pai-warm-start-1",
+  "strategy": "gp-nsga2",
+  "budget": {
+    "initial": 8,
+    "rounds": 3,
+    "perRound": 3
+  },
+  "warmStartPoints": 27,
+  "source": "solved points of the two seed-3 runs (gp-nsga2 and botorch); the dataset path in production is GET /api/dataset/solver",
+  "cold": [
+    {
+      "strategy": "gp-nsga2",
+      "seed": 7,
+      "seconds": 142,
+      "solverCalls": 17,
+      "screens": 3,
+      "feasible": 7,
+      "lightestMassG": 47.312,
+      "lightestDeflectionMm": 0.0586,
+      "hypervolume": 0.4583,
+      "calibrationMedian": 0.0098
+    },
+    {
+      "strategy": "gp-nsga2",
+      "seed": 11,
+      "seconds": 189,
+      "solverCalls": 16,
+      "screens": 0,
+      "feasible": 8,
+      "lightestMassG": 45.347,
+      "lightestDeflectionMm": 0.059,
+      "hypervolume": 0.4662,
+      "calibrationMedian": 0.0075
+    }
+  ],
+  "warm": [
+    {
+      "strategy": "gp-nsga2",
+      "seed": 7,
+      "seconds": 163,
+      "solverCalls": 15,
+      "screens": 0,
+      "feasible": 9,
+      "lightestMassG": 43.921,
+      "lightestDeflectionMm": 0.0562,
+      "hypervolume": 0.4362,
+      "calibrationMedian": 0.0042
+    },
+    {
+      "strategy": "gp-nsga2",
+      "seed": 11,
+      "seconds": 148,
+      "solverCalls": 14,
+      "screens": 0,
+      "feasible": 10,
+      "lightestMassG": 44.365,
+      "lightestDeflectionMm": 0.0592,
+      "hypervolume": 0.4639,
+      "calibrationMedian": 0.0035
+    }
+  ],
+  "result": {
+    "meanLightestMassG": {
+      "cold": 46.33,
+      "warm": 44.14
+    },
+    "meanSolverCalls": {
+      "cold": 16.5,
+      "warm": 14.5
+    }
+  },
+  "lesson": "A first warm start that carried only deflection/stress/mass made seed 7 worse (48.4 g): without wall and hole-edge observations the geometry surrogates sent 11 candidates into the infeasible region. Prior rows now carry the measured min wall and hole-edge distance.",
+  "note": "Prior points train the surrogate only; every recommended point is measured in the run itself and then formally reviewed. Two paired seeds; not a statistical claim."
+}

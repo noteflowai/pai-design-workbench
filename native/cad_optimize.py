@@ -189,6 +189,11 @@ def run_batch(batch):
 
 
 # ---------------------------------------------------------------- initial design
+# Warm start: solver measurements from earlier records under the same load (the workbench's solver dataset). They train
+# the deflection / stress / mass surrogates only; they are never recommended from this run and never re-measured.
+PRIOR = [q for q in spec.get("prior", []) if all(k in q for k in ("parameters", "deflectionMm", "stressMPa", "mass"))
+         and all(BOUNDS[k][0] <= q["parameters"][k] <= BOUNDS[k][1] for k in AXES) and q["deflectionMm"] > 0 and q["stressMPa"] > 0]
+PRIOR = [{**q, "parameters": {k: float(q["parameters"][k]) for k in AXES}} for q in PRIOR]
 initial = []
 # The frozen reference design is always measured first: every search starts from the known baseline.
 if spec.get("includeReference", True):
@@ -197,10 +202,14 @@ for seed in spec.get("seeds", [])[:4]:
     initial.append(({k: seed["parameters"][k] for k in AXES}, "ai-seed", None, {k: seed[k] for k in ("expectedDeflectionMm", "expectedMassG", "rationale") if k in seed}))
 qmc = optuna.samplers.QMCSampler(qmc_type="sobol", scramble=True, seed=rng_seed)
 study = optuna.create_study(sampler=qmc)
-while len(initial) < budget["initial"]:
+# With a warm start, fewer space-filling points are needed: keep at least 4 measured initial points in this run.
+fill_to = max(4, len(initial), budget["initial"] - len(PRIOR)) if PRIOR else budget["initial"]
+while len(initial) < fill_to:
     trial = study.ask({k: optuna.distributions.FloatDistribution(*BOUNDS[k]) for k in AXES})
     initial.append((trial.params, "initial", None, None))
     study.tell(trial, 0.0)
+# Same solver budget: initial points saved by the warm start become extra surrogate rounds (exploitation).
+extra_rounds = (budget["initial"] - len(initial)) // budget["perRound"] if PRIOR else 0
 event({"type": "phase", "phase": "initial", "points": len(initial)})
 points += run_batch([(i + 1, *x) for i, x in enumerate(initial)])
 
@@ -231,6 +240,7 @@ def fit():
     models, loo = {}, {}
     for name, f in TARGETS.items():
         ok = [p for p in points if ("minWallMm" in p if name in GEOMETRY_TARGETS else "deflectionMm" in p)]
+        ok = ok + [q for q in PRIOR if name not in ("minWall", "holeEdge") or "minWallMm" in q]
         X = np.array([norm(p["parameters"]) for p in ok])
         y = np.array([f(p) for p in ok])
         kernel = ConstantKernel(1.0, (1e-3, 1e3)) * Matern(length_scale=[0.5] * len(AXES), length_scale_bounds=(0.05, 20), nu=2.5) + WhiteKernel(1e-4, (1e-8, 1e-1))
@@ -243,7 +253,7 @@ def fit():
             g = GaussianProcessRegressor(kernel=gp.kernel_, optimizer=None, normalize_y=True).fit(X[m], y[m])
             errs.append(abs(g.predict(X[i:i + 1])[0] - y[i]))
         loo[name] = round(float(np.mean(errs)), 4)
-    return models, loo, sum(1 for p in points if "deflectionMm" in p)
+    return models, loo, sum(1 for p in points if "deflectionMm" in p) + len(PRIOR)
 
 
 def predict(models, params):
@@ -278,6 +288,7 @@ def bo_candidates(r, q, pending=()):
     models = []
     for name in names:
         ok = [p for p in points if ("minWallMm" in p if name in GEOMETRY_TARGETS else "deflectionMm" in p)]
+        ok = ok + [q for q in PRIOR if name not in ("minWall", "holeEdge") or "minWallMm" in q]
         X = [norm(p["parameters"]) for p in ok]
         Y = [[TARGETS[name](p)] for p in ok]
         # A recipe build failure is an infeasible observation: zero wall and zero hole-edge distance, so the
@@ -322,7 +333,7 @@ def bo_candidates(r, q, pending=()):
 
 rounds = []
 next_index = len(points) + 1
-for r in range(1, budget["rounds"] + 1):
+for r in range(1, budget["rounds"] + extra_rounds + 1):
     if sum(1 for p in points if "deflectionMm" in p) < 3:
         # Too few solved points to fit any surrogate: stop and report what was measured (no fabricated ranking).
         rounds.append({"round": r, "trainedOn": 0, "looMeanAbsError": {}, "surrogateTrials": 0, "screenedGeometry": 0, "proposed": [], "skipped": "fewer than 3 solved points"})
@@ -375,6 +386,8 @@ for r in range(1, budget["rounds"] + 1):
     search = optuna.create_study(directions=["minimize", "minimize"],
                                  sampler=optuna.samplers.NSGAIISampler(population_size=40, seed=rng_seed + r, constraints_func=lambda t: t.user_attrs["constraints"]))
     search.optimize(objective, n_trials=int(spec.get("surrogateTrials", 600)))
+    # Prior points do not block candidates: only this run's measurements can be recommended, so a promising region the
+    # prior already found must be re-measured here (the surrogate is confident there, which is the point of the prior).
     measured = [norm(p["parameters"]) for p in points]
     broken = [norm(p["parameters"]) for p in points if p.get("fidelity") == "failed"]
     distinct = lambda p: (min(np.linalg.norm(norm(p) - m) for m in measured + chosen_x) > 0.04
@@ -428,7 +441,8 @@ if STRATEGY == "botorch-qlognehvi":
     search_text = "qLogNoisyExpectedHypervolumeImprovement (mass, log deflection) with outcome and linear envelope constraints"
 else:
     surrogate_text, search_text = "GaussianProcessRegressor (Matérn 5/2 + white noise), scikit-learn", "NSGA-II on the surrogate, constraints at mean ± 1σ"
-result = {"schema": "pai-cad-optimize-1", "optuna": optuna.__version__, "strategy": STRATEGY, "surrogate": surrogate_text,
+prior_feasible = sorted((q for q in PRIOR if q["deflectionMm"] <= limit["deflection"] and q["stressMPa"] <= limit["stress"] and q["mass"] <= limit["mass"]), key=lambda q: q["mass"])
+result = {"schema": "pai-cad-optimize-1", "warmStart": {"points": len(PRIOR), "extraRounds": extra_rounds, "lightestPriorMassG": prior_feasible[0]["mass"] if prior_feasible else None} if PRIOR else None, "optuna": optuna.__version__, "strategy": STRATEGY, "surrogate": surrogate_text,
           "search": search_text, "requirements": req, "budget": budget, "axes": AXES, "bounds": BOUNDS,
           "points": points, "rounds": rounds, "feasibleCount": len(feasible), "lightestFeasible": feasible[0]["index"] if feasible else None,
           "pareto": front, "calibration": calibration, "aiSeeds": ai,

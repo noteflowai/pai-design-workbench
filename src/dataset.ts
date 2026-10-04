@@ -22,7 +22,7 @@ export function solverDataset(store: Store) {
       rows.push({ domain: "structural-fea", source: "cad-optimize", recordId: o.id, projectId: o.projectId, createdAt: o.createdAt,
         inputs: { thickness: p.parameters.thickness, width: p.parameters.width, plateHeight: p.parameters.plateHeight, pilotBore: p.parameters.pilotBore,
           forceN: o.request.requirements.structural!.forceN, leverMm: o.request.requirements.structural!.leverMm },
-        outputs: { deflectionMm: p.deflectionMm, stressMPa: p.stressMPa ?? NaN, massG: p.mass }, solver: "Gmsh 4.15.2 C3D10 fine + CalculiX 2.21",
+        outputs: { deflectionMm: p.deflectionMm, stressMPa: p.stressMPa ?? NaN, massG: p.mass, minWallMm: p.minWallMm ?? NaN, holeEdgeMm: p.holeEdgeMm ?? NaN }, solver: "Gmsh 4.15.2 C3D10 fine + CalculiX 2.21",
         fidelity: p.remote ? "fea-fine (AWS Batch)" : "fea-fine" });
     }
   }
@@ -34,7 +34,7 @@ export function solverDataset(store: Store) {
       rows.push({ domain: "structural-fea", source: "cad-review", recordId: c.id, projectId: c.projectId, createdAt: c.createdAt,
         inputs: { thickness: params.thickness, width: params.width, plateHeight: params.plateHeight, pilotBore: params.pilotBore,
           forceN: c.request.requirements.structural!.forceN, leverMm: c.request.requirements.structural!.leverMm },
-        outputs: { deflectionMm: v("max-deflection"), stressMPa: v("max-stress"), massG: chk.mass }, solver: "Gmsh 4.15.2 C3D10 two-mesh + CalculiX 2.21", fidelity: "fea-two-mesh" });
+        outputs: { deflectionMm: v("max-deflection"), stressMPa: v("max-stress"), massG: chk.mass, minWallMm: v("min-wall"), holeEdgeMm: v("hole-edge-distance") }, solver: "Gmsh 4.15.2 C3D10 two-mesh + CalculiX 2.21", fidelity: "fea-two-mesh" });
     }
   }
   for (const a of store.list<AeroReview>("aero-review")) {
