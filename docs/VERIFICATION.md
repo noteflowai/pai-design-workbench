@@ -11,6 +11,8 @@
 | 真实 AgentForge Host 会话 | `autoforge-host`（main 加 PR #562）+ acpx 0.19.4 + Kiro + 治理网关 + pai-mcp + 本机工作台。Agent 依次调用 `pai_list_projects`、`pai_list_grants`、`pai_propose_plan`、`pai_run_plan`、`pai_get_plan`、`pai_get_record`，全部成功。它在授权内运行了紧凑型支架检查，并按实测报告"孔边距 5.0 mm < 8.25 mm，拒绝"；提议记录带有 Host 会话 id |
 | 托管站点（pai.oneai.host） | 维护者签发 1 次 cad-review 授权。外部 Agent 用 OAuth 客户端凭据（scope 为 read、propose、run）经 Agent API 依次提议、执行（ALB 先校验 JWT，工作台再按 scope 校验），原生结论为拒绝（孔边距不足）；第 2 次调用被拒绝，返回 `GRANT_INACTIVE: Grant quota used up` |
 | 跑通过程中修复的底座缺陷（PR #562，已合并 `3dada8e`） | 本地后端上带 `mcp_profile` 的会话原来无法使用 MCP，有三处缺陷：配置项未声明为保留键、MCP 配置只读调用方的环境、`env` 格式不被 acpx 接受。另外让网关把会话 id 传给上游。Rust 门禁、JS 门禁、交付门禁全部通过，790 个 Host 测试通过 |
+| 底座对齐 | 合并 #562（`3dada8e`）、#554（`d46db4b`，修复 AgentCore follower 的 IAM 模板）、#564（`0375d82`，快照加入 `pai_run_plan`）。审批 Agent 驳回 3 个已被取代的执行，批准 `0375d82`，部署成功。之后 appbuilder、autoos、autotutor 三个 AgentCore runtime 的镜像全部是 `0375d82`（autoos 和 autotutor 原先停在 `3ebc406`） |
+| 开发机清理 | `/opt/dlami/nvme` 上 4 个失效的 workbench worktree 已 `git worktree prune`；对应的 4 个分支都已核对在远端 |
 
 ## 托管 BoTorch、求解数据集 MCP 工具、边界层实验（2026-10-04 上午）
 
