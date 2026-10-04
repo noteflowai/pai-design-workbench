@@ -4,7 +4,7 @@ const THEME_LABEL: Record<Theme, string> = { system: "跟随系统", light: "浅
 const nextTheme = (t: Theme): Theme => t === "system" ? "light" : t === "light" ? "dark" : "system";
 import { createRoot } from "react-dom/client";
 import { api } from "./api";
-import { AppContext, VIEWS, type Ctx, type Route, type State, type ViewId } from "./context";
+import { AppContext, VIEWS, type Ctx, type Route, type State, type ViewId, type Attachment } from "./context";
 import { revealInScroller, Toasts } from "./ui";
 import { Assistant, useLiveSession } from "./studio";
 import { Palette, type Command } from "./palette";
@@ -110,7 +110,7 @@ function App() {
   const lifecycle = project ? data?.lifecycles?.[project.id] : undefined;
   const ctx: Ctx | undefined = data && { data, project, lifecycle, busy, route, navigate, perform, refresh, selectProject, toast, track, session,
     openAssistant: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); },
-    askAI: (message: string) => { setAssistant(true); setTimeout(() => dispatchEvent(new CustomEvent("pai-ask", { detail: message })), 60); } };
+    askAI: (message: string, attachments?: Attachment[]) => { setAssistant(true); setTimeout(() => dispatchEvent(new CustomEvent("pai-ask", { detail: { message, attachments } })), 60); } };
 
   const commands: Command[] = useMemo(() => [
     { id: "theme", label: `外观：${THEME_LABEL[theme]} → ${THEME_LABEL[nextTheme(theme)]}`, run: () => setTheme(nextTheme(theme)) },

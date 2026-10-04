@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { CANDIDATES, KIND_LABEL, useApp, type RunKind } from "../context";
+import { CANDIDATES, KIND_LABEL, useApp, type Attachment, type RunKind } from "../context";
 import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, revealInScroller, time, verdictOf, type RunItem } from "../ui";
 import { LiveSteps, viewportModel } from "../studio";
 import { FactoryResult } from "../factory";
@@ -59,6 +59,17 @@ function ReviewDetail({ run }: { run: Review }) {
   </>;
 }
 
+/**
+ * "Ask AI with the picture": sends recorded native images (digest re-checked on the server) with the question. Shown only
+ * when the deployment's executor pins images by digest; the native checks stay the verdict.
+ */
+function VisualAsk({ attachments, message }: { attachments: Attachment[]; message: string }) {
+  const c = useApp();
+  if (!c.data.capabilities.assistant?.images || !attachments.length) return null;
+  return <div className="visual-ask"><button type="button" className="secondary" onClick={() => c.askAI(message, attachments)}>带图问 AI（{attachments.length} 张已记录图像）</button>
+    <small className="muted">模型看图只作参考，结论以原生检查为准</small></div>;
+}
+
 const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", "declared-target-envelope": "声明的目标包络", "camera-visibility": "原生相机射线可见性" };
 function SceneDetail({ scene }: { scene?: SceneReview }) {
   const c = useApp();
@@ -83,6 +94,8 @@ function SceneDetail({ scene }: { scene?: SceneReview }) {
       })}</ul>
       <div className="scene-previews">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}合成工作单元原生 Cycles 渲染`} src={`/api/scenes/${scene.id}/files/${w}/preview.png`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · 原生 Cycles 渲染</figcaption></figure>)}</div>
+      <VisualAsk message="附图是基准和候选工作单元的检测相机视图（原生渲染）。请对照图像和检查记录说明候选布局在视线、包络或占地上的问题，并给出不放宽需求的修正方案。"
+        attachments={(["baseline", "candidate"] as const).filter(w => scene.files[`${w}/preview.png`]).map(w => ({ recordKind: "scene-review" as const, recordId: scene.id, which: w, file: "preview.png", label: `${w === "baseline" ? "基准" : "候选"}相机视图` }))} />
       <Receipts value={{ request: scene.request, requirementDigest: scene.requirementDigest, receipts: scene.receipts, files: scene.files, rays: scene.rays }} />
     </>}
   </>;
@@ -143,6 +156,10 @@ function CadDetail({ cad }: { cad?: CadReview }) {
     {cad?.state === "completed" && shown && <>
       <CheckTable caption={`${which === "baseline" ? "基准" : "候选"}零件 · B-Rep 实测`} rows={cadRows(shown.checks)}
         onAsk={row => c.askAI(`${CAD_VARIANTS[cad.request.variant][0]}零件的「${row.title}」实测 ${row.observed} ${row.unit}，要求 ${row.required} ${row.unit}，为什么未通过？请引用检查记录，并给出在不放宽要求的前提下的修正方案（预设变体或 cad-code）。`)} />
+      {cad.files[`${which}/fea.png`] && <figure className="result-image"><img alt={`${which === "baseline" ? "基准" : "候选"}零件 von Mises 应力云图（原生 Blender 渲染，等轴测与正视）`} src={`/api/cad/${cad.id}/files/${which}/fea.png`} />
+        <figcaption>{which === "baseline" ? "基准" : "候选"} · von Mises 应力云图 · 0 → {fea?.colorScaleMaxMPa ?? "—"} MPa · 原生 Blender 渲染，按摘要登记</figcaption></figure>}
+      <VisualAsk message={`附图是${which === "baseline" ? "基准" : "候选"}支架的 von Mises 应力云图（CalculiX 结果，色标 0 → ${fea?.colorScaleMaxMPa ?? "?"} MPa，变形放大 ${fea?.displayScale ?? "?"}×）。请对照图像和 FEA 检查记录指出应力集中和刚度薄弱的位置，并给出不放宽要求的加强方案（预设变体或 cad-code）。`}
+        attachments={cad.files[`${which}/fea.png`] ? [{ recordKind: "cad-review", recordId: cad.id, which, file: "fea.png", label: `${which === "baseline" ? "基准" : "候选"}应力云图` }] : []} />
       <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · OCCT 投影视图（含隐藏线）</figcaption></figure>)}</div>
       <Receipts value={{ request: cad.request, requirementDigest: cad.requirementDigest, receipts: cad.receipts, files: cad.files, parameters: { baseline: cad.baseline?.parameters, candidate: cad.candidate?.parameters } }} />

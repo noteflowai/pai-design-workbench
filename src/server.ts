@@ -238,7 +238,9 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
-        transport: controllerTransport(config) ?? null },
+        transport: controllerTransport(config) ?? null,
+        // Visual review: recorded images go to the model only through an executor that pins them by digest.
+        images: controllerConfigured(config) && process.env.PAI_EXECUTOR_IMAGES === "1" },
       liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
   }));

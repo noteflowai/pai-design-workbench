@@ -1,7 +1,7 @@
 import type { AeroReview } from "../src/aero";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, openLive, requestIdFor, type LiveEvent } from "./api";
-import { CAD_DRAFT_KEY, useApp, type RunKind } from "./context";
+import { CAD_DRAFT_KEY, useApp, type Attachment, type RunKind } from "./context";
 import type { ViewportModel, Stage, Ray } from "./viewport";
 import type { AssistantPlan, ToolPlan } from "../src/assistant";
 import type { Project } from "../src/contracts";
@@ -135,6 +135,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
   useEffect(() => { localStorage.setItem("pai-assistant-mode", mode); }, [mode]);
   const [reconcileReason, setReconcileReason] = useState("已核对：文本请求，执行器拒绝了客户端工具与文件权限，工作区没有变化。");
   const [thinking, setThinking] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [running, setRunning] = useState<string>();
   const timeline = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -142,8 +143,9 @@ export function Assistant({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const focus = () => input.current?.focus();
     // Context questions from the workspace ("问 AI" on a failed check, palette free text) prefill the composer.
-    const ask = (e: Event) => { const text = (e as CustomEvent<string>).detail; if (typeof text !== "string") return;
-      setMessage(text); if (aiAvailable) setMode("ai"); setTimeout(() => { input.current?.focus(); input.current?.setSelectionRange(text.length, text.length); }, 0); };
+    const ask = (e: Event) => { const detail = (e as CustomEvent<{ message: string; attachments?: Attachment[] }>).detail;
+      const text = detail?.message; if (typeof text !== "string") return;
+      setMessage(text); setAttachments(detail.attachments ?? []); if (aiAvailable) setMode("ai"); setTimeout(() => { input.current?.focus(); input.current?.setSelectionRange(text.length, text.length); }, 0); };
     window.addEventListener("pai-focus-chat", focus); window.addEventListener("pai-ask", ask);
     return () => { window.removeEventListener("pai-focus-chat", focus); window.removeEventListener("pai-ask", ask); };
   }, [aiAvailable]);
@@ -153,9 +155,10 @@ export function Assistant({ onClose }: { onClose: () => void }) {
     if (!text.trim()) return;
     setThinking(true);
     try {
-      const body = { requestId: crypto.randomUUID(), projectId: project?.id, message: text.trim() };
+      const images = useAi ? attachments.map(({ label: _label, ...a }) => a) : [];
+      const body = { requestId: crypto.randomUUID(), projectId: project?.id, message: text.trim(), ...(images.length ? { attachments: images } : {}) };
       if (useAi) {
-        setMessage("");
+        setMessage(""); setAttachments([]);
         await c.track(body.requestId, "AI 引擎规划", "assistant", () => api<AssistantPlan>("/assistant/ai", body));
       } else { await api<AssistantPlan>("/assistant/plans", body); setMessage(""); }
       await c.refresh();
@@ -268,6 +271,10 @@ export function Assistant({ onClose }: { onClose: () => void }) {
       <label className="visually-hidden" htmlFor="studio-input">设计意图</label>
       <textarea id="studio-input" ref={input} rows={3} maxLength={2000} value={message} placeholder="描述意图，例如：生成带遮挡的工作单元，占地 ≤ 12 m²"
         onChange={e => setMessage(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(); }} />
+      {attachments.length > 0 && <ul className="attachments" aria-label="随问题发送的已记录图像">{attachments.map((a, i) => <li key={`${a.recordId}/${a.which}/${a.file}`}>
+        <img src={`/api/${a.recordKind === "cad-review" ? "cad" : a.recordKind === "scene-review" ? "scenes" : "aero"}/${a.recordId}/files/${a.which}/${a.file}`} alt="" />
+        <span>{a.label}</span><button type="button" className="ghost" aria-label={`移除附图 ${a.label}`} onClick={() => setAttachments(attachments.filter((_, k) => k !== i))}>×</button></li>)}
+        {!useAi && <li className="muted">规则解析不使用附图；切换到 AI 模式才会发送</li>}</ul>}
       <div className="composer-foot"><small>{useAi ? `AI 引擎：${(c.data.capabilities.assistant?.engines ?? []).map(e => PROFILE_NAME[e] ?? e).join(" → ")}` : aiAvailable ? "规则解析 · 不调用模型" : "未配置 AI 引擎 · 规则解析"} · Ctrl/⌘+Enter</small>
         <button type="submit" disabled={thinking || !message.trim()}>生成计划 ↵</button></div>
     </form>

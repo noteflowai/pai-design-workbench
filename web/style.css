@@ -345,6 +345,15 @@ video { display: block; width: 100%; aspect-ratio: 1; background: var(--vp); bor
 .composer { border-top: 1px solid var(--line); padding: 12px 14px; display: grid; gap: 8px; background: var(--surface); }
 .composer textarea { min-height: 70px; resize: none; }
 .composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.attachments { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.attachments li { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2, var(--surface)); font-size: 12px; max-width: 100%; }
+.attachments li.muted { border-style: dashed; padding: 4px 8px; }
+.attachments img { width: 48px; height: 32px; object-fit: cover; border-radius: 5px; background: #fff; }
+.attachments span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.attachments button { min-width: 28px; min-height: 28px; padding: 0; }
+.visual-ask { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.result-image { margin: 0; }
+.result-image img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .composer-foot small { font-size: 11px; }
 
 /* Viewport (dark CAD surface) */
@@ -703,3 +712,5 @@ h1 { font-size: 22px; }
 .sweep-plot .pt.bo { stroke: var(--brand); stroke-width: 2; stroke-dasharray: 4 1; }
 
 .ok-text { color: var(--ok); display: block; margin-top: 4px; } .bad-text { color: var(--bad); display: block; margin-top: 4px; }
+/* Phone with the assistant open: notices go to the top so they never cover the composer's send button. */
+@media (max-width: 760px) { body:has(.app.with-assistant) .toasts { top: calc(var(--top) + 8px); bottom: auto; } }

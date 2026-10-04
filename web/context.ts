@@ -20,7 +20,7 @@ export type State = {
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>;
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
-  capabilities: { aero?: false | { engine: string; reference: AeroParameters; defaultRequirements: AeroRequirementsValue }; modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[] }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
+  capabilities: { aero?: false | { engine: string; reference: AeroParameters; defaultRequirements: AeroRequirementsValue }; modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[]; images?: boolean }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements;
     generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
     signing?: { kms: boolean; keyId: string; algorithm: string };
     physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number; strategies?: string[]; botorch?: string | null } };
@@ -43,8 +43,10 @@ export interface Ctx {
   refresh(): Promise<State>; selectProject(id: string): void; toast(message: string, tone?: "ok" | "bad"): void;
   track: LiveTrack; session?: LiveSession; openAssistant(): void;
   /** Open the assistant with a prefilled, context-specific question (Fusion/NX-style "ask about this"). */
-  askAI(message: string): void;
+  askAI(message: string, attachments?: Attachment[]): void;
 }
+/** A recorded native image (render, inspection view) sent with an AI question; the server re-checks its digest. */
+export interface Attachment { recordKind: "scene-review" | "cad-review" | "aero-review"; recordId: string; which: "baseline" | "candidate"; file: string; label: string }
 export const AppContext = createContext<Ctx | null>(null);
 export function useApp(): Ctx {
   const ctx = useContext(AppContext);

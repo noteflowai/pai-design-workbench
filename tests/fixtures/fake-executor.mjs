@@ -9,12 +9,19 @@ const { values } = parseArgs({ options: { state: { type: "string" }, database: {
 const request = JSON.parse(readFileSync(values.request, "utf8"));
 const fail = (m) => { console.error(m); process.exit(2); };
 const keys = ["schema_version", "kind", "run_id", "prompt_file", "profiles", "timeout_seconds", "max_attempts", "cost_bounds_microusd"];
-if (Object.keys(request).sort().join() !== [...keys].sort().join()) fail("request keys");
+// Optional digest-pinned images (executor PR noteflow-agent-control#60): each file must exist and match its digest.
+const images = request.images ?? [];
+if (Object.keys(request).filter(k => k !== "images").sort().join() !== [...keys].sort().join()) fail("request keys");
+if (!Array.isArray(images) || images.length > 3) fail("images bound");
+for (const i of images) {
+  if (Object.keys(i).sort().join() !== "media_type,path,sha256" || !["image/png", "image/jpeg"].includes(i.media_type)) fail("image shape");
+  if (createHash("sha256").update(readFileSync(i.path)).digest("hex") !== i.sha256) fail("image digest");
+}
 if (request.schema_version !== 1 || request.kind !== "text-proposal" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(request.run_id)) fail("request identity");
 if (!(request.timeout_seconds >= 1 && request.timeout_seconds <= 60) || request.max_attempts > 5 || request.max_attempts < 1) fail("request bounds");
 const prompt = readFileSync(request.prompt_file, "utf8");
 const spec = JSON.parse(process.env.FAKE_EXECUTOR ?? (process.env.FAKE_EXECUTOR_FILE ? readFileSync(process.env.FAKE_EXECUTOR_FILE, "utf8") : "{}"));
-if (spec.log) appendFileSync(spec.log, JSON.stringify({ run_id: request.run_id, profiles: request.profiles, promptBytes: Buffer.byteLength(prompt), prompt }) + "\n");
+if (spec.log) appendFileSync(spec.log, JSON.stringify({ run_id: request.run_id, profiles: request.profiles, promptBytes: Buffer.byteLength(prompt), prompt, images: images.map(i => i.sha256) }) + "\n");
 if (spec.silent) process.exit(0);
 const dir = join(values.state, "runs", request.run_id);
 mkdirSync(dir, { recursive: true });

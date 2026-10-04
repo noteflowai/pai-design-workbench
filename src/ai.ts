@@ -507,6 +507,7 @@ async function screenCode(config: Config, result: Pick<AssistantPlan, "interpret
 const STATE: Record<string, NonNullable<AssistantPlan["state"]>> = { done: "done", "deferred-budget": "deferred", "blocked-policy": "blocked", "blocked-engine": "blocked" };
 
 /** Recorded native images only: the file must be listed in the record with a digest, and still match it. */
+const IMAGE_KIND: Record<string, string> = { "preview.png": "检测相机视图 / 原生渲染", "fea.png": "von Mises 应力云图（CalculiX 结果的 Blender 渲染）" };
 async function attachedImages(store: Store, config: Config, list: NonNullable<z.infer<typeof AiInput>["attachments"]>) {
   const DIR: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad", "aero-review": "aero" };
   const out: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[] = [];
@@ -553,7 +554,11 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
   try {
     step("context", "整理工作区记录与可用工具", "running");
     const context = buildContext(store, project, project ? lifecycleOf(project) : undefined, await contextOptions(config));
-    const prompt = buildPrompt(request.message, context);
+    // Attached images are named in the prompt by order and record handle, so the model can relate what it sees to the record.
+    const handleOf = (id: string) => [...context.handles].find(([, h]) => h.id === id)?.[0] ?? "unreferenced";
+    const prompt = buildPrompt(request.message, context) + (request.attachments?.length ? ["", "<attached-images>",
+      ...request.attachments.map((x, i) => `图像 ${i + 1}：${handleOf(x.recordId)} 的${x.which === "baseline" ? "基准" : "候选"}${IMAGE_KIND[x.file] ?? "原生图像"}（原生工具生成，按摘要登记）`),
+      "图像只用于理解；结论仍以记录里的原生检查为准。", "</attached-images>"].join("\n") : "");
     step("context", "整理工作区记录与可用工具", "done", `${context.handles.size} 个可引用记录 · ${Math.round(Buffer.byteLength(prompt) / 1024)} KB`);
     step("engine", `调用 AI 引擎（${profiles.map(p => PROFILE_LABEL[p]).join(" → ")}）`, "running");
     const onAttempt = (a: ControllerAttempt) => step(`attempt-${a.profile}`, PROFILE_LABEL[a.profile] ?? a.profile,

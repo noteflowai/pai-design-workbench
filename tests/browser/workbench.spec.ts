@@ -108,6 +108,44 @@ test("full lifecycle: requirement, native review, replay, feedback recheck, hand
   expect(cached.some(path => path.startsWith("/api/"))).toBe(false);
 });
 
+test("visual review: recorded inspection views go to the AI with the question, pinned by digest", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.blender) throw new Error("Native Blender is required for this integration check");
+  expect(state.capabilities.assistant.images).toBe(true);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "Blender 场景" }).click();
+  await page.getByRole("button", { name: "生成并检查 Blender 场景" }).click();
+  await expect(page.getByRole("heading", { name: "场景检查拒绝" })).toBeVisible({ timeout: 150_000 });
+  const { writeFile: write, readFile: read, rm } = await import("node:fs/promises");
+  const log = ".state/browser/fake-visual.jsonl"; await rm(log, { force: true });
+  await write(".state/browser/fake-executor.json", JSON.stringify({ log, attempts: [{ profile: "kiro-primary", status: "succeeded", answer: "```json\n" + JSON.stringify({
+    kind: "plan", interpretation: ["候选相机视图被大块体挡住"], answer: { text: "scene-1 候选视图里一块大面板挡住了工位，射线检查同样失败；改回无遮挡布局。", citations: ["scene-1"] },
+    plans: [{ ref: "p1", tool: "scene-review", title: "无遮挡布局复测", payload: { variant: "clear" } }] }) + "\n```" }] }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /带图问 AI（2 张已记录图像）/ }).click();
+  const assistant = page.getByRole("complementary", { name: "AI 助手" });
+  const chips = assistant.getByRole("list", { name: "随问题发送的已记录图像" });
+  await expect(chips.getByRole("listitem")).toHaveCount(2);
+  await expect(chips).toContainText("候选相机视图");
+  await noOverflow(page);
+  await assistant.screenshot({ path: testInfo.outputPath("visual-ask-mobile.png") });
+  await assistant.getByRole("button", { name: "移除附图 基准相机视图" }).click();
+  await expect(chips.getByRole("listitem")).toHaveCount(1);
+  await assistant.getByRole("button", { name: "生成计划 ↵" }).click();
+  await expect(assistant.getByRole("article", { name: "计划 无遮挡布局复测" })).toBeVisible({ timeout: 60_000 });
+  await expect(chips).toHaveCount(0);
+  // The executor received exactly the recorded candidate preview, by digest; nothing from the browser.
+  const sent = JSON.parse((await read(log, "utf8")).trim().split("\n").at(-1)!);
+  const after = await (await page.request.get("/api/state")).json();
+  const scene = after.scenes.filter((s: { projectId: string }) => s.projectId === after.projects.at(-1).id).at(-1);
+  expect(sent.images).toEqual([scene.files["candidate/preview.png"]]);
+  expect(sent.prompt).not.toContain("preview.png");
+  expect(errors).toEqual([]);
+});
+
 test("native Blender scene from the professional form: rejection, evidence files and occlusion recheck", async ({ page }, testInfo) => {
   test.setTimeout(360_000);
   const state = await (await page.request.get("/api/state")).json();
