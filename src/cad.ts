@@ -411,6 +411,7 @@ export async function renderResult(config: Config, record: { receipts: Receipt[]
   const script = join(config.repository, "native/render_glb.py");
   const r = await command(config.blender, ["--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "2", "--python", script, "--", "--input", glb, "--output", png],
     config.repository, undefined, 180_000);
+  await writePrivate(`${png}.log`, `${r.stdout}\n${r.stderr}`);
   record.receipts.push({ adapter: "blender-render", command: ["blender", "render_glb.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
     stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)) } });
   return r.exitCode === 0;

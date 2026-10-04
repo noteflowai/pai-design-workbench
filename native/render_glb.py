@@ -2,10 +2,10 @@
 
     blender --background --factory-startup --python render_glb.py -- --input fea.glb --output fea.png [--title "..."]
 
-Workbench engine, flat lighting and the GLB's own vertex colours (COLOR_0), so the image shows the solver's field and
+Cycles (CPU), the GLB's own vertex colours (COLOR_0) as unlit emission, so the image shows the solver's field and
 nothing invented. Two views (isometric and front) side by side. The colour scale is
 not drawn: it lives in the result JSON (e.g. fea.json colorScaleMaxMPa), which the reviewer receives as text.
-Deterministic: fixed resolution, camera from the bounding box, no sampling noise.
+Deterministic: fixed resolution, camera from the bounding box, fixed sample count and seed.
 """
 import json, sys
 from pathlib import Path
@@ -25,11 +25,26 @@ lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)
 hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
 centre, size = (lo + hi) / 2, max((hi - lo).length, 1e-6)
 scene = bpy.context.scene
-scene.render.engine = "BLENDER_WORKBENCH"
-shading = scene.display.shading
-shading.light, shading.color_type = "FLAT", "VERTEX"
-shading.show_object_outline, shading.object_outline_color = True, (0.1, 0.1, 0.1)
-scene.world = bpy.data.worlds.new("bg"); scene.world.color = (1, 1, 1)
+# Cycles on the CPU (headless CI has no GPU context for Workbench/EEVEE). Each mesh shows its COLOR_0 as pure
+# emission: the pixel is the solver's colour, unlit and unshaded; Freestyle draws the silhouette for shape.
+scene.render.engine = "CYCLES"
+scene.cycles.device, scene.cycles.samples, scene.cycles.use_denoising = "CPU", 16, False
+for o in objs:
+    mat = bpy.data.materials.new("field"); mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    nodes.clear()
+    attr, emit, output = nodes.new("ShaderNodeVertexColor"), nodes.new("ShaderNodeEmission"), nodes.new("ShaderNodeOutputMaterial")
+    attr.layer_name = o.data.color_attributes[0].name if o.data.color_attributes else ""
+    links.new(attr.outputs["Color"], emit.inputs["Color"]); links.new(emit.outputs["Emission"], output.inputs["Surface"])
+    o.data.materials.clear(); o.data.materials.append(mat)
+scene.render.use_freestyle = True
+scene.render.line_thickness_mode, scene.render.line_thickness = "ABSOLUTE", 1.0
+lineset = scene.view_layers[0].freestyle_settings.linesets.new("outline")
+lineset.select_by_visibility, lineset.select_silhouette, lineset.select_border, lineset.select_crease = True, True, True, True
+lineset.linestyle = bpy.data.linestyles.new("outline")
+lineset.linestyle.color, lineset.linestyle.thickness = (0.15, 0.15, 0.15), 1.0
+scene.world = bpy.data.worlds.new("bg"); scene.world.use_nodes = True
+scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (1, 1, 1, 1)
 # Standard view transform: the vertex colours are the solver's colour map and must not be tone-mapped.
 scene.view_settings.view_transform, scene.view_settings.look = "Standard", "None"
 scene.render.resolution_x, scene.render.resolution_y = 640, 480
