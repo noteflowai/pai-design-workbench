@@ -1,11 +1,11 @@
 {
   "schema": "pai-visual-blind-1",
-  "checkedAt": "2026-10-04T11:29:17.159Z",
+  "checkedAt": "2026-10-04T16:25:55.444Z",
   "task": "line of sight from the inspection camera; ground truth = native BVH ray check camera-visibility of the same record",
   "blinding": "neutral letters only; no variant name, record id, check result or path in the prompt; images pinned by SHA-256 in the executor request",
   "runs": [
     {
-      "runId": "pai-visual-aa51556a-a387-4b5f-bc77-5315253afe57",
+      "runId": "pai-visual-bbd32056-6c2a-4ccb-9e19-711d4cc35775",
       "action": "done",
       "engine": {
         "profile": "kiro-primary",
@@ -14,31 +14,31 @@
         "engineVersion": "2.27.1",
         "modelEvidence": "acp_advertised"
       },
-      "reportSha256": "34b7a29e9a82c31bf7ec622b3e7919019d5dbe76f58366bb7d6264d3f2fbd4f7",
+      "reportSha256": "f85f3683c64587f39f1119ce709635c46c72c4ac8260d4c0afb6a0d1674fee9b",
       "answered": true,
       "images": [
         {
-          "sha256": "039bedd0d09824bf362308e9e365d41d933e5fb8ff7ad6341ef2388ae0a8f0e4",
+          "sha256": "2a1ce447420830cacc5bcd4f2454ff930cd1d3805b6584b1719fd0b5bab34f31",
           "native": true,
           "model": true,
-          "reason": "Clear view of the fixture block with the small orange part on top; the green arm is beside it, not in front, so nothing blocks the line of sight."
+          "reason": "Clear view of base plate, two blue blocks, green arm overhead, and orange part on top of the right fixture block. Nothing blocks the work area."
         },
         {
-          "sha256": "0b6159379436ee1490fb9e02253f0ac6acd19e46bdcf5cc0a58b307368c02125",
+          "sha256": "2a63f6828eba90a771f9b90e40bda83e996340f1b99613022e27de277a5e9561",
           "native": false,
           "model": false,
-          "reason": "A large grey panel fills most of the frame in front of the camera. Only the edge of the base plate shows, and the fixture and part are hidden."
+          "reason": "A large light-gray panel fills most of the frame. Only a corner of the base plate shows at bottom left; the fixture and part are hidden behind it."
         },
         {
-          "sha256": "0ec433eb2952566f2c174009d15de28af906431884e04173c65e158fdb8886f4",
+          "sha256": "392e58bff58d7e0cb26fe0fb9baad7455709005036e2e310fa2a570772696550",
           "native": false,
           "model": false,
-          "reason": "Same as B: a large grey panel blocks most of the view. Only a corner of the base plate is visible, and no fixture or part can be seen."
+          "reason": "Same as B: a large gray panel covers most of the view, leaving only an edge of the base plate. The fixture and part cannot be seen."
         }
       ]
     },
     {
-      "runId": "pai-visual-d5ce64ee-51db-487e-8e8d-d4750a473ebc",
+      "runId": "pai-visual-03b83f9b-e08a-4c78-b56a-851ec730b49f",
       "action": "done",
       "engine": {
         "profile": "kiro-primary",
@@ -47,26 +47,26 @@
         "engineVersion": "2.27.1",
         "modelEvidence": "acp_advertised"
       },
-      "reportSha256": "a5e9a1cc194387160b55cb279cb231abcde14feeebe349c4539b4704f16c078d",
+      "reportSha256": "47f3f382e428b169bed4b7dd9d63d9e35d82bd093ad859bbde335211951b52f4",
       "answered": true,
       "images": [
         {
-          "sha256": "01e5f4a2528ca45ad6affd9409ac1447257d4a86052277532e0a7baa0109d8fb",
-          "native": true,
-          "model": true,
-          "reason": "Clear view of the fixture block with the small orange part on top; robot arm nearby but not blocking line of sight."
-        },
-        {
-          "sha256": "018480b5bc37d78c1c1179eb6dfff304128e529335b07fcc1a3cd744dcd4ae67",
+          "sha256": "12733ff3ea556b83e104c0fc0f7ded3953ecdf1a3e918c422d8c95dbf178631e",
           "native": false,
           "model": false,
-          "reason": "A large light-gray panel fills most of the frame; only a corner of the base plate shows. Fixture and part are hidden."
+          "reason": "A large light-gray vertical panel fills most of the frame right in front of the camera. Only a corner of the base plate shows, and no fixture or part is visible."
         },
         {
-          "sha256": "02df368b86b6732dbe8cc26533da84d010b870b77f2cbde53060fc7ba4939532",
+          "sha256": "13043c0b979ddb67745bd70ff8b16dc06dc67738b35a04328b59d780a6d6500a",
           "native": true,
           "model": true,
-          "reason": "Same unobstructed view as A: fixture block and orange part clearly visible, arm beside it and not occluding the part."
+          "reason": "Clear view of the base plate, both blue blocks and the orange part on the right fixture. The green arm sits beside the part and does not cover it."
+        },
+        {
+          "sha256": "15ab85f6f7a558788ddc08c3a5f34b97d2ea233dc30c32e2b4a94adbcbd1f8c1",
+          "native": true,
+          "model": true,
+          "reason": "Looks identical to B. The fixture and orange part are fully visible, and the green arm is next to the part without blocking the line of sight."
         }
       ]
     }

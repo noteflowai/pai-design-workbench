@@ -52,6 +52,7 @@ Environment=PAI_CONTROL_ROOT=$ROOT
 Environment=PAI_CONTROLLER_ENTRYPOINT=$ROOT/.runtime/compiled/flows/execute.js
 Environment=PAI_CONTROLLER_DATABASE=$STATE/ai-ledger/ledger.sqlite3
 Environment=PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2
+Environment=PAI_EXECUTOR_IMAGES=$(python3 -c "import json,sys; print('1' if 'images' in json.load(open(sys.argv[1]))['executor'].get('accepts', []) else '0')" "$PAI_RELEASE/tools/runtime-pins.json")
 Environment=PATH=$AI/bin:$NODE_BIN:/usr/local/bin:/usr/bin:/bin
 ReadWritePaths=/var/lib/pai/.kiro /var/lib/pai/.acpx /var/lib/pai/.cache /var/lib/pai/.local
 EOF

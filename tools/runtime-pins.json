@@ -21,9 +21,12 @@
   },
   "executor": {
     "repository": "noteflowai/noteflow-agent-control (private)",
-    "commit": "95215e6086db8540dda53c24c3e25ed45b37ad02",
-    "archiveSha256": "0292fb925f1e5c4b3cc1f04f7cd57897f4e1c3afc218ffd75f7dc1efdb31abeb",
-    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json"
+    "commit": "bf438e49492b85a9ce09f7be7d7d24f3ca337c33",
+    "archiveSha256": "00ee170000767d2d11df540584d1143af130ebce88865ca75c17b0d75fb603ce",
+    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it.",
+    "accepts": [
+      "images"
+    ]
   },
   "ubuntu": "ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3",
   "physicsnemoCfd": {
