@@ -10,7 +10,7 @@
 | 自主有边界 | AI 可以在维护者签发的授权内多轮执行原生检查，但不能放宽要求，也不能验收或发布 | `autonomy-grant` 规定工具、次数和有效期；autopilot 与 `pai_run_plan` 共用同一套执行规则 |
 | 做减法 | 每个概念只出现一次：一个来源、一个固定值、一个入口 | 集成内容只在工作台维护；底座只做安装；审批脚本两份合并成一份 |
 |---|---|---|
-| AI 只提议，求解器裁决 | 模型输出只能成为计划或种子，结论来自原生工具 | 计划 `authority: none`；验收只看原生检查 + EvalArc；代理模型只排序 |
+| AI 提议与执行，求解器裁决 | 模型输出只能成为计划或种子；计划由人确认后执行，或在授权内由 AI 自主执行（见下一行）；结论只来自原生工具 | 计划 `authority: none`；验收只看原生检查 + EvalArc；代理模型只排序 |
 | 需求先冻结 | 每次评审绑定需求版本和哈希；放宽要求会生成新版本 | `project-version` 只追加；计划差异标出收紧或放宽 |
 | 失败不能被覆盖 | 失败案例必须经反馈、绑定的复测、关闭来处置 | 反馈状态机；复测必须绑定 `feedbackId`；准入 5 项 |
 | 不确定就不重放 | 结果未知的原生或模型运行等人工核对 | 请求身份写入 SQLite；`reconcile` 状态；不自动重试 |
@@ -36,7 +36,7 @@ flowchart TB
     Gate[发布准入与审批]
     Seal[封存：KMS 签名 + RFC 3161 + Object Lock]
   end
-  subgraph AI["AI 运行时（只提议）"]
+  subgraph AI["AI 运行时（提议；授权内执行）"]
     Exec[NoteFlow 受控执行器：acpx、共享账本、无重试]
     Kiro[Kiro / Codex / Claude]
     AC[Bedrock AgentCore：microVM 沙箱 + Agent]

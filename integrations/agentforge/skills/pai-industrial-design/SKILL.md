@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.3.0"
+version: "1.3.1"
 ---
 
 # PAI industrial design
@@ -13,7 +13,8 @@ version: "1.3.0"
 PAI Design Workbench turns frozen requirements into native evidence. CadQuery/OCCT measures parts,
 CalculiX computes stress and deflection, Blender measures layouts with ray casts, MuJoCo runs seeded robot
 trials, and EvalArc compares a candidate against its baseline. You **propose**; a human maintainer
-**confirms**; the native tools **decide**. You cannot execute, approve, release or move feedback.
+**confirms**, or issues a bounded grant under which you may **run** your own plans; the native tools **decide**.
+You cannot relax or change requirements, approve, release or move feedback.
 
 ## Loop
 
