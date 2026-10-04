@@ -86,8 +86,11 @@ coefficients equal the local ones: reference 0.23406, candidate 0.22926 against 
 | No layers (the review setting) | 0.2537 | 0.2295 | 10.6 % |
 | 3 relative layers (expansion 1.2, final 0.5; 80 % thickness coverage) | 0.3059 | 0.2454 | 24.7 % |
 | 3 absolute layers (first cell for y+ ≈ 50) | 0.2547 (28 % coverage) | diverged (floating-point exception, iteration 9) | — |
+| 5 absolute layers (first cell y+ ≈ 50, expansion 1.3), `potentialFoam` start, SIMPLE with p 0.3 / U 0.7 | 0.2647 (83 % coverage) | 0.2366 (92 % coverage) | 11.9 % |
 
-Prism layers alone increase the mesh dependence. A layered setup that converges needs four things together:
+Prism layers alone increase the mesh dependence. The stabilised layered setup converges on both levels, with
+level-4 Cd 0.2366 against 0.230 measured. Its mesh dependence (11.9 %) is no better than without layers, and it costs
+2–3 times the run time (28 and 63 minutes locally). The remaining work toward mesh independence is:
 - a y+ study per level;
 - a `potentialFoam` initialisation and a first-order start;
 - finer surface refinement so the layers can grow;
