@@ -10,6 +10,7 @@
 | 审批 Agent | `scripts/approval-agent.py` 取代 `drain-approvals.sh`。首次运行驳回 18 个已被取代的执行，批准 `9594430`（该执行的 Source、4 条 Test、Build、PackageSignVSIX 全部成功），Deploy 成功。每个决定写一行 JSON 日志 |
 | 集成包统一 | 工作台 `integrations/agentforge/bundle.json`（8 个文件，摘要 `239f93e3…`）是唯一来源。底座 PR #551 删掉 4 个模块、2 个安装器和全部副本，只保留 `pai.mjs` 和 `install.mjs`，净减 79 行。从实际提交 `be11e86` 安装：底座的 `skills-config.mjs` 分发了 1.2.0，评测自测通过 |
 | 底座 PR | #550 `92a677b`、#551 `4bd745f`，合并前 CodeBuild 的 rust、js、delivery 三条全部 SUCCEEDED |
+| 合并后上线 | 审批 Agent 驳回已被取代的 `92a677b`，批准 `4bd745f`：overlay 基于新的 `:full` digest 构建，Deploy 成功。之后改为每 5 分钟由 cron 运行一次（`flock` 防止重叠，`--once` 每次只做一个决定） |
 
 ## OpenFOAM 上 Batch、DFM、求解数据集（2026-10-04 晨）
 
