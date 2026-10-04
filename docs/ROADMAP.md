@@ -62,10 +62,10 @@
 | 里程碑 | 复用 | 完成标准 |
 |---|---|---|
 | M5 自主闭环（✓ 第一版） | 授权 + autopilot + `pai_run_plan`；循环由工作台和 AgentForge 承担，不引入新的编排框架 | 本机 autopilot 达成目标；外部 Agent 能在授权内完成提议 → 执行 → 读取结论；托管站点开通 `run` scope 后实测 |
-| M6 代理模型预筛 | PhysicsNeMo-CFD（DoMINO / Transolver），为 OpenFOAM 做混合初始化 | 同一车身上迭代次数减少，Cd 与冷启动一致；代理模型只负责排序和给初值 |
+| M6 代理模型预筛（进行中） | PhysicsNeMo-CFD 固定提交 + DoMINO 检查点（上游 `DoMINOInference` 原样复用）；评审中与 OpenFOAM 并行跑，按摘要登记，只作参考 | 校准门禁：≥ 6 个车身、Spearman ≥ 0.8 才可参与排序。当前 4 个车身 Spearman −0.4，未通过（Ahmed 车身在训练分布外）；下一步用自有 OpenFOAM 场数据按上游 `domino_nim_finetuning` 微调，通过后再做混合初始化 |
 | M7 USD → 机器人策略 | Newton / Isaac Lab（L40S）、NVIDIA/skills 挂到 AgentForge、LeRobot + GR00T N1.7 | 导出的 USD 在 Isaac Lab 或 Newton 上加载并跑出策略成功率，作为新的检查项 |
 | M8 设计到制造与实测回流 | ocp-freecad-cam / OpenCAMLib 出 G-code；ros-mcp-server、asyncua、BaSyx 第一阶段只读；硬件三道闸 | G-code 经仿真校验；三坐标或应变实测回写证据，只有这一级才把 `physicalValidation` 标为 true |
-| 多模态评审（✓ 第一版） | 顶级模型的视觉能力；执行器 PR #60 支持按摘要绑定图像 | ✓ 渲染图已能进入评审；待做：执行器 PR 合并后更新固定版本；把 FEA 云图和流场图导出为 PNG；按图像得出的结论要与求解器结论对照打分 |
+| 多模态评审（✓ 第一版） | 顶级模型的视觉能力；执行器 PR #60 支持按摘要绑定图像 | ✓ 渲染图、相机视图和 FEA 应力云图（`fea.png`）已能进入评审，界面上有"带图问 AI"；盲测对照 6/6 与射线检查一致（容易情形）。待做：执行器 PR 合并后更新固定版本；流场图；更难的盲测（局部遮挡、应力集中位置） |
 
 ## 风险与对策
 

@@ -13,6 +13,8 @@ import type { AeroReview } from "./aero.js";
 export interface DatasetRow {
   domain: "structural-fea" | "aero-rans"; source: string; recordId: string; projectId: string; createdAt: string;
   inputs: Record<string, number>; outputs: Record<string, number>; solver: string; fidelity: string;
+  /** AI prediction for the same input, kept apart from the solver outputs: a calibration pair, never a measurement. */
+  advisory?: { prescreenCd: number; model: string };
 }
 export function solverDataset(store: Store) {
   const rows: DatasetRow[] = [];
@@ -43,7 +45,8 @@ export function solverDataset(store: Store) {
       if (!chk || !cfd) continue;
       for (const l of cfd.levels) rows.push({ domain: "aero-rans", source: "aero-review", recordId: a.id, projectId: a.projectId, createdAt: a.createdAt,
         inputs: { ...chk.parameters, meshLevel: l.level, cells: l.cells, speedMs: 40 }, outputs: { cd: l.cd, cl: l.cl, frontalAreaM2: cfd.frontalAreaM2 },
-        solver: `${chk.engine} simpleFoam k-ω SST`, fidelity: `rans-level-${l.level}${cfd.runner === "batch" ? " (AWS Batch)" : ""}` });
+        solver: `${chk.engine} simpleFoam k-ω SST`, fidelity: `rans-level-${l.level}${cfd.runner === "batch" ? " (AWS Batch)" : ""}`,
+        ...(a.prescreen?.results[which] ? { advisory: { prescreenCd: a.prescreen.results[which]!.cd, model: `DoMINO DrivAerML surface sha256:${a.prescreen.results[which]!.checkpointSha256.slice(0, 12)}` } } : {}) });
     }
   }
   rows.sort((x, y) => x.createdAt.localeCompare(y.createdAt) || x.recordId.localeCompare(y.recordId));

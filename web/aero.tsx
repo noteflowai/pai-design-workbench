@@ -78,9 +78,24 @@ export function AeroDetail({ run }: { run?: AeroReview }) {
       <div className="table-wrap"><table className="sweep-table"><caption>网格层级（{which === "baseline" ? "参考" : "候选"}）</caption>
         <thead><tr><th scope="col">level</th><th scope="col">单元数</th><th scope="col">Cd</th><th scope="col">Cl</th><th scope="col">迭代</th><th scope="col">耗时 s</th></tr></thead>
         <tbody>{levels.map(l => <tr key={l.level}><td>{l.level}</td><td>{l.cells.toLocaleString()}</td><td>{l.cd}</td><td>{l.cl}</td><td>{l.iterations}</td><td>{l.seconds}</td></tr>)}</tbody></table></div>
+      {run.prescreen && <PrescreenNote run={run} which={which} />}
       <div className="button-row"><a className="button secondary" href={`/api/aero/${run.id}/files/candidate/body.step`}>下载车身 STEP</a>
         <a className="button secondary" href={`/api/aero/${run.id}/files/candidate/forces-4.dat`}>下载力系数历史</a>
         <a className="button secondary" href={`/api/aero/${run.id}/files/candidate/cfd.json`}>下载 CFD 摘要</a></div>
     </>}
   </>;
 }
+
+/** Advisory AI prescreen next to the native result: its own error on this record and the reviewed calibration status. */
+function PrescreenNote({ run, which }: { run: AeroReview; which: "baseline" | "candidate" }) {
+  const p = run.prescreen!, r = p.results[which], fine = run.cfd?.[which]?.levels.at(-1)?.cd, cal = p.calibration;
+  const status = !cal ? "尚无校准记录" : cal.admittedForRanking ? `已校准（${cal.n} 个车身，Spearman ${cal.spearman}），可作排序参考`
+    : `未通过校准（${cal.n} 个车身，Spearman ${cal.spearman ?? "—"}，门槛 ≥ 0.8），不用于排序`;
+  return <aside className={`prescreen ${cal?.admittedForRanking ? "admitted" : "advisory"}`} aria-label="AI 预筛">
+    <strong>AI 预筛 · NVIDIA DoMINO</strong>
+    {r ? <span>Cd ≈ {r.cd.toFixed(3)}{fine !== undefined && <> · OpenFOAM {fine.toFixed(3)} · 偏差 {((r.cd - fine) / fine * 100).toFixed(0)}%</>} · {Math.round(r.seconds)} s（{r.device}）</span>
+      : <span>{p.error ? "预筛失败，不影响原生结论" : "本车身没有预筛结果"}</span>}
+    <small>{status}。预筛只是参考，结论以 OpenFOAM 为准；每条完成的评审都会成为一组新的校准数据。</small>
+  </aside>;
+}
+

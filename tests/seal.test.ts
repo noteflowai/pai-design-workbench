@@ -87,11 +87,15 @@ test("solver dataset: only solved points become rows, with inputs, outputs and t
         { index: 3, origin: "bo", fidelity: "fea", parameters: { thickness: 5, width: 58, plateHeight: 52, pilotBore: 22.5 }, mass: 66, deflectionMm: 0.024, remote: { jobId: "j" } }] } }],
     "cad-review": [], "aero-review": [{ id: "a1", projectId: "p", createdAt: "2026-10-04T01:00:00Z",
       baseline: { engine: "OpenFOAM v2512", parameters: { slantAngleDeg: 25, noseRadius: 0.1, length: 1.044, height: 0.288 } },
-      cfd: { baseline: { frontalAreaM2: 0.112, runner: "batch", levels: [{ level: 3, cells: 61310, cd: 0.2575, cl: 0.2 }, { level: 4, cells: 219622, cd: 0.2341, cl: 0.21 }] } } }],
+      cfd: { baseline: { frontalAreaM2: 0.112, runner: "batch", levels: [{ level: 3, cells: 61310, cd: 0.2575, cl: 0.2 }, { level: 4, cells: 219622, cd: 0.2341, cl: 0.21 }] } },
+      prescreen: { calibration: null, results: { baseline: { cd: 0.479, seconds: 103, checkpointSha256: "ad45e9477a7c0336", device: "L40S" } } } }],
   };
   const d = solverDataset({ list: (kind: string) => records[kind] ?? [] } as never);
   assert.equal(d.rows, 4); assert.deepEqual(d.byDomain, { "structural-fea": 2, "aero-rans": 2 });
   assert.equal(d.data[1].fidelity, "fea-fine (AWS Batch)");
-  assert.equal(d.data.find(r => r.domain === "aero-rans" && r.inputs.meshLevel === 4)!.outputs.cd, 0.2341);
+  const fine = d.data.find(r => r.domain === "aero-rans" && r.inputs.meshLevel === 4)!;
+  assert.equal(fine.outputs.cd, 0.2341);
+  // The AI prescreen is a calibration pair kept apart from the solver outputs, never mixed into them.
+  assert.equal(fine.advisory?.prescreenCd, 0.479); assert.equal(Object.keys(fine.outputs).includes("prescreenCd"), false);
   assert.match(d.sha256, /^[a-f0-9]{64}$/);
 });

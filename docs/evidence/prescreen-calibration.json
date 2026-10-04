@@ -1,0 +1,81 @@
+{
+  "schema": "pai-prescreen-calibration-1",
+  "checkedAt": "2026-10-04T13:30:53+00:00",
+  "model": {
+    "name": "DoMINO DrivAerML surface",
+    "checkpoint": "DoMINO.0.501.mdlus",
+    "checkpointSha256": "ad45e9477a7c0336c07a039ba70db7ddc9a2254d4ff94104d9c297ae7d7b662b",
+    "scalingFactorsSha256": "895b876ab7a2f32b4c714e4eafc7b2e7d94029e037bfc2950cf8c6cb2a818c2d",
+    "torch": "2.12.0+cu130",
+    "device": "NVIDIA L40S"
+  },
+  "scale": 4.4,
+  "points": [
+    {
+      "parameters": {
+        "slantAngleDeg": 0.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "1733b229b898c48821a3ecc62a04fc64e966079d4cea0c45fcad81203a551aa4",
+      "openfoamCd": 0.24727,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.59764,
+      "prescreenSeconds": 93.7,
+      "openfoamSeconds": 3301.5
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 12.5,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "7d505d8bbc5881788f5d39fcdb76c24e60d8d033a06e1277fce1ab8aa1b2b003",
+      "openfoamCd": 0.22945,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.54357,
+      "prescreenSeconds": 102.2,
+      "openfoamSeconds": 2664.6
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 25.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "f0ad1fcb765147afb36c7ab07cfe925707eff3349293bd76baf3abb2ef8aae08",
+      "openfoamCd": 0.23412,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.47889,
+      "prescreenSeconds": 113.5,
+      "openfoamSeconds": 2931.7
+    },
+    {
+      "parameters": {
+        "slantAngleDeg": 35.0,
+        "noseRadius": 0.1,
+        "length": 1.044,
+        "height": 0.288
+      },
+      "stlSha256": "68d864c0cfbc75d403367b34f65cac51550e3ae140744a4a8ea68ca2cd0f6bd3",
+      "openfoamCd": 0.24885,
+      "openfoamLevel": 4,
+      "prescreenCd": 0.47357,
+      "prescreenSeconds": 108.9,
+      "openfoamSeconds": 2981.9
+    }
+  ],
+  "n": 4,
+  "spearman": -0.4,
+  "meanRatio": 2.184,
+  "gate": {
+    "minPoints": 6,
+    "minSpearman": 0.8,
+    "admittedForRanking": false
+  },
+  "rule": "admitted only as a ranking signal; the prescreen Cd is never a result, and every ranked body is still solved natively",
+  "physicalValidation": false
+}

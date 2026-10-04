@@ -25,5 +25,21 @@
     "archiveSha256": "0292fb925f1e5c4b3cc1f04f7cd57897f4e1c3afc218ffd75f7dc1efdb31abeb",
     "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json"
   },
-  "ubuntu": "ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3"
+  "ubuntu": "ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3",
+  "physicsnemoCfd": {
+    "repository": "https://github.com/NVIDIA/physicsnemo-cfd",
+    "commit": "0612ec4ed54484a47bfa134eda7b3b012a607624",
+    "lock": "uv.lock (uv sync --frozen, extras evaluation-hf + gpu)",
+    "python": "3.12",
+    "checkpoint": {
+      "repository": "nvidia/domino_drivaerml",
+      "revision": "35b1bf1edafdaa2600d16182825890cd51c07427",
+      "sha256": {
+        "domino_drivaerml_surface_checkpoint/DoMINO.0.501.mdlus": "ad45e9477a7c0336c07a039ba70db7ddc9a2254d4ff94104d9c297ae7d7b662b",
+        "domino_drivaerml_surface_checkpoint/scaling_factors.pkl": "895b876ab7a2f32b4c714e4eafc7b2e7d94029e037bfc2950cf8c6cb2a818c2d"
+      },
+      "license": "NVIDIA Open Model Agreement (commercial use permitted)"
+    },
+    "note": "Advisory aerodynamic prescreen only (native/cfd_prescreen.py); needs an NVIDIA GPU. The revision equals DOMINO_PACKAGE_ROOT in physicsnemo-cfd builtin_packages.py."
+  }
 }

@@ -15,6 +15,8 @@ export interface Config {
   /** S3 bucket with Object Lock for write-once archiving of sealed release packages, and the retention in days. */
   /** Aerodynamics lane: the pinned OpenCFD OpenFOAM image (name@sha256 digest) and the cores to give OpenFOAM. */
   openfoamImage?: string; cfdProcessors?: number;
+  /** Advisory AI aero prescreen (npm run setup:prescreen): pinned PhysicsNeMo-CFD + DoMINO checkpoint; needs an NVIDIA GPU. */
+  prescreenDir?: string;
   /** FEA scale-out on AWS Batch (PAISolver stack): queue, job definition, jobs bucket and region. */
   solverBatch?: { queue: string; jobDefinition: string; cfdJobDefinition?: string; bucket: string; region: string };
   packageArchiveBucket?: string; packageRetentionDays: number; packageLockMode: "COMPLIANCE" | "GOVERNANCE";
@@ -74,6 +76,7 @@ export function configuration(): Config {
     tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
     openfoamImage: /^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$/.test(process.env.PAI_OPENFOAM_IMAGE ?? "") ? process.env.PAI_OPENFOAM_IMAGE : undefined,
     cfdProcessors: Number(process.env.PAI_CFD_PROCESSORS) || undefined,
+    prescreenDir: process.env.PAI_PRESCREEN_DIR || undefined,
     solverBatch: process.env.PAI_SOLVER_QUEUE && process.env.PAI_SOLVER_JOB_DEFINITION && process.env.PAI_SOLVER_BUCKET
       ? { queue: process.env.PAI_SOLVER_QUEUE, jobDefinition: process.env.PAI_SOLVER_JOB_DEFINITION, cfdJobDefinition: process.env.PAI_SOLVER_CFD_JOB_DEFINITION || undefined, bucket: process.env.PAI_SOLVER_BUCKET,
           region: process.env.PAI_SOLVER_REGION || process.env.AWS_REGION || "ap-northeast-1" } : undefined,

@@ -30,6 +30,7 @@
     "check": "npm run typecheck && npm test && npm run test:desktop-contract && npm run build",
     "test:desktop-contract": "node --test tests/desktop-contract.test.mjs",
     "setup:cad": "python3 tools/setup_cadquery.py",
+    "setup:prescreen": "python3 tools/setup_prescreen.py",
     "test:cad": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cad-e2e.ts",
     "test:suite": "node --env-file-if-exists=.state/demo.env --import tsx scripts/industrial-suite.ts",
     "test:ai-live": "node --env-file-if-exists=.state/demo.env --import tsx scripts/ai-live.ts",

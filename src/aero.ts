@@ -52,7 +52,26 @@ export interface AeroReview {
     remote?: { level: number; jobId: string; image?: string; seconds?: number; nproc?: number }[] }>>;
   receipts: Receipt[]; sourceDigests: Record<string, string>; files: Record<string, string>;
   stages?: Partial<Record<"baseline" | "candidate", SceneStage[]>>; scope: "steady-rans-cfd"; physicalValidation: false;
+  /**
+   * Advisory AI prescreen (NVIDIA DoMINO on the same STL), never a result: shown next to the native Cd with the reviewed
+   * calibration. Each completed review is one more (prescreen, OpenFOAM) pair.
+   */
+  prescreen?: { calibration: PrescreenCalibration | null; results: Partial<Record<"baseline" | "candidate", { cd: number; seconds: number; checkpointSha256: string; device: string }>>; error?: string };
 }
+export interface PrescreenCalibration { n: number; spearman: number | null; meanRatio: number | null; admittedForRanking: boolean; checkedAt: string }
+const Prescreen = z.object({ schema: z.literal("pai-cfd-prescreen-1"), cd: z.number(), seconds: z.number(), advisory: z.literal(true), physicalValidation: z.literal(false),
+  model: z.object({ checkpointSha256: z.string(), device: z.string() }).passthrough() }).passthrough();
+/** The reviewed calibration (docs/evidence/prescreen-calibration.json, produced by tools/prescreen_calibrate.py). */
+export async function prescreenCalibration(config: Config): Promise<PrescreenCalibration | null> {
+  try {
+    const r = JSON.parse(await readFile(join(config.repository, "docs/evidence/prescreen-calibration.json"), "utf8"));
+    return { n: r.n, spearman: r.spearman, meanRatio: r.meanRatio, admittedForRanking: r.gate?.admittedForRanking === true, checkedAt: r.checkedAt };
+  } catch { return null; }
+}
+export const prescreenConfigured = (config: Config) => Boolean(config.prescreenDir);
+const PRESCREEN_FILES = { python: "venv/bin/python", workflow: "src/workflows/domino_design_sensitivities", checkpoint: "domino_drivaerml/domino_drivaerml_surface_checkpoint/DoMINO.0.501.mdlus" };
+/** Body scale into the DrivAerML frame (dynamic similarity; Cd is compared, not forces). */
+const PRESCREEN_SCALE = 4.4;
 
 function checksXml(value: AeroChecks) {
   const ids = new Set(value.checks.map(c => c.id));
@@ -85,6 +104,7 @@ export async function reviewAero(store: Store, config: Config, project: Project,
   if (claimed !== record.id) return store.get<AeroReview>("aero-review", claimed)!;
   publish(request.requestId, { kind: "record", recordKind: "aero-review", recordId: record.id });
   const directory = join(config.state, "aero", record.id);
+  const prescreens: Promise<void>[] = [];
   try {
     if (project.revision !== request.projectRevision) throw new DomainError("REVISION_CONFLICT", "Freeze the current requirement revision");
     if (request.feedbackId) {
@@ -107,6 +127,32 @@ export async function reviewAero(store: Store, config: Config, project: Project,
     // Reference and candidate solve concurrently; each gets half of the host's cores.
     // Local: reference and candidate share the host's cores. Batch: each case gets its own 16-vCPU job.
     const processors = runnerKind === "batch" ? 16 : Math.max(2, Math.floor((config.cfdProcessors ?? 8) / 2));
+    // Advisory prescreen: starts as soon as the body STL exists, one GPU job at a time; it never touches the verdict.
+    let gpu = Promise.resolve();
+    if (prescreenConfigured(config)) record.prescreen = { calibration: await prescreenCalibration(config), results: {} };
+    const startPrescreen = (name: "baseline" | "candidate", target: string, frontalAreaM2: number) => {
+      const p = gpu.then(async () => {
+        const dir = config.prescreenDir!, script = native("cfd_prescreen.py"), out = join(target, "prescreen.json");
+        const label = `AI 预筛（NVIDIA DoMINO）：${name === "baseline" ? "参考" : "候选"}车身`;
+        publish(request.requestId, { kind: "step", id: `prescreen-${name}`, label, status: "running", which: name });
+        const args = [script, "--stl", join(target, "body.stl"), "--output", out, "--workflow", join(dir, PRESCREEN_FILES.workflow),
+          "--checkpoint", join(dir, PRESCREEN_FILES.checkpoint), "--frontal-area", String(frontalAreaM2), "--scale", String(PRESCREEN_SCALE)];
+        const r = await command(join(dir, PRESCREEN_FILES.python), args, join(dir, PRESCREEN_FILES.workflow), undefined, 900_000);
+        await writePrivate(join(directory, `${name}.prescreen.log`), `${r.stdout}\n${r.stderr}`);
+        record.receipts.push({ adapter: "domino-prescreen", command: ["python", "cfd_prescreen.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
+          stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)) } });
+        if (r.exitCode !== 0) throw new Error(`exit ${r.exitCode}`);
+        const raw = await readFile(out), v = Prescreen.parse(JSON.parse(raw.toString("utf8")));
+        record.files[`${name}/prescreen.json`] = sha256(raw);
+        record.prescreen!.results[name] = { cd: v.cd, seconds: v.seconds, checkpointSha256: v.model.checkpointSha256, device: v.model.device };
+        publish(request.requestId, { kind: "step", id: `prescreen-${name}`, label, status: "done", which: name,
+          detail: `Cd ≈ ${v.cd.toFixed(3)} · ${Math.round(v.seconds)} s · ${record.prescreen!.calibration?.admittedForRanking ? "已校准，可作排序参考" : "未通过校准，仅供参考"}` });
+      }).catch(e => {
+        record.prescreen!.error = `${name}: ${e instanceof Error ? e.message : String(e)}`;
+        publish(request.requestId, { kind: "step", id: `prescreen-${name}`, label: "AI 预筛失败（不影响原生结论）", status: "failed", which: name });
+      });
+      gpu = p; prescreens.push(p);
+    };
     await Promise.all((["baseline", "candidate"] as const).map(async name => {
       const target = join(directory, name);
       const parameters = name === "baseline" ? AERO_REFERENCE : request.parameters;
@@ -131,6 +177,10 @@ export async function reviewAero(store: Store, config: Config, project: Project,
           const parsed = NativeEvent.safeParse(raw);
           if (!parsed.success || parsed.data.type !== "stage") return;
           const e = parsed.data, digest = sha256(await readFile(join(target, e.file)));
+          if (e.id === "body" && record.prescreen) {
+            const body = JSON.parse(await readFile(join(target, "body.json"), "utf8")) as { frontalAreaM2: number };
+            startPrescreen(name, target, body.frontalAreaM2);
+          }
           record.stages = { ...record.stages, [name]: [...(record.stages?.[name] ?? []), { index: e.index, id: e.id, label: e.label, file: e.file, sha256: digest, objects: e.objects }] };
           store.put("aero-review", record);
           publish(request.requestId, { kind: "stage", which: name, index: e.index, id: e.id, label: e.label, objects: e.objects, url: `/api/aero/${record.id}/stages/${name}/${e.index}`, sha256: digest });
@@ -155,6 +205,7 @@ export async function reviewAero(store: Store, config: Config, project: Project,
       for (const file of AERO_FILES) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       store.put("aero-review", record);
     }));
+    await Promise.all(prescreens);
     for (const name of ["baseline", "candidate"] as const) {
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(record[name]!), { mode: 0o600, flag: "wx" });
     }
@@ -170,6 +221,7 @@ export async function reviewAero(store: Store, config: Config, project: Project,
     record.verdict = record.candidate!.checks.every(c => c.passed) ? "accepted-aero-body" : "rejected";
     record.state = "completed";
   } catch (e) { record.state = "failed"; record.error = e instanceof DomainError ? `${e.code}: ${e.message}` : "CFD_FAILED: check native configuration and retained local receipts"; }
+  await Promise.allSettled(prescreens);
   record.finishedAt = new Date().toISOString(); store.put("aero-review", record);
   publish(request.requestId, { kind: "done", state: record.state, recordId: record.id, verdict: record.verdict, detail: record.error });
   return record;

@@ -15,7 +15,7 @@ import { archive, timestamp, type Archive } from "./seal.js";
 import { solverDataset } from "./dataset.js";
 import { createGrant, revokeGrant, runUnderGrant } from "./autonomy.js";
 import { runAutopilot, type Autopilot } from "./autopilot.js";
-import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
+import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, prescreenCalibration, prescreenConfigured, reviewAero, type AeroReview } from "./aero.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
 import { Store } from "./store.js";
@@ -233,7 +233,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS,
           strategies: (await botorchVersion(config)) ? ["gp-nsga2", "botorch-qlognehvi"] : ["gp-nsga2"], botorch: await botorchVersion(config) } } : false,
       aero: aeroConfigured(config) ? { engine: `OpenFOAM v2512 (OpenCFD image${aeroRunner(config) === "batch" ? ", AWS Batch 16 vCPU" : ""}) · snappyHexMesh + simpleFoam k-ω SST · two mesh levels`, reference: AERO_REFERENCE,
-        defaultRequirements: DEFAULT_AERO_REQUIREMENTS } : false,
+        defaultRequirements: DEFAULT_AERO_REQUIREMENTS,
+        prescreen: prescreenConfigured(config) ? { engine: "NVIDIA PhysicsNeMo-CFD · DoMINO DrivAerML (advisory, never a result)", calibration: await prescreenCalibration(config) } : false } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
@@ -319,7 +320,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.post("/api/projects/:id/aero", async (request, reply) =>
     executeNative(reply, request.body, "aero-review", "aero", () => reviewAero(store, config, workbench.project(paramId(request.params)), request.body, live)));
   app.get("/api/aero/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(AERO_FILES) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum([...AERO_FILES, "prescreen.json"]) }).parse(request.params);
     const run = store.get<AeroReview>("aero-review", p.id);
     if (!run || run.state !== "completed" || !run.files[`${p.which}/${p.file}`]) throw new DomainError("NOT_FOUND", "Completed aerodynamics evidence required", 404);
     const content = await readFile(join(config.state, "aero", p.id, p.which, p.file));

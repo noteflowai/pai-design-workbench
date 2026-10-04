@@ -77,6 +77,43 @@ The 12.5° review on pai.oneai.host took 9 minutes in 4 jobs; locally on 8 cores
 coefficients equal the local ones: reference 0.23406, candidate 0.22926 against 0.22945 locally. See
 [aero-batch.json](evidence/aero-batch.json).
 
+## AI prescreen (NVIDIA DoMINO, advisory)
+
+`npm run setup:prescreen` installs the pinned [PhysicsNeMo-CFD](https://github.com/NVIDIA/physicsnemo-cfd) commit
+(`uv sync --frozen`) and the DoMINO DrivAerML surface checkpoint at the Hugging Face revision that PhysicsNeMo-CFD itself
+pins (SHA-256 of every file checked; NVIDIA Open Model Agreement, commercial use permitted). Pins live in
+`tools/runtime-pins.json` (`physicsnemoCfd`). It needs an NVIDIA GPU; the hosted site has none and skips it.
+
+- **Reuse, not rebuild.** `native/cfd_prescreen.py` imports the upstream `DoMINOInference` of
+  `workflows/domino_design_sensitivities` unchanged and only places the body in the training frame: refine flat CAD
+  facets to the DrivAerML surface density (about 0.75 M faces), scale by 4.4 (dynamic similarity; Cd is compared, not
+  forces), put the ground plane on the DrivAerML ground and refuse anything outside the checkpoint's surface box.
+- **In the review.** When the body STL exists (first stage event), the prescreen runs on the GPU while OpenFOAM meshes.
+  `prescreen.json` is recorded by digest with a `domino-prescreen` receipt and shown next to the native Cd with its own
+  error. It never enters the checks, the EvalArc comparison or the verdict; a failure is recorded and changes nothing.
+  Each completed review adds a (prescreen, OpenFOAM) pair; `pai_get_solver_dataset` returns it under `advisory`,
+  apart from the solver outputs.
+- **Calibration gate.** `tools/prescreen_calibrate.py` runs the prescreen on the exact STLs of native solves and admits
+  it as a *ranking* signal only with ≥ 6 bodies and Spearman ≥ 0.8 against fine-mesh OpenFOAM Cd. The result is
+  [prescreen-calibration.json](evidence/prescreen-calibration.json); the UI and the record carry its status.
+
+| Slant | OpenFOAM Cd (level 4) | DoMINO Cd |
+|---|---|---|
+| 0° | 0.2473 | 0.598 |
+| 12.5° | 0.2295 | 0.544 |
+| 25° | 0.2341 | 0.479 |
+| 35° | 0.2489 | 0.474 |
+
+Sanity check in distribution: DrivAerML run_1 gives 0.307 against 0.3035 (1.1 %; run_1 may be a training sample, so
+this checks the installation only). On the Ahmed body the surrogate is out of distribution (no wheels or cabin, other
+Reynolds number): it overestimates Cd by about 2.2× and falls monotonically with slant, while OpenFOAM shows the
+known Ahmed minimum near 12.5° and the rise towards 30–35°. Spearman so far −0.4 on 4 bodies: **not admitted**; the
+prescreen is shown as a reference only. More native points are being solved; fine-tuning on our own OpenFOAM fields
+(upstream recipe `domino_nim_finetuning`) is the route to admission, not tuning the adapter.
+
+Hybrid initialisation (upstream `hybrid_initialization_example`) needs the volume checkpoint and a transient case; it is
+not used until the surface prescreen passes its gate on our geometry.
+
 ## Boundary-layer experiment (not used by reviews)
 
 `cfd_case.py --layers N` adds snappyHexMesh prism layers. On the 12.5° body:
