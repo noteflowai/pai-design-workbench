@@ -1,0 +1,10 @@
+{
+  "parameters": {
+    "thickness": 4.0,
+    "width": 60.0,
+    "plateHeight": 46.0
+  },
+  "deflectionMm": 0.0478,
+  "massG": 48.368,
+  "solver": "Gmsh 4.15.2 C3D10 fine mesh + CalculiX 2.21, linear static, nominal 6061-T6 (E 68.9 GPa)"
+}

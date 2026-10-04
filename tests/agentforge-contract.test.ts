@@ -32,3 +32,11 @@ test("the Agent Skill is a valid SKILL.md with name and version frontmatter", ()
   assert.match(fm, /^version: "\d+\.\d+\.\d+"$/m);
   assert.match(fm, /^description: /m);
 });
+
+test("the AgentForge bundle lists every integration file with its current digest (one pin for the base)", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync("node", ["scripts/agentforge-bundle.mjs", "--check"], { encoding: "utf8" });
+  assert.match(out, /^bundle OK: \d+ files, sha256 [a-f0-9]{64}/);
+  const bundle = JSON.parse(readFileSync("integrations/agentforge/bundle.json", "utf8"));
+  for (const f of ["mcp-profile.json", "skills/pai-industrial-design/SKILL.md", "eval/tasks/estimate-bracket-deflection/oracle.mjs"]) assert.ok(bundle.files[f], f);
+});

@@ -1,0 +1,17 @@
+{
+  "schema": "pai-agentforge-bundle-1",
+  "skillVersion": "1.2.0",
+  "profile": "mcp-profile.json",
+  "skill": "skills/pai-industrial-design",
+  "evalTasks": "eval/tasks",
+  "files": {
+    "eval/tasks/estimate-bracket-deflection/oracle.mjs": "04f36411229069bb57a2ea3f3de3503bc1eafb687163442381c4fcea43a488e0",
+    "eval/tasks/estimate-bracket-deflection/solution/estimate.mjs": "bbae3311d62ff3c3dabd02cd8931ed09218bc3f391e6cae269831f1127e1ebb9",
+    "eval/tasks/estimate-bracket-deflection/task.json": "ef61fe39b907adae72bc5246a5892f369756204bdb9dd5942351165cf3da7213",
+    "eval/tasks/estimate-bracket-deflection/workspace/README.md": "4414555d299a243be06ac72884cd5a5c3a513461b4f0567422a83e8ab0573088",
+    "eval/tasks/estimate-bracket-deflection/workspace/estimate.mjs": "18b67dee983445659a0ed8195ba7a10082e93d773abd7235bdb989ad7074a6ca",
+    "eval/tasks/estimate-bracket-deflection/workspace/reference.json": "0221ec633353421c189f159869c9c38df23f105a3463d1ab87f92527ae356372",
+    "mcp-profile.json": "1c38dd07abf70b0b3d6cc88c48a3aacc4e5acf1c9d3591256994ce5ec9f3edec",
+    "skills/pai-industrial-design/SKILL.md": "36b08ff046265f5b2c2490bb19ab52ff9734fa581e34a1ebfcbeaa6ba0d6a5e3"
+  }
+}

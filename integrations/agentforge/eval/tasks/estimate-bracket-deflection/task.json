@@ -1,0 +1,7 @@
+{
+  "title": "Estimate NEMA 17 bracket deflection from first principles",
+  "prompt": "estimate.mjs must export estimate({ thickness, width, plateHeight }) returning the motor-axis deflection in mm of the PAI NEMA 17 bracket under a 60 N belt load at a 50 mm lever (6061-T6). The only measurement you get is the reference design in reference.json. Reason from plate bending and the rib/bore geometry described in README.md. Your estimates are scored against held-out CalculiX results that are not in the workspace.",
+  "testCmd": "node oracle.mjs",
+  "timeoutMs": 30000,
+  "oracle": "oracle.mjs"
+}
