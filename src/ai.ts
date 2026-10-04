@@ -355,10 +355,13 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
     const payload = { projectRevision: opts.revision, variant: p.variant, requirements };
     CadRequest.parse({ ...payload, requestId: placeholder });
-    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"),
-      compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
-      compare("edgeDistanceFactor", prev?.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
-      compare("requireNoInterference", prev?.requireNoInterference, requirements.requireNoInterference, "true"),
+    // Against the previous record, or the lane defaults when there is none, so a first plan that loosens a default
+    // is still marked as a relaxation.
+    const was = prev ?? DEFAULT_CAD_REQUIREMENTS;
+    const changes: PlanChange[] = [compare("maxMassG", was.maxMassG, requirements.maxMassG, "lower"),
+      compare("minWallMm", was.minWallMm, requirements.minWallMm, "higher"),
+      compare("edgeDistanceFactor", was.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
+      compare("requireNoInterference", was.requireNoInterference, requirements.requireNoInterference, "true"),
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: p.variant, direction: context.lastCad ? (context.lastCad.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `CadQuery 参数化零件：NEMA 17 电机支架 · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };

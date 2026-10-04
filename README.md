@@ -54,7 +54,8 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 只提议�
 | 可制造性 | 三轴铣削 DFM：最少装夹方向、孔深径比、单件成本估算（车间参数已审查） | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
 | 证据 | EvalArc 基准对照、发布准入 5 项；AWS KMS 签名，加 RFC 3161 时间戳，只封存一次；界面内和离线核验 | [VERIFICATION.md](docs/VERIFICATION.md) |
 | AI | 受控执行器调用 Kiro 2.27（主账号 → 备用 → 二备），共享账本、不自动重试；计划带收紧/放宽标记，确认后才执行；模型的物理估算由求解器打分 | [AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
-| 外部 Agent | AgentForge 会话经治理 MCP 网关使用 9 个读取/提议工具（含求解数据集）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
+| 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
+| 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
 界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[27 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
@@ -92,7 +93,7 @@ npm run test:browser
 
 - [主流工业设计软件界面对比](docs/UI_UX_BENCHMARK.md)
 - [工业设计典型测试用例](docs/INDUSTRIAL_TEST_CASES.md)
-- [整体架构（权威）](docs/SYSTEM_DESIGN.md) · [核心需求](docs/REQUIREMENTS.md) · [专业规划](docs/ROADMAP.md)
+- [整体架构（权威）](docs/SYSTEM_DESIGN.md) · [核心需求](docs/REQUIREMENTS.md) · [专业规划](docs/ROADMAP.md) · [行业对标与开源复用](docs/INDUSTRY_BENCHMARK.md)
 - [系统设计与取舍](docs/ARCHITECTURE.md)
 - [Agent 运行时复用决策（acpx / NoteFlow / AgentForge）](docs/AGENT_RUNTIME.md)
 - [API 与闭环操作](docs/API.md)

@@ -61,13 +61,15 @@ export class WorkbenchStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
     // Machine agents (e.g. AgentForge sessions through pai-mcp): OAuth 2.0 client credentials on a resource
-    // server with read/propose scopes only. There is no scope for confirming, executing or releasing.
+    // server with read / propose / run scopes. `run` executes a validated plan step only inside a maintainer-issued autonomy
+    // grant (granted tools, quota, expiry; no relaxations); there is no scope for approving, releasing or moving feedback.
     const agentApi = pool.addResourceServer("AgentApi", { identifier: "pai-agent", userPoolResourceServerName: "PAI agent API",
       scopes: [new cognito.ResourceServerScope({ scopeName: "read", scopeDescription: "Read the grounded workspace" }),
-        new cognito.ResourceServerScope({ scopeName: "propose", scopeDescription: "Propose typed plans for human confirmation" })] });
+        new cognito.ResourceServerScope({ scopeName: "propose", scopeDescription: "Propose typed plans for human confirmation" }),
+        new cognito.ResourceServerScope({ scopeName: "run", scopeDescription: "Run a validated plan step within a maintainer's autonomy grant" })] });
     const agentClient = pool.addClient("AgentClient", {
       generateSecret: true, authFlows: {}, accessTokenValidity: cdk.Duration.hours(1), enableTokenRevocation: true,
-      oAuth: { flows: { clientCredentials: true }, scopes: ["read", "propose"].map(s =>
+      oAuth: { flows: { clientCredentials: true }, scopes: ["read", "propose", "run"].map(s =>
         cognito.OAuthScope.custom(`pai-agent/${s}`)) },
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });

@@ -163,6 +163,20 @@ export function createMcpServer(api: Fetch, agentName?: string): McpServer {
     inputSchema: { domain: z.enum(["structural-fea", "aero-rans"]).optional() },
   }, guard(async ({ domain }) => api(`/dataset/solver${domain ? `?domain=${domain}` : ""}`)));
 
+  server.registerTool("pai_run_plan", {
+    title: "在自主授权内执行计划步骤",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: "在维护者签发的自主授权（autonomy grant）范围内，执行一个已通过校验的计划步骤，启动原生检查/求解（结构 FEA、CFD 可在 AWS Batch 上运行）。"
+      + "授权限定项目、工具、次数和有效期；放宽要求、修改需求、依赖步骤会被拒绝。返回原生记录 id；用 pai_get_record 或 pai_get_plan 查看结论。"
+      + "此工具不能验收、发布或处理反馈，结论只来自原生求解器。用 pai_list_grants 查看可用授权。",
+    inputSchema: { planId: z.string().uuid(), step: z.string().regex(/^p\d{1,2}$/), grantId: z.string().uuid() },
+  }, guard(async ({ planId, step, grantId }) => api(`/assistant/plans/${planId}/autonomous-runs`, { method: "POST", body: { grantId, step } })));
+
+  server.registerTool("pai_list_grants", {
+    title: "自主授权", annotations: READ, description: "列出任务的自主授权：允许的工具、剩余次数、有效期、是否撤销。没有有效授权时，只能提议计划，等待人工确认。",
+    inputSchema: { projectId: ProjectId },
+  }, guard(async ({ projectId }) => api(`/autonomy-grants?projectId=${projectId}`)));
+
   server.registerTool("pai_propose_plan", {
     title: "提议计划（需人工确认）",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

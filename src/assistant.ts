@@ -49,6 +49,8 @@ export interface AssistantPlan {
 export const ConfirmPlan = z.object({
   planId: z.string().regex(/^p[0-9]{1,2}$/), recordKind: z.enum(["project", "scene-review", "review", "factory-criteria", "factory-review", "proposal", "cad-review", "cad-sweep", "cad-optimize", "aero-review"]),
   recordId: Id,
+  /** Set when the step ran under a maintainer's autonomy grant instead of a per-step click. */
+  grantId: Id.optional(),
 }).strict();
 
 const num = (text: string, pattern: RegExp) => { const m = pattern.exec(text); return m ? Number(m[1]) : undefined; };

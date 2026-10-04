@@ -12,7 +12,8 @@ import { CognitoJwtVerifier } from "aws-jwt-verify";
 import type { Config } from "./config.js";
 
 export const AGENT_PREFIX = "/api/agent";
-export const AGENT_SCOPES = { read: "pai-agent/read", propose: "pai-agent/propose" } as const;
+/** `run` executes an already-validated plan step only within a maintainer's autonomy grant (never approve/release). */
+export const AGENT_SCOPES = { read: "pai-agent/read", propose: "pai-agent/propose", run: "pai-agent/run" } as const;
 type Scope = keyof typeof AGENT_SCOPES;
 
 /** The complete allowlist. Anything else under /api/agent is 404 before routing. */
@@ -26,6 +27,8 @@ const ROUTES: { method: "GET" | "POST"; pattern: RegExp; scope: Scope }[] = [
   { method: "GET", pattern: /^\/projects\/[0-9a-f-]{36}\/admission\?kind=[a-z-]{1,24}&runId=[0-9a-f-]{36}$/, scope: "read" },
   { method: "POST", pattern: /^\/cad\/code-check$/, scope: "read" },
   { method: "POST", pattern: /^\/assistant\/external-plans$/, scope: "propose" },
+  { method: "POST", pattern: /^\/assistant\/plans\/[0-9a-f-]{36}\/autonomous-runs$/, scope: "run" },
+  { method: "GET", pattern: /^\/autonomy-grants\?projectId=[0-9a-f-]{36}$/, scope: "read" },
 ];
 
 export interface AgentPrincipal { clientId: string; verified: boolean; session?: string }

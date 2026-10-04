@@ -13,6 +13,8 @@ import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
 import { solverDataset } from "./dataset.js";
+import { createGrant, revokeGrant, runUnderGrant } from "./autonomy.js";
+import { runAutopilot, type Autopilot } from "./autopilot.js";
 import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
 import { propose } from "./proposals.js";
 import { Workbench } from "./service.js";
@@ -216,7 +218,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return { ...d, rows: data.length, data, sha256: sha256(JSON.stringify(data)), domain };
   });
   app.get("/api/state", async () => ({
-    releases: store.list("release"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
+    releases: store.list("release"), autonomyGrants: store.list("autonomy-grant"), autopilots: store.list("autopilot"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), aeros: store.list("aero-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
@@ -387,6 +389,25 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const p = workbench.project(paramId(request.params));
     const handle = z.string().regex(/^(project|[a-z]+-[0-9]{1,3})$/).parse((request.params as { handle?: string }).handle);
     return resolveHandle(store, p, handle, lifecycle(p));
+  });
+  // Bounded autonomy: a maintainer grants native runs (never approval/release/feedback); plans then run without a click.
+  const autonomyDeps = { store, config, live, project: (id: string) => workbench.project(id), lifecycle };
+  app.post("/api/projects/:id/autonomy-grants", async request => createGrant(store, workbench.project(paramId(request.params)), request.body, actor(request.headers)));
+  app.get("/api/autonomy-grants", async request => {
+    const q = z.object({ projectId: Id }).strict().parse(request.query);
+    return store.list<{ projectId: string }>("autonomy-grant").filter(g => g.projectId === q.projectId);
+  });
+  app.post("/api/autonomy-grants/:id/revoke", async request => revokeGrant(store, paramId(request.params), actor(request.headers)));
+  app.post("/api/assistant/plans/:id/autonomous-runs", async request => {
+    const principal = principals.get(request.raw);
+    return runUnderGrant(autonomyDeps, paramId(request.params), request.body, principal ? `agent:${principal.clientId}${principal.session ? `:${principal.session}` : ""}` : actor(request.headers));
+  });
+  app.post("/api/projects/:id/autopilot", async (request, reply) =>
+    executeNative(reply, request.body, "autopilot", "autopilots", () => runAutopilot(autonomyDeps, workbench.project(paramId(request.params)), request.body, actor(request.headers))));
+  app.get("/api/autopilots/:id", async (request, reply) => {
+    const a = store.get<Autopilot>("autopilot", paramId(request.params));
+    if (!a) throw new DomainError("NOT_FOUND", "Autopilot not found", 404);
+    return nativeResponse(a, reply, "autopilots");
   });
   app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle, principals.get(request.raw)));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));

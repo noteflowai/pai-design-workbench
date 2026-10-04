@@ -2,6 +2,15 @@
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 有边界的自主与真实 AgentForge 会话（2026-10-04 下午）
+
+| 检查 | 实际结果 |
+|---|---|
+| 授权规则 | `tests/autonomy.test.ts`：以下情况都被拒绝，且不消耗次数——工具不在授权内、放宽要求（无历史记录时与默认值比较）、计划属于别的项目、授权已撤销；启动失败（CAD_NOT_CONFIGURED）时退回预留的次数 |
+| autopilot（本机，真实模型） | 起点：轻量化支架最小壁厚 2.5 mm 未通过。授权 3 次，目标为全部检查通过（最小壁厚 3.2 mm、≤ 50 g）。Kiro 2.27.1（claude-opus-5.5）第 1 轮写出 CadQuery 代码，三层沙箱建模，B-Rep 7 项全部通过，40.59 g，用 1.5 分钟达成目标；计划确认记录为 `grantId`。前两次试跑暴露出两个缺陷：生成代码在占用请求前要先做策略检查，只等一个事件循环 tick 不够；CAD 结论还要求基准件通过，原先没有把基准件的失败项反馈给模型。两处都已修复 |
+| 真实 AgentForge Host 会话 | `autoforge-host`（main 加 PR #562）+ acpx 0.19.4 + Kiro + 治理网关 + pai-mcp + 本机工作台。Agent 依次调用 `pai_list_projects`、`pai_list_grants`、`pai_propose_plan`、`pai_run_plan`、`pai_get_plan`、`pai_get_record`，全部成功。它在授权内运行了紧凑型支架检查，并按实测报告"孔边距 5.0 mm < 8.25 mm，拒绝"；提议记录带有 Host 会话 id |
+| 跑通过程中修复的底座缺陷（PR #562） | 本地后端上带 `mcp_profile` 的会话原来无法使用 MCP，有三处缺陷：配置项未声明为保留键、MCP 配置只读调用方的环境、`env` 格式不被 acpx 接受。另外让网关把会话 id 传给上游。Rust 门禁、JS 门禁、交付门禁全部通过，790 个 Host 测试通过 |
+
 ## 托管 BoTorch、求解数据集 MCP 工具、边界层实验（2026-10-04 上午）
 
 | 检查 | 实际结果 |

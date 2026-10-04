@@ -42,6 +42,11 @@
 | F21 | 可制造性：三轴铣削 DFM，在 B-Rep 上实测最少装夹方向（精确覆盖）、孔深径比、单件成本估算（车间参数放在 `native/dfm-shop.json`，经审查）；作为可选冻结要求进入 CAD 检查和 EvalArc | `npm run test:cad`：2 次装夹；参考件 17.22 EUR 超出 16 EUR 目标，紧凑型 14.69 EUR 达标 | 已验证（估算，不是报价；未做 CAM 刀路仿真） |
 | F22 | 第二个零件族，以及 FreeCAD / build123d 文档 | 原生 e2e | 待做 |
 
+| F23 | 有边界的自主：维护者签发授权（工具、次数、有效期），autopilot 在授权内多轮执行"提议 → 原生检查 → 修改"；放宽要求、修改需求一律拒绝；不能验收或发布 | `tests/autonomy.test.ts`；本机实测：Kiro 2.27.1 写 CadQuery 代码，第 1 轮通过（40.59 g） | 已验证（本机） |
+| F24 | 外部 Agent 在授权内触发原生求解：`pai_list_grants`、`pai_run_plan`；托管站点用单独的 `pai-agent/run` scope | 真实 AgentForge Host 会话（Kiro + acpx 0.19.4 + 治理网关）：提议 → 执行 → 读取结论，整条链跑通 | 已验证（本机）；托管站点待部署 |
+| F25 | 多模态评审：渲染图、应力云图、流场图交给模型做视觉评审，结论仍以求解器为准 | 待定 | 待做（受控执行器目前只处理文本） |
+| F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测通过的那一级才把 `physicalValidation` 标为 true；写操作经硬件三道闸 | 待定 | 待做 |
+
 ## N. 非功能需求
 
 | ID | 需求 | 验收方式 | 状态 |

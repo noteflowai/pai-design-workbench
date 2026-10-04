@@ -18,6 +18,8 @@
         "pai/pai_get_admission",
         "pai/pai_list_versions",
         "pai/pai_get_solver_dataset",
+        "pai/pai_list_grants",
+        "pai/pai_run_plan",
         "pai/pai_get_plan",
         "pai/pai_check_cad_code",
         "pai/pai_propose_plan"

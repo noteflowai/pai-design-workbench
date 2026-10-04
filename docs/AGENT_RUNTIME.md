@@ -60,7 +60,9 @@ The AgentForge side of this integration is merged ([PR #549](https://github.com/
 
 ## Gates for an AgentForge Host channel
 
-Adopt it only for a need the executor cannot meet, and only when every gate holds. Examples of such a need: autonomous multi-turn "propose → native check → revise" loops, or governed MCP for external agents.
+Adopt it only for a need the executor cannot meet, and only when every gate holds.
+
+The multi-turn "propose → native check → revise" loop no longer depends on the Host. It runs in the workbench as the autopilot: each round is one bounded executor call on the shared ledger. The loop is bounded by a maintainer's autonomy grant. External AgentForge sessions reach the same grant through `pai_run_plan` via the governed gateway. See [INDUSTRY_BENCHMARK.md](INDUSTRY_BENCHMARK.md#5-已落地有边界的自主).
 
 1. Admission and settlement go through the NoteFlow ledger (reserve and claim before `POST /sessions/{id}/prompt`; settle from the turn receipt), and Host budgets are off. This needs an external-admission seam in the Host or an executor-side transport. It must not be done by running two ledgers.
 2. `AUTOFORGE_TURN_RETRY_MAX=0`, and an uncertain turn returns `reconcile`. The idempotency key is the ledger attempt ID.

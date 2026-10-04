@@ -46,14 +46,15 @@ async function setup() {
     cleanup: async () => { await client.close(); await app.close(); await rm(dir, { recursive: true, force: true }); } };
 }
 
-test("MCP exposes reads and proposals only; read tools are annotated read-only", async () => {
+test("MCP exposes reads, proposals and grant-bounded runs; read tools are annotated read-only", async () => {
   const s = await setup();
   try {
     const { tools } = await s.client.listTools();
     const names = tools.map(t => t.name).sort();
-    assert.deepEqual(names, ["pai_check_cad_code", "pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_solver_dataset", "pai_get_workspace", "pai_list_projects", "pai_list_versions", "pai_propose_plan"]);
-    assert.ok(!names.some(n => /approve|release|confirm|execute|feedback|reconcil|run_/.test(n)), "no authority-bearing tool");
-    for (const t of tools.filter(t => t.name !== "pai_propose_plan")) assert.equal(t.annotations?.readOnlyHint, true, t.name);
+    assert.deepEqual(names, ["pai_check_cad_code", "pai_get_admission", "pai_get_plan", "pai_get_record", "pai_get_solver_dataset", "pai_get_workspace", "pai_list_grants", "pai_list_projects", "pai_list_versions", "pai_propose_plan", "pai_run_plan"]);
+    assert.ok(!names.some(n => /approve|release|confirm|execute|feedback|reconcil/.test(n)), "no authority-bearing tool");
+    for (const t of tools.filter(t => !["pai_propose_plan", "pai_run_plan"].includes(t.name))) assert.equal(t.annotations?.readOnlyHint, true, t.name);
+    assert.match(tools.find(t => t.name === "pai_run_plan")!.description ?? "", /自主授权/, "run is bounded by a maintainer grant");
     const propose = tools.find(t => t.name === "pai_propose_plan")!;
     assert.equal(propose.annotations?.destructiveHint, false);
 
