@@ -94,6 +94,15 @@ their original identities.
 | 底座 PR | #550 `92a677b`、#551 `4bd745f`，合并前 CodeBuild 的 rust、js、delivery 三条全部 SUCCEEDED |
 | 合并后上线 | 审批 Agent 驳回已被取代的 `92a677b`，批准 `4bd745f`：overlay 基于新的 `:full` digest 构建，Deploy 成功。之后改为每 5 分钟由 cron 运行一次（`flock` 防止重叠，`--once` 每次只做一个决定） |
 
+## 首件检验：实测数据回到证据链（2026-10-06）
+
+| 检查 | 实际结果 |
+|---|---|
+| 检验计划 | `GET /api/cad/:id/inspection-plan`：只对验收通过的零件生成，特性、公差和来源都取自该评审冻结的要求和测得的名义几何（轴承座 8 项：H7 孔径 35.000–35.025、孔深 ≥ 11、止口 17–28.6、外形三向、壁厚 ≥ 5、质量 ≤ 250 g） |
+| 实测判定 | `POST /api/cad/:id/inspections`：每个计划内特性恰好一个值，缺项或多余项拒绝；逐项判定，按请求身份幂等。浏览器测试：SN-001 全部在公差内为合格；SN-002 孔径 35.031 超出 H7 为不合格，记录保留，不自动重测 |
+| 证据 | 检验记录带 `physicalMeasurement: true`、检验员、设备、序列号、计划摘要；在发布前记录的检验写进签名发布包（`inspections/<id>.json`），`npm run test:package` 断言。仿真评审保持 `physicalValidation: false` |
+| 未做 | 这里的实测值由测试填写，还没有真实零件的测量；CMM 报告导入（QIF）待做 |
+
 ## 演示 D：从设计到车间（2026-10-05 夜）
 
 | 检查 | 实际结果 |

@@ -715,3 +715,11 @@ h1 { font-size: 22px; }
 .ok-text { color: var(--ok); display: block; margin-top: 4px; } .bad-text { color: var(--bad); display: block; margin-top: 4px; }
 /* Phone with the assistant open: notices go to the top so they never cover the composer's send button. */
 @media (max-width: 760px) { body:has(.app.with-assistant) .toasts { top: calc(var(--top) + 8px); bottom: auto; } }
+.fai-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.fai-list li { border: 1px solid var(--ok-line); background: var(--ok-soft); border-radius: var(--radius-sm); padding: 8px 10px; }
+.fai-list li.bad { border-color: var(--bad-line); background: var(--bad-soft); }
+.fai-list strong { display: block; color: var(--ok); } .fai-list li.bad strong { color: var(--bad); }
+.fai-list small { display: block; color: var(--ink-2); margin-top: 2px; }
+.fai-table th[scope="row"] small { display: block; font-weight: 400; color: var(--ink-3); font-size: 11px; }
+.fai-input { width: 92px; min-width: 92px; }
+@media (max-width: 760px) { .fai-table td, .fai-table th { padding: 6px; } .fai-input { width: 80px; min-width: 80px; } }

@@ -187,6 +187,43 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
   expect(errors).toEqual([]);
 });
 
+test("first-article inspection: measured values against the frozen tolerances, nonconforming bore kept, phone width", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
+  await page.getByRole("radio", { name: /6202 轴承座基准/ }).check();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 180_000 });
+  const fai = page.locator(".card", { hasText: "首件检验（实测回填）" });
+  const fill = async (serial: string, bore: string) => {
+    await fai.getByRole("button", { name: "生成检验计划并录入实测值" }).click();
+    const measured: Record<string, string> = { "轴承孔 Ø（H7）": bore, "轴承孔深": "11.05", "止口 / 轴孔 Ø": "28.02", "外形 X": "108.05", "外形 Y": "36.02", "外形 Z": "55.48", "最薄壁厚": "7.95", "质量": "190.1" };
+    for (const [label, v] of Object.entries(measured)) await fai.getByRole("spinbutton", { name: `实测 ${label}` }).fill(v);
+    await fai.getByLabel("检验员").fill("QA 张工"); await fai.getByLabel("测量设备").fill("CMM"); await fai.getByLabel("零件序列号").fill(serial);
+    await fai.getByRole("button", { name: "记录首件检验" }).click();
+  };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await fai.getByRole("button", { name: "生成检验计划并录入实测值" }).click();
+  await noOverflow(page);
+  await fai.screenshot({ path: testInfo.outputPath("fai-plan-mobile.png") });
+  await page.reload(); await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible();
+  await fill("SN-001", "35.011");
+  await expect(fai.getByText("SN-001 · 合格")).toBeVisible();
+  await fill("SN-002", "35.031");
+  await expect(fai.getByText("SN-002 · 不合格")).toBeVisible();
+  await expect(fai).toContainText("轴承孔 Ø（H7） 35.031（35 – 35.025）");
+  const st = await (await page.request.get("/api/state")).json();
+  expect(st.inspections.map((i: { verdict: string }) => i.verdict).sort()).toEqual(["conforming", "nonconforming"]);
+  expect(st.inspections.every((i: { physicalMeasurement: boolean }) => i.physicalMeasurement)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  await fai.screenshot({ path: testInfo.outputPath("fai-mobile.png") });
+  expect(errors).toEqual([]);
+});
+
 test("CAM from the CAD form: G-code per setup, independent simulation, programs downloadable at phone width", async ({ page }, testInfo) => {
   test.setTimeout(1_500_000);
   const state = await (await page.request.get("/api/state")).json();

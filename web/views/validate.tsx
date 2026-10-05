@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { api, requestIdFor } from "../api";
+import type { Characteristic, Inspection } from "../../src/inspection";
 import { CANDIDATES, KIND_LABEL, useApp, type Attachment, type RunKind } from "../context";
 import { Card, Check, Chip, Empty, ViewHeader, Verdict, projectRuns, revealInScroller, time, verdictOf, type RunItem } from "../ui";
 import { LiveSteps, viewportModel } from "../studio";
@@ -186,6 +188,7 @@ function CadDetail({ cad }: { cad?: CadReview }) {
         <a className="button secondary" href={`/api/cad/${cad.id}/files/${which}/cam-verify.json`}>切削仿真报告</a></div>}
       <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · OCCT 投影视图（含隐藏线）</figcaption></figure>)}</div>
+      {cad.verdict === "accepted-cad-part" && <FirstArticle cad={cad} />}
       <Receipts value={{ request: cad.request, requirementDigest: cad.requirementDigest, receipts: cad.receipts, files: cad.files, parameters: { baseline: cad.baseline?.parameters, candidate: cad.candidate?.parameters } }} />
     </>}
   </>;
@@ -240,3 +243,44 @@ export function Validate() {
     </div>
   </>;
 }
+
+/**
+ * First-article inspection of the accepted part: the plan comes from the frozen requirements; the maintainer enters
+ * what was measured on a real part. Conforming or not, the result is kept as physical evidence and travels with the
+ * release; the simulated review itself is never changed by it.
+ */
+function FirstArticle({ cad }: { cad: CadReview }) {
+  const c = useApp();
+  const [plan, setPlan] = useState<Characteristic[]>();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [who, setWho] = useState(""), [instrument, setInstrument] = useState(""), [serial, setSerial] = useState("");
+  const done = (c.data.inspections ?? []).filter(i => i.cadReviewId === cad.id);
+  const open = async () => setPlan((await api<{ characteristics: Characteristic[] }>(`/cad/${cad.id}/inspection-plan`, undefined, "GET")).characteristics);
+  const tol = (p: Characteristic) => p.lower !== undefined && p.upper !== undefined ? `${p.lower} – ${p.upper}` : p.lower !== undefined ? `≥ ${p.lower}` : `≤ ${p.upper}`;
+  const complete = plan && plan.every(p => values[p.id]?.trim() && Number.isFinite(Number(values[p.id]))) && who.trim().length >= 2 && instrument.trim().length >= 2 && serial.trim();
+  return <Card title="首件检验（实测回填）" aside={<small>实测记录随发布签名；仿真结论不会被改写</small>}>
+    {done.length > 0 && <ul className="fai-list">{done.map(i => <li key={i.id} className={i.verdict === "conforming" ? "ok" : "bad"}>
+      <strong>{i.partSerial} · {i.verdict === "conforming" ? "合格" : "不合格"}</strong>
+      <small>{i.measuredBy} · {i.instrument} · {new Date(i.createdAt).toLocaleString()}{i.verdict === "nonconforming" ? ` · 超差：${i.results.filter(r => !r.passed).map(r => `${r.label} ${r.measured}（${tol(r)}）`).join("；")}` : ""}</small></li>)}</ul>}
+    {!plan ? <button type="button" className="secondary" onClick={() => void open().catch(e => c.toast(String(e), "bad"))}>生成检验计划并录入实测值</button> : <>
+      <div className="table-wrap"><table className="data-table fai-table"><caption className="visually-hidden">首件检验计划</caption>
+        <thead><tr><th scope="col">特性 · 量具</th><th scope="col">名义</th><th scope="col">公差</th><th scope="col">实测</th></tr></thead>
+        <tbody>{plan.map(p => <tr key={p.id}><th scope="row">{p.label}<small>{p.instrument}</small></th><td className="num">{p.nominal}</td><td className="num">{tol(p)} {p.unit}</td>
+          <td><input className="fai-input" type="number" step="any" inputMode="decimal" aria-label={`实测 ${p.label}`} value={values[p.id] ?? ""} onChange={e => setValues({ ...values, [p.id]: e.target.value })} /></td></tr>)}</tbody></table></div>
+      <div className="field-grid">
+        <label>检验员<input value={who} onChange={e => setWho(e.target.value)} aria-label="检验员" /></label>
+        <label>测量设备<input value={instrument} onChange={e => setInstrument(e.target.value)} aria-label="测量设备" placeholder="例如 CMM、气动量仪" /></label>
+        <label>零件序列号<input value={serial} onChange={e => setSerial(e.target.value)} aria-label="零件序列号" /></label>
+      </div>
+      <div className="form-foot"><small>每项按冻结公差判定；超差记录为不合格并保留，不会自动重测</small>
+        <button type="button" disabled={c.busy || !complete} onClick={() => void c.perform(async () => {
+          const body = { requestId: requestIdFor(`pai-fai-${cad.id}-${serial}-${JSON.stringify(values)}`), measuredBy: who, instrument, partSerial: serial,
+            values: Object.fromEntries(plan.map(p => [p.id, Number(values[p.id])])) };
+          const r = await api<Inspection>(`/cad/${cad.id}/inspections`, body);
+          setPlan(undefined); setValues({});
+          if (r.verdict === "nonconforming") throw new Error(`零件 ${r.partSerial} 不合格：${r.results.filter(x => !x.passed).map(x => x.label).join("、")}`);
+        }, "首件检验已记录：全部特性在公差内。")}>记录首件检验</button></div>
+    </>}
+  </Card>;
+}
+

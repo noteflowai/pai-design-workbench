@@ -24,9 +24,11 @@ AWS deployment uses the exact origin `https://pai.oneai.host` and requires signe
 | `POST /api/projects/:id/factory-reviews` | `{requestId,projectRevision,criteriaId,source,feedbackId?}`; `source` is the bundled reviewed sample or an upload of byte-exact `seeds.json` + `manifest.json` |
 | `GET /api/factory-reviews/:id` | Saved per-seed results, consistency checks, criteria digest and source digests |
 | `GET /api/projects/:id/lifecycle` | Stage status, failing cases, next step and activity derived from durable records (also in `/api/state` as `lifecycles`) |
-| `POST /api/projects/:id/cad` | `{requestId,projectRevision,variant,requirements,feedbackId?}`; variants `reference/lightweight/undersize-bore/compact`; native CadQuery; may return 202 + `Location: /api/cad/:id` |
+| `POST /api/projects/:id/cad` | `{requestId,projectRevision,variant,requirements,family?,parameters?,source?,feedbackId?}`; bracket variants `reference/lightweight/undersize-bore/compact`, pillow-block variants `pillow-block/-light/-compact/-tight`, `parametric`, `generated` (code); `requirements.dfm{maxSetups,maxUnitCostEur,cam?{maxCycleMinutes}}` adds DFM/DFA and CAM; may return 202 + `Location: /api/cad/:id` |
 | `GET /api/cad/:id` | Saved CAD checks for baseline and candidate, receipts, artifact digests |
 | `GET /api/cad/:id/files/:which/:file` | `part.step`, `part.stl`, `part.glb`, `assembly.glb`, `drawing.svg`, `checks.json`; digest checked; SVG served with `default-src 'none'` |
+| `GET /api/cad/:id/inspection-plan` | First-article plan of an accepted part: characteristics with nominal, tolerance, instrument and source (from the frozen requirements) |
+| `POST /api/cad/:id/inspections` | `{requestId,measuredBy,instrument,partSerial,values{characteristic:value},note?}`: exactly one value per planned characteristic; judged against the plan; `physicalMeasurement: true`; included in a later release package |
 | `GET /api/cad/:id/stages/:which/:index` | Staged GLB per modelling feature; presentation only |
 | `GET /api/projects/:id/versions` | Immutable snapshots of every frozen requirement version with digest |
 | `GET /api/projects/:id/admission?kind=&runId=` | Release admission checks for a completed run |

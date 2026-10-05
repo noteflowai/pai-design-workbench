@@ -26,6 +26,11 @@ try {
     requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
   const cad = await req<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL } });
   assert.equal(cad.verdict, "accepted-cad-part");
+  // First-article inspection of a real part, recorded before release: it must travel in the signed package.
+  const plan = await req<{ characteristics: { id: string; nominal: number }[] }>("GET", `/api/cad/${cad.id}/inspection-plan`);
+  const fai = await req<{ id: string; verdict: string }>("POST", `/api/cad/${cad.id}/inspections`, { requestId: randomUUID(), measuredBy: "QA", instrument: "CMM",
+    partSerial: "SN-001", values: Object.fromEntries(plan.characteristics.map(c => [c.id, c.nominal])) });
+  assert.equal(fai.verdict, "conforming");
   const rel = await req<{ id: string; revision: number; number: string }>("POST", `/api/projects/${project.id}/releases`,
     { requestId: randomUUID(), projectRevision: 1, evidenceKind: "cad-part", runId: cad.id, title: "Reference bracket" });
   const before = await app.inject({ url: `/api/releases/${rel.id}/package`, headers: { host } });
@@ -43,6 +48,7 @@ try {
   assert.equal(result.valid, true); assert.equal(result.signer.trusted, true);
   if (config.tsaUrl) assert.ok(result.timestamp?.genTime, "time-stamp verifies against the CA bundle");
   assert.ok(Object.keys(pkg.files).some(f => f.endsWith("part.step")), "native STEP is inside the package");
+  assert.ok(pkg.files[`inspections/${fai.id}.json`], "the first-article inspection is signed with the release");
   assert.ok(Object.keys(pkg.files).some(f => f.endsWith("bracket-fine.frd")), "CalculiX results are inside the package");
   const offline = verifyPackage(pkg, key.publicKeyPem);
   const tampered = structuredClone(pkg); const step = Object.keys(tampered.files).find(f => f.endsWith("part.step"))!;

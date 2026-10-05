@@ -13,6 +13,7 @@ import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
 import { solverDataset } from "./dataset.js";
+import { inspectionPlan, recordInspection } from "./inspection.js";
 import { createGrant, revokeGrant, runUnderGrant } from "./autonomy.js";
 import { runAutopilot, type Autopilot } from "./autopilot.js";
 import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
@@ -203,6 +204,10 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       files[name] = content;
     }
     for (const [name, content] of Object.entries(record.artifacts ?? {})) files[`artifacts/${name}`] = Buffer.from(content);
+    // First-article inspections recorded before the release travel with it, as signed physical evidence.
+    for (const i of store.list<{ id: string; cadReviewId: string; createdAt: string }>("cad-inspection").filter(i => i.cadReviewId === record.id && i.createdAt <= (release.history.find(h => h.maturity === "released")?.at ?? new Date().toISOString()))) {
+      files[`inspections/${i.id}.json`] = Buffer.from(JSON.stringify(i, null, 2));
+    }
     return buildPackage(config, { ...release }, { ...record, verdict: record.verdict ?? record.decision?.verdict ?? null }, files);
   }
   app.get("/api/signing/public-key", async () => { const s = await signer(config); return { keyId: s.keyId, algorithm: s.algorithm, publicKeyPem: s.publicKeyPem }; });
@@ -223,7 +228,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), aeros: store.list("aero-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
-    factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"),
+    factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"), inspections: store.list("cad-inspection"),
     assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
@@ -299,6 +304,13 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (!run) throw new DomainError("NOT_FOUND", "Aerodynamics review not found", 404);
     return nativeResponse(run, reply, "aero");
   });
+  // First-article inspection: the plan of an accepted part, and measured values judged against it (physical evidence).
+  app.get("/api/cad/:id/inspection-plan", async request => {
+    const cad = store.get<CadReview>("cad-review", paramId(request.params));
+    if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);
+    return { cadReviewId: cad.id, characteristics: inspectionPlan(cad) };
+  });
+  app.post("/api/cad/:id/inspections", async request => recordInspection(store, paramId(request.params), request.body, actor(request.headers)));
   app.get("/api/cad/:id", async (request, reply) => {
     const cad = store.get<CadReview>("cad-review", paramId(request.params));
     if (!cad) throw new DomainError("NOT_FOUND", "CAD review not found", 404);

@@ -48,7 +48,7 @@
 | F28 | 导出的 OpenUSD 与仿真用的 MJCF 是同一台机器人：Newton 导入为一个关节树，质量一致，正运动学一致 | `npm run test:robot`（配置 Newton 时断言）；[newton-usd.json](evidence/newton-usd.json) | 已验证（本机与托管站点） |
 | F27 | AI 气动预筛：NVIDIA DoMINO（PhysicsNeMo-CFD）在同一 STL 上预估 Cd，与原生求解并行，只作参考；按校准门禁决定能否参与排序 | `tools/prescreen_calibrate.py`；`npm run test:aero` 在配置 GPU 时断言预筛已登记且不进入检查 | 评估后移出评审：12 个车身 Spearman −0.35，未通过校准，从未影响结论；适配器与校准工具保留，见 [AERO.md](AERO.md) |
 | F29 | CAM：FreeCAD 1.1 CAM（ocp-freecad-cam）+ OpenCAMLib 按装夹生成 G-code，独立的高度图切削仿真检查过切、残料、刀具过载和快移碰撞，并给出节拍 | `npm run test:cam`；4 个注入故障的反例全部被拒绝，见 [CAM.md](CAM.md) | 已验证：本机；托管站点上程序由 PAISolver Batch 作业生成、在主机上独立仿真，参考支架通过（[cam-batch.json](evidence/cam-batch.json)） |
-| F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测通过的那一级才把 `physicalValidation` 标为 true；写操作经硬件三道闸 | 待定 | 待做 |
+| F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测那一级才是物理证据；写操作经硬件三道闸 | G-code：F29。首件检验：`tests/inspection.test.ts`、浏览器测试（390 px）、`npm run test:package`（检验记录随发布签名） | 部分：首件检验已实现。验收过的零件按冻结要求生成检验计划（轴承座：Ø35 H7 孔径、孔深、止口、外形、壁厚、质量；支架：止口、孔距、外形、壁厚、质量，每项带公差和量具），实测值逐项判定为合格或不合格，记录 `physicalMeasurement: true` 并随发布签名；仿真评审本身仍是 `physicalValidation: false`，不会被改写。待做：CMM 报告导入、应变实测、硬件只读接入 |
 
 ## N. 非功能需求
 
