@@ -39,6 +39,8 @@ runuser -u pai -- python3 tools/setup_cadquery.py
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64 >/dev/null
 # BoTorch strategy (CPU PyTorch, hash-locked) and Newton USD conformance (CPU Warp) only when the operator opts in.
 runuser -u pai -- env PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" PAI_PHYSICS_NEWTON="${PAI_PHYSICS_NEWTON:-}" python3 tools/setup_physics.py
+# CAM lane (FreeCAD 1.1 AppImage, sha256-pinned, ~0.8 GB) only when the operator opts in.
+if [ "${PAI_ENABLE_CAM:-}" = "1" ]; then runuser -u pai -- python3 tools/setup_cam.py; fi
 # OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
 if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
 # Ubuntu 24.04 restricts unprivileged user namespaces; grant them to bwrap only (per-application AppArmor profile).

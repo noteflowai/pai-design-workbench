@@ -67,6 +67,13 @@ Developing the programs against the checker found six real program faults: rough
 the bore silhouette, open edges left uncut, plunges into deep stock, rapids at cutting depth, wrong setup rotation for
 the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam_part.py`, not by loosening a check.
 
+## Where it runs
+
+Locally and in CI (GitHub runner, `python3 tools/setup_cam.py && npm run test:cam`). The hosted site can opt in with
+`PAI_ENABLE_CAM=1` (`tools/aws_operator.py` → `update_release.sh`). It is off on pai.oneai.host: the host has 2 vCPU,
+3 GB RAM and 5.6 GB free, while the extracted FreeCAD needs about 2.5 GB and one part takes about 9 minutes on 8
+cores. The right home for it is a PAISolver Batch job, like FEA and CFD.
+
 ## Limits
 
 This is simulation, not a machine test. There is no work holding, no tabs, no tool-length offsets, no machine
