@@ -386,7 +386,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       throw new DomainError("SOURCE_CHANGED", "Native verifier changed during CAD production");
     }
     record.diff = diff.value; record.receipts.push(diff.receipt);
-    record.verdict = record.candidate!.checks.every(c => c.passed) && record.baseline!.checks.every(c => c.passed) ? "accepted-cad-part" : "rejected";
+    // The candidate is judged against the frozen requirements (as in every other lane); the baseline only anchors the
+    // EvalArc comparison. A reference that misses a tightened requirement must not reject a candidate that meets it.
+    record.verdict = record.candidate!.checks.every(c => c.passed) ? "accepted-cad-part" : "rejected";
     record.state = "completed";
   } catch (e) { record.state = "failed"; record.error = e instanceof DomainError ? `${e.code}: ${e.message}` : "CAD_FAILED: check native configuration and retained local receipts"; }
   record.finishedAt = new Date().toISOString(); store.put("cad-review", record);

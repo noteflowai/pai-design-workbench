@@ -5,12 +5,15 @@ const j = async (m, u, b) => { const r = await fetch(B + u, { method: m, headers
 const p = await j("POST", "/projects", { title: "Lighter NEMA 17 bracket (autopilot)", intendedDecision: "A bracket lighter than the 48.4 g reference that passes every B-Rep check",
   requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
 const st = await j("GET", "/state");
-const light = await j("POST", `/projects/${p.id}/cad`, { requestId: crypto.randomUUID(), projectRevision: 1, variant: "lightweight", requirements: { ...st.capabilities.cad.defaultRequirements, maxMassG: 50, minWallMm: 3.2 } });
+// SCENARIO=dfa: the compact bracket's base ribs cover its M5 screw holes (DFA) while cost must stay at or below 16 EUR.
+const dfa = process.env.SCENARIO === "dfa";
+const requirements = dfa ? { ...st.capabilities.cad.defaultRequirements, dfm: { maxSetups: 2, maxUnitCostEur: 16 } } : { ...st.capabilities.cad.defaultRequirements, maxMassG: 50, minWallMm: 3.2 };
+const light = await j("POST", `/projects/${p.id}/cad`, { requestId: crypto.randomUUID(), projectRevision: 1, variant: dfa ? "compact" : "lightweight", requirements });
 console.log("start", light.verdict, light.candidate.checks.filter(c => !c.passed).map(c => `${c.id}=${c.observed}`));
 const grant = await j("POST", `/projects/${p.id}/autonomy-grants`, { tools: ["cad-review", "cad-code"], maxRuns: 3, hours: 2, note: "autopilot e2e" });
 const t0 = Date.now();
 let a = await j("POST", `/projects/${p.id}/autopilot`, { requestId: crypto.randomUUID(), grantId: grant.id, maxRounds: 3,
-  goal: "Make the NEMA 17 bracket pass every frozen check (min wall 3.2 mm, mass at most 50 g and lighter than 45 g as a design target, interface, hole edge distance) without relaxing anything. The 2.5 mm lightweight variant fails min wall; the 4 mm reference is 48.4 g. Write CadQuery code (cad-code) for a bracket that meets both." });
+  goal: dfa ? "Make the compact NEMA 17 bracket pass every frozen check, including DFM/DFA, without relaxing anything. In record cad-1 the two M5 base holes (x = ±20, Ø5.5) sit under the side ribs, so an ISO 4762 M5 head and its hex key cannot seat (fastener-access fails) and hole-edge-distance fails; widening the part pushes the unit-cost estimate over 16 EUR. Write CadQuery code (cad-code) that keeps the bracket compact and cheap but moves the mounting holes clear of the ribs with enough edge distance." : "Make the NEMA 17 bracket pass every frozen check (min wall 3.2 mm, mass at most 50 g and lighter than 45 g as a design target, interface, hole edge distance) without relaxing anything. The 2.5 mm lightweight variant fails min wall; the 4 mm reference is 48.4 g. Write CadQuery code (cad-code) for a bracket that meets both." });
 console.log(JSON.stringify({ id: a.id, state: a.state, outcome: a.outcome, minutes: +((Date.now() - t0) / 60000).toFixed(1), error: a.error,
   rounds: a.rounds.map(r => ({ round: r.round, tool: r.tool, verdict: r.verdict, failing: r.failing?.map(f => `${f.id}=${f.observed}`), note: r.note })) }, null, 1));
 const g = (await j("GET", `/autonomy-grants?projectId=${p.id}`))[0];
