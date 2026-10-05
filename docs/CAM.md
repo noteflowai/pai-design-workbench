@@ -82,7 +82,10 @@ the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam
     the same simulation (94.3 min).
 - **Measured on pai.oneai.host** ([cam-batch.json](evidence/cam-batch.json)): the reference bracket was reviewed as
   baseline and candidate and accepted. Each part's programs came from one Batch job (image `cam-6309cb6ff1a12f2c`,
-  81 s on 4 vCPU). Verification on the 2 vCPU host takes most of the 19 min for both parts.
+  81 s on 4 vCPU). Verification on the 2 vCPU host takes most of the 19 min for both parts. It is a per-sample Python loop
+  (about 3.5 min per part on one core); batching the samples per move was tried and was slower, because most adaptive
+  moves have only 2–3 samples. Next step: run the verifier as its own Batch job from a separate image, so the
+  generator and the checker still never share a container.
 - **Not on the small host:** the hosted host itself has 2 vCPU and 3 GB RAM, so the local FreeCAD lane
   (`PAI_ENABLE_CAM=1`) stays off there.
 
