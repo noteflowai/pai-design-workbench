@@ -150,9 +150,11 @@ function CadDetail({ cad }: { cad?: CadReview }) {
   const fea = cad?.state === "completed" ? cad.fea?.[which] : undefined;
   const [stressView, setStressView] = useState(true);
   const shownModel = model && fea && stressView ? { ...model, stages: [], finalUrl: `/api/cad/${cad!.id}/files/${which}/fea.glb`, title: `${model.title} · von Mises` } : model;
+  // While the part is still building there is no record yet; the live session title names the family.
+  const pillow = cad ? cad.request.variant.startsWith("pillow-block") || cad.request.family === "pillow-block" : Boolean(live && c.session?.title.includes("轴承座"));
   return <>
-    <Verdict tone={v.tone} eyebrow={`参数化 CAD · ${cad?.request.variant.startsWith("pillow-block") || cad?.request.family === "pillow-block" ? "6202 轴承座" : "NEMA 17 电机支架"}${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
-      detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何${cad.fea ? "；结构检查为 CalculiX 线性静力 FEA" : "，未冻结结构要求（无 FEA）"}，不含实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
+    <Verdict tone={v.tone} eyebrow={`参数化 CAD · ${pillow ? "6202 轴承座" : "NEMA 17 电机支架"}${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
+      detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何${cad.fea ? "；结构检查为 CalculiX 线性静力 FEA" : "，未冻结结构要求（无 FEA）"}，不含实物测试。` : `每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加${pillow ? " 6202 轴承" : " NEMA 17 电机"}做装配检查。`)} />
     <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={shownModel} /></Suspense>
     {fea && <div className="fea-bar" role="group" aria-label="FEA 结果">
       <label className="check"><input type="checkbox" checked={stressView} onChange={e => setStressView(e.target.checked)} />显示 von Mises 应力云图（变形放大 {fea.displayScale}×）</label>

@@ -15,7 +15,7 @@ export function runCad(c: Ctx, variant: string, requirements: CadRequirements, c
   const requestId = requestIdFor(`pai-cad-${p.id}-${p.revision}-${variant}-${JSON.stringify(requirements)}-${code ?? ""}-${parameters ? JSON.stringify(parameters) : ""}-${feedback ? `${feedback.id}-${feedback.revision}` : ""}-${family ?? ""}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
-    const r = await c.track(requestId, `CadQuery 参数化零件 · ${CAD_VARIANTS[variant][0]}`, "cad-part",
+    const r = await c.track(requestId, `CadQuery 参数化零件 · ${variant.startsWith("pillow-block") || family === "pillow-block" ? "6202 轴承座" : "NEMA 17 支架"} · ${CAD_VARIANTS[variant][0]}`, "cad-part",
       () => api<CadReview>(`/projects/${p.id}/cad`, { requestId, projectRevision: p.revision, variant, ...(family ? { family } : {}), requirements, ...(source ? { source } : {}), ...(variant === "parametric" && parameters ? { parameters } : {}), ...(feedback ? { feedbackId: feedback.id } : {}) }));
     c.navigate("validate", { kind: "cad-part", id: r.id });
     if (r.state !== "completed") throw new Error(r.error ?? r.state);

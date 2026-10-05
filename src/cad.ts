@@ -395,7 +395,8 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
           "--requirements", JSON.stringify(dfm), "--output", join(target, "dfm.json")], config.repository, undefined, 180_000);
         own.push({ adapter: "cadquery-dfm", command: ["python", "cad_dfm.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
           stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(native("cad_dfm.py"))), shop: sha256(await readFile(native("dfm-shop.json"))) } });
-        publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM（${name === "baseline" ? "基准" : "候选"}）`, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: r.stdout.trim().slice(0, 160) });
+        publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM（${name === "baseline" ? "基准" : "候选"}）`, status: r.exitCode === 0 ? "done" : "failed", which: name,
+          detail: (() => { try { const d = JSON.parse(r.stdout.trim().split("\n").at(-1)!); return `${d.setups.length} 次装夹（${d.setups.join("、")}）· 估算 ${d.unitCostEur} EUR · 加工 ${d.machiningMinutes} min`; } catch { return `exit ${r.exitCode}`; } })() });
         if (r.exitCode !== 0) throw new DomainError("DFM_FAILED", "Native DFM analysis failed; retain receipts", 422);
         const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(DFM_CHECKS.length) }).passthrough()
           .parse(JSON.parse(await readFile(join(target, "dfm.json"), "utf8")));
