@@ -22,8 +22,9 @@ RUN python3 -m venv /opt/cadquery && /opt/cadquery/bin/python -m pip install -q 
       -r /opt/pai/cadquery-runtime-requirements.txt \
     && /opt/cadquery/bin/python -W ignore -c "import cadquery as cq; assert cq.__version__ == '2.8.0'" \
     && find /opt/cadquery -name __pycache__ -prune -exec rm -rf {} + && rm -rf /opt/cadquery/lib/python3*/site-packages/pip
-COPY native/cad_bracket.py native/cad_recipe.py native/cad_checks.py native/cad_sweep.py native/cad_code_policy.py \
-     native/cad_lockdown.py native/cad_sandbox.py native/cad_generated.py native/cad_template.py native/cad_reopen.py /opt/pai/native/
+# The build context holds exactly the native scripts listed in tools/package_agentcore.py (one list, not two).
+RUN install -d -m 0755 /opt/pai/native
+COPY --chmod=0644 native/*.py /opt/pai/native/
 COPY agentcore/server.py /opt/pai/agentcore/server.py
 ARG PAI_IMAGE_VERSION=dev
 ENV PAI_ROLE=sandbox PAI_NATIVE=/opt/pai/native PAI_CADQUERY_PYTHON=/opt/cadquery/bin/python PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} HOME=/home/pai PORT=8080

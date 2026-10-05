@@ -191,7 +191,9 @@ def op_cad_code(body):
         m, _ = sandboxed([PYTHON, "-I", "-W", "ignore", str(NATIVE / "cad_generated.py"), "--input", str(work / "in.json"), "--source", str(src), "--output", str(out)],
                          [str(work / "in.json"), str(src)], [str(out)], 300)
         if m["exit"] != 0:
-            return {"status": "error", "error": "measurement failed", "layers": layers, "codeSha256": sha(code.encode())}
+            # The measurer is trusted code (no user text in its traceback), so its last line is safe to report.
+            tail = [l for l in m["stderr"].strip().splitlines() if l.strip()][-1:] if not m.get("timedOut") else ["timed out"]
+            return {"status": "error", "error": f"measurement failed: {tail[0][:240] if tail else m['exit']}", "layers": layers, "codeSha256": sha(code.encode())}
         files = collect(out, CAD_FILES)
         files.update({f"stages/{p.name}": v for p in sorted((out / "stages").glob("*.glb")) for v in [collect(out / "stages", [p.name])[p.name]]})
         brep = (src / "generated.brep").read_bytes()
