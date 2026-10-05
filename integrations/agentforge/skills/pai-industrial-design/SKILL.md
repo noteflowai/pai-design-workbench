@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.4.0"
+version: "1.5.0"
 ---
 
 # PAI industrial design
@@ -38,7 +38,8 @@ You cannot relax or change requirements, approve, release or move feedback.
   FEA, sweeps, optimisation, DFM/DFA and CAM.
 - **6202 pillow block** (`variant` pillow-block, pillow-block-light, pillow-block-compact, pillow-block-tight; or
   `parametric` with `family: "pillow-block"`): Ø35 H7 bearing seat and coaxiality, shoulder and shaft passage,
-  ray-measured wall around the seat, M8 bolt edge distance, mass, envelope, DFM/DFA and CAM. No FEA, sweep or code yet.
+  ray-measured wall around the seat, M8 bolt edge distance, mass, envelope, DFM/DFA and CAM. `cad-code` with
+  `family: "pillow-block"` starts from the workspace's pillow-block template and must assign `AXIS_Z`. No FEA or sweep yet.
   Its own default requirements apply; never carry the bracket's structural load case over.
 
 ## Tools beyond a single review

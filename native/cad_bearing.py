@@ -174,6 +174,21 @@ def measure(part, h, req):
     ], volume, mass, size
 
 
+def export(body, h, depth, out):
+    cq.exporters.export(body, str(out / "part.step"))
+    cq.exporters.export(body, str(out / "part.stl"), tolerance=0.02, angularTolerance=0.1)
+    cq.Assembly().add(body, name="Housing", color=cq.Color(*AL)).export(str(out / "part.glb"))
+    (cq.Assembly().add(body, name="Housing", color=cq.Color(*AL)).add(bearing(h, depth), name=f"{BEARING['designation']} bearing", color=cq.Color(0.34, 0.37, 0.4))
+     .export(str(out / "assembly.glb")))
+    cq.exporters.export(body, str(out / "drawing.svg"), opt={"projectionDir": (1.2, -1.0, 0.9), "showHidden": True, "strokeWidth": 0.25,
+                                                            "strokeColor": (30, 60, 70), "hiddenColor": (150, 170, 175), "width": 640, "height": 400})
+
+
+def depth_of(part):
+    """Housing depth along Y, measured (the bearing view is placed against the +Y face)."""
+    return part.BoundingBox().ylen
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--input", required=True); ap.add_argument("--output", required=True); args = ap.parse_args()
     spec = json.loads(Path(args.input).read_text()); req, out = spec["requirements"], Path(args.output)
@@ -184,13 +199,7 @@ if __name__ == "__main__":
     h = p["axisHeight"]
     stage("bearing", f"装配检查：{BEARING['designation']} 轴承", [("Housing", body, AL), (f"{BEARING['designation']} bearing", bearing(h, p["depth"]), (0.34, 0.37, 0.4))])
     checks, volume, mass, size = measure(part, h, req)
-    cq.exporters.export(body, str(out / "part.step"))
-    cq.exporters.export(body, str(out / "part.stl"), tolerance=0.02, angularTolerance=0.1)
-    cq.Assembly().add(body, name="Housing", color=cq.Color(*AL)).export(str(out / "part.glb"))
-    (cq.Assembly().add(body, name="Housing", color=cq.Color(*AL)).add(bearing(h, p["depth"]), name=f"{BEARING['designation']} bearing", color=cq.Color(0.34, 0.37, 0.4))
-     .export(str(out / "assembly.glb")))
-    cq.exporters.export(body, str(out / "drawing.svg"), opt={"projectionDir": (1.2, -1.0, 0.9), "showHidden": True, "strokeWidth": 0.25,
-                                                            "strokeColor": (30, 60, 70), "hiddenColor": (150, 170, 175), "width": 640, "height": 400})
+    export(body, h, p["depth"], out)
     result = {"schema": "pai-cad-checks-1", "family": "pillow-block", "variant": spec["variant"], "variantLabel": label, "units": "mm", **versions(),
               "material": "6061 aluminium (2.70 g/cm³, nominal)", "bearing": BEARING,
               "parameters": {k: p[k] for k in ("width", "depth", "baseDepth", "axisHeight", "baseThickness", "boltPitch", "seatDiameter", "shoulderDiameter", "crown")},

@@ -11,7 +11,7 @@ import type { LiveBus } from "./live.js";
 import { cadRequirementChanges, compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, RobotTool, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
-import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, PILLOW_PRESETS, FAMILY_DEFAULTS, familyOf, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, PILLOW_PRESETS, FAMILY_DEFAULTS, familyOf, CAD_FAMILIES, CAD_TEMPLATES, type CadFamily, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
@@ -52,7 +52,7 @@ const ModelPayload = {
   "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}),
     tool: z.object({ cad: z.string().regex(/^cad-\d{1,3}$/), payloadKg: z.number().min(0).max(3).optional() }).strict().optional() }).strict(),
   "cad-review": z.object({ variant: z.enum([...CAD_PRESETS, ...PILLOW_PRESETS]), requirements: CadRequirements.partial().default({}) }).strict(),
-  "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-code": z.object({ code: CadSource.shape.code, family: z.enum(CAD_FAMILIES).default("nema17-bracket"), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]),
     strategy: z.enum(OPTIMIZE_STRATEGIES).optional() }).strict(),
@@ -82,8 +82,8 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
     + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4。"
     + "strategy 可选 gp-nsga2（默认）或 botorch-qlognehvi（BoTorch 约束批量超体积贝叶斯优化，先做几何多保真先验；需已安装）",
-  "cad-code": "编写 CadQuery 代码生成新的 NEMA 17 支架候选（预设变体不够用时）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
-    + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 MOTOR_AXIS_Z（电机轴高度 mm）赋值。坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
+  "cad-code": "编写 CadQuery 代码生成新的零件候选（预设变体不够用时）。family 为 nema17-bracket（默认，用 template）或 pillow-block（6202 轴承座，用 templates.pillow-block：轴线平行于 Y、过 x=0、z=AXIS_Z，Ø35 H7 轴承孔从 +Y 面加工到止口，底面 z=0，竖直 M8 地脚孔）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
+    + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 AXIS_Z（轴线高度 mm；支架也可写 MOTOR_AXIS_Z）赋值。支架的坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
     + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
   "factory-criteria": "冻结工厂孪生验收标准（必须先于 factory-review）",
   "factory-review": "按冻结标准评估已复核的工厂孪生样本；criteria 填已有标准句柄（如 criteria-1）或同一回答中 factory-criteria 计划的 ref（如 p1）",
@@ -120,8 +120,8 @@ type Handle = { kind: string; id: string; label: string };
 export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
   lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements>; tool?: z.infer<typeof RobotTool> } }; lastCad?: CadReview; lastAero?: AeroReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
-  cadCode?: { template: string } }
-export interface ContextOptions { cadCode?: { template: string } }
+  cadCode?: { template: string; templates?: Record<string, string> } }
+export interface ContextOptions { cadCode?: { template: string; templates?: Record<string, string> } }
 
 export function buildContext(store: Store, project: Project | undefined, lifecycle?: Lifecycle, options: ContextOptions = {}): AiContext {
   const handles = new Map<string, Handle>();
@@ -206,7 +206,7 @@ const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c")
 export const planTools = (context: AiContext) => Object.fromEntries(AI_TOOLS
   .filter(t => (context.project ? t !== "create-project" : t === "create-project") && (t !== "cad-code" || context.cadCode))
   .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }),
-    ...(t === "cad-code" ? { template: context.cadCode!.template } : {}) }]));
+    ...(t === "cad-code" ? { template: context.cadCode!.template, templates: context.cadCode!.templates } : {}) }]));
 export function buildPrompt(message: string, context: AiContext): string {
   const tools = planTools(context);
   return [
@@ -399,15 +399,16 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
   }
   if (t === "cad-code") {
     if (!context.cadCode) throw new Error("生成代码通道不可用（沙箱未就绪）");
-    const p = parsed as { code: string; requirements: Partial<CadRequirements> };
-    const prev = context.lastCad?.request.requirements;
+    const p = parsed as { code: string; family: CadFamily; requirements: Partial<CadRequirements> };
+    const sameFamily = context.lastCad && familyOf(context.lastCad.request) === p.family;
+    const prev = sameFamily ? context.lastCad!.request.requirements : context.lastCad || p.family !== "nema17-bracket" ? FAMILY_DEFAULTS[p.family] : undefined;
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
-    const payload = { projectRevision: opts.revision, variant: "generated", requirements, source: { language: "cadquery-2.8", code: p.code } };
+    const payload = { projectRevision: opts.revision, variant: "generated", ...(p.family !== "nema17-bracket" ? { family: p.family } : {}), requirements, source: { language: "cadquery-2.8", code: p.code } };
     CadRequest.parse({ ...payload, requestId: placeholder });
     const changes: PlanChange[] = [...cadRequirementChanges(prev ?? DEFAULT_CAD_REQUIREMENTS, requirements),
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: "generated", direction: context.lastCad?.request.variant === "generated" ? "same" : context.lastCad ? "changed" : "new" },
       { field: "code", from: null, to: `${p.code.split("\n").length} 行 · sha256 ${sha256(p.code).slice(0, 12)}`, direction: "new" }];
-    return { ...base, title: opts.title ?? "CadQuery 生成代码：NEMA 17 支架新候选", route: route("cad"), method: "POST", payload, changes,
+    return { ...base, title: opts.title ?? `CadQuery 生成代码：${p.family === "pillow-block" ? "6202 轴承座" : "NEMA 17 支架"}新候选`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), "代码在隔离沙箱中运行（无网络、只读文件系统、资源上限）；只有原生 B-Rep 检查决定结论。", ...note],
       evidence: "沙箱执行 → 精确 BREP 实体 → 与预设相同的 B-Rep 检查 → EvalArc 对照；可编辑 STEP" };
   }
@@ -480,7 +481,8 @@ function interpretPlanned(out: z.infer<typeof ModelOutput>, context: AiContext):
 /** The generated-code tool is offered only when the OS sandbox works on this host. */
 export async function contextOptions(config: Config): Promise<ContextOptions> {
   if (!config.cadquery || !(await sandboxStatus(config)).available) return {};
-  return { cadCode: { template: await readFile(join(config.repository, CAD_TEMPLATE_FILE), "utf8") } };
+  return { cadCode: { template: await readFile(join(config.repository, CAD_TEMPLATE_FILE), "utf8"),
+    templates: { "pillow-block": await readFile(join(config.repository, CAD_TEMPLATES["pillow-block"]), "utf8") } } };
 }
 /** Layer 1 of the sandbox, applied to proposals: code plans that violate the static policy are dropped with the reason. */
 async function screenCode(config: Config, result: Pick<AssistantPlan, "interpretation" | "plans" | "answer" | "unmatched">, label: string) {

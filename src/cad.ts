@@ -101,11 +101,11 @@ export const CadRequest = z.object({
   .refine(r => (r.variant === "parametric") === Boolean(r.parameters), { message: "variant parametric requires parameters, and only parametric takes them", path: ["parameters"] })
   .refine(r => !r.fromSweep || r.variant === "parametric", { message: "fromSweep only applies to parametric candidates", path: ["fromSweep"] })
   .refine(r => !r.fromOptimize || (r.variant === "parametric" && !r.fromSweep), { message: "fromOptimize only applies to parametric candidates", path: ["fromOptimize"] })
-  .refine(r => !r.family || r.variant === "parametric" || familyOf({ variant: r.variant }) === r.family, { message: "family must match the preset", path: ["family"] })
+  .refine(r => !r.family || r.variant === "parametric" || r.variant === "generated" || familyOf({ variant: r.variant }) === r.family, { message: "family must match the preset", path: ["family"] })
   .refine(r => r.variant !== "parametric" || (familyOf(r) === "pillow-block" ? PillowParameters : CadParameters).safeParse(r.parameters).success,
     { message: "parameters must match the part family", path: ["parameters"] })
-  .refine(r => familyOf(r) === "nema17-bracket" || (!r.requirements.structural && r.variant !== "generated" && !r.fromSweep && !r.fromOptimize),
-    { message: "FEA load cases, generated code, sweeps and optimisation exist for the NEMA 17 bracket only", path: ["family"] });
+  .refine(r => familyOf(r) === "nema17-bracket" || (!r.requirements.structural && !r.fromSweep && !r.fromOptimize),
+    { message: "FEA load cases, sweeps and optimisation exist for the NEMA 17 bracket only", path: ["family"] });
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
@@ -215,7 +215,7 @@ async function buildRemote(config: Config, publish: LiveBus["publish"], record: 
   record.sandbox = { codeSha256, isolation: ["agentcore-microvm-per-job", "no-network-route", "no-credentials", ...ISOLATION], status: "error", transport: "agentcore" };
   publish(requestId, { kind: "step", id: "cad-sandbox", label: "在 AgentCore 隔离 microVM 中运行生成代码", status: "running", which: "candidate" });
   const startedAt = new Date().toISOString();
-  const raw = await invokeRuntime<unknown>(config.agentcoreSandboxArn!, { op: "cad-code", code: source.code, requirements }, { timeoutMs: 600_000 });
+  const raw = await invokeRuntime<unknown>(config.agentcoreSandboxArn!, { op: "cad-code", code: source.code, requirements, family: familyOf(record.request) }, { timeoutMs: 600_000 });
   const finishedAt = new Date().toISOString();
   const job = RemoteJob.parse(raw);
   if (job.codeSha256 !== codeSha256) throw new DomainError("CAD_SANDBOX_MISMATCH", "AgentCore sandbox ran different code", 502);
@@ -311,7 +311,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const structural = request.requirements.structural;
     const cam = request.requirements.dfm?.cam;
     if (cam && !camConfigured(config)) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam) or the PAISolver CAM job", 503);
-    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), FAMILY_SCRIPT[family], ...(family === "nema17-bracket" ? ["cad_recipe.py"] : []), "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), FAMILY_SCRIPT[family], ...(family === "nema17-bracket" ? ["cad_recipe.py"] : []), "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py", "cad_bearing.py"].filter(f => f !== FAMILY_SCRIPT[family]) : []),
       ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
@@ -339,7 +339,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       const label = `CadQuery ${name === "baseline" ? "基准零件" : "候选零件"}（${variant}）`;
       publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: "running", which: name });
       const input = join(directory, `${name}-input.json`);
-      await writePrivate(input, JSON.stringify({ variant, requirements: request.requirements, ...(codeSha256 ? { codeSha256 } : {}),
+      await writePrivate(input, JSON.stringify({ variant, family, requirements: request.requirements, ...(codeSha256 ? { codeSha256 } : {}),
         ...(variant === "parametric" ? { parameters: request.parameters } : {}) }));
       await mkdir(target, { recursive: true, mode: 0o700 });
       const sandboxed = Boolean(generated && name === "candidate");
@@ -542,3 +542,4 @@ export async function checkCadCode(config: Config, code: string): Promise<string
   } finally { await rm(file, { force: true }); }
 }
 export const CAD_TEMPLATE_FILE = "native/cad_template.py";
+export const CAD_TEMPLATES: Record<CadFamily, string> = { "nema17-bracket": CAD_TEMPLATE_FILE, "pillow-block": "native/cad_template_pillow.py" };

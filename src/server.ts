@@ -30,7 +30,7 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
-import { CAM_FILE, FAMILY_DEFAULTS, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
+import { CAM_FILE, CAD_TEMPLATES, FAMILY_DEFAULTS, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, optimizeCad, type CadOptimization } from "./optimize.js";
@@ -87,6 +87,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   const sandbox = config.cadquery ? await sandboxStatus(config) : { available: false, reason: "CadQuery 未配置" };
   const cadTemplate = await readFile(join(config.repository, CAD_TEMPLATE_FILE), "utf8");
+  const cadTemplates = Object.fromEntries(await Promise.all(Object.entries(CAD_TEMPLATES).map(async ([f, file]) => [f, await readFile(join(config.repository, file), "utf8")])));
   const paramId = (p: unknown, field = "id") => Id.parse((p as Record<string, unknown>)[field]);
   const nativeResponse = <T extends { id: string; state: string }>(record: T, reply: FastifyReply, route: string) => {
     if (record.state === "running" && config.publicOrigin) reply.code(202).header("Location", `/api/${route}/${record.id}`).header("Retry-After", "2");
@@ -236,7 +237,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         defaultRequirements: DEFAULT_AERO_REQUIREMENTS } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS, families: FAMILY_DEFAULTS,
         cam: camConfigured(config) ? { engine: `FreeCAD 1.1.4 CAM (ocp-freecad-cam) + OpenCAMLib${camRunner(config) === "batch" ? " on AWS Batch" : ""} · independent dexel simulation` } : false,
-        generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
+        generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate, templates: cadTemplates }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
         transport: controllerTransport(config) ?? null,

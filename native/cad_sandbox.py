@@ -49,7 +49,7 @@ except RecursionError:
 except BaseException as e:  # noqa: BLE001 — report any failure of untrusted code without a host traceback
     finish(3, {"status": "error", "type": type(e).__name__, "message": str(e)[:500]})
 
-result, axis = scope.get("result"), scope.get("MOTOR_AXIS_Z")
+result, axis = scope.get("result"), scope.get("AXIS_Z", scope.get("MOTOR_AXIS_Z"))
 if isinstance(result, cq.Workplane):
     solids = [s for v in result.vals() if isinstance(v, cq.Shape) for s in v.Solids()]
 elif isinstance(result, cq.Shape):
@@ -59,6 +59,6 @@ else:
 if len(solids) != 1:
     finish(3, {"status": "error", "type": "ResultSolids", "message": f"result 必须恰好包含 1 个实体（实际 {len(solids)} 个）"})
 if not isinstance(axis, (int, float)) or isinstance(axis, bool) or not math.isfinite(axis) or not 5 <= axis <= 500:
-    finish(3, {"status": "error", "type": "MotorAxis", "message": "MOTOR_AXIS_Z 必须是 5–500 mm 的数值"})
+    finish(3, {"status": "error", "type": "MotorAxis", "message": "AXIS_Z（MOTOR_AXIS_Z）必须是 5–500 mm 的数值"})
 solids[0].exportBrep(str(out / "generated.brep"))
 finish(0, {"status": "ok", "motorAxisZ": float(axis), "solids": 1})

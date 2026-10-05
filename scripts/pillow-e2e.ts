@@ -44,6 +44,21 @@ try {
   assert.equal(dfm.state, "completed", dfm.error ?? "dfm");
   const d = (id: string) => dfm.candidate!.checks.find(c => c.id === id) as unknown as { passed: boolean; observed: number };
   results.dfm = { verdict: dfm.verdict, setups: d("machining-setups").observed, fastenerAccess: d("fastener-access").observed, unitCostEur: d("unit-cost").observed };
+  // Generated CadQuery code for this family (the reference template) runs in the OS sandbox and is measured with the
+  // pillow-block checks; a revised seat Ø outside H7 is caught by the same check as the preset.
+  const state0 = (await app.inject({ url: "/api/state", headers: { host } })).json();
+  const template = state0.capabilities.cad.generatedCode?.templates?.["pillow-block"] as string | undefined;
+  if (state0.capabilities.cad.generatedCode?.available && template) {
+    const code = (src: string) => post<CadReview>(`/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "generated", family: "pillow-block",
+      requirements, source: { language: "cadquery-2.8", code: src } });
+    const ok = await code(template);
+    assert.equal(ok.state, "completed", ok.error ?? "generated");
+    assert.deepEqual(failed(ok), [], JSON.stringify(ok.candidate!.checks.filter(c => !c.passed)));
+    assert.ok(ok.candidate!.checks.some(c => c.id === "bearing-seat") && ok.sandbox?.status === "ok");
+    const tight = await code(template.replace("SEAT, SEAT_LEN = 35.012, 11.0", "SEAT, SEAT_LEN = 34.96, 11.0"));
+    assert.deepEqual(failed(tight), ["bearing-seat"]);
+    results.generated = { template: { verdict: ok.verdict, mass: ok.candidate!.mass, isolation: ok.sandbox!.isolation.length }, seatOutsideH7: { verdict: tight.verdict, failed: failed(tight) } };
+  }
   // Bracket-only lanes are refused for this family, before anything runs.
   await post("/api/projects/" + project.id + "/cad", { requestId: randomUUID(), projectRevision: 1, variant: "pillow-block",
     requirements: { ...requirements, structural: { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 } } }, 400);

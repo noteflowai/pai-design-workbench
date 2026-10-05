@@ -21,7 +21,7 @@ export type State = {
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
   capabilities: { aero?: false | { engine: string; reference: AeroParameters; defaultRequirements: AeroRequirementsValue }; modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[]; images?: boolean }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements; families?: Record<string, CadRequirements>; cam?: false | { engine: string };
-    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
+    generatedCode?: { available: boolean; reason?: string; isolation: string[]; template: string; templates?: Record<string, string> }; sweep?: { defaultGrid: SweepGrid; maxPoints: number } }; authenticatedWorkspace?: boolean;
     signing?: { kms: boolean; keyId: string; algorithm: string };
     physics?: false | { fea: string; defaultStructural: StructuralRequirements; optimize: { engine: string; defaultBudget: { initial: number; rounds: number; perRound: number }; maxEvaluations: number; strategies?: string[]; botorch?: string | null } };
     factoryTwin?: { defaultCriteria: FactoryCriteriaValues; reviewedSample?: string } };

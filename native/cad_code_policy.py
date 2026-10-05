@@ -3,7 +3,7 @@
 Allowed: `import cadquery as cq`, `import math`, assignments, arithmetic, comprehensions, if/for,
 plain functions and a small set of builtins. Denied: other imports, dunder or private names,
 attribute assignment, file/export/import APIs, dynamic code, classes, context managers, try/raise,
-async and generators. The program must assign `result` (one solid) and `MOTOR_AXIS_Z` at module level.
+async and generators. The program must assign `result` (one solid) and `AXIS_Z` (or, for the bracket, `MOTOR_AXIS_Z`) at module level.
 
 Run as `python -I cad_code_policy.py FILE` to print {"ok": bool, "violations": [...]} as JSON.
 """
@@ -79,9 +79,10 @@ def check(source: str) -> list[str]:
 
     assigned = {t.id for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign))
                 for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) for t in ast.walk(t) if isinstance(t, ast.Name)}
-    for required in ("result", "MOTOR_AXIS_Z"):
-        if required not in assigned:
-            violations.append(f"必须在模块顶层给 {required} 赋值")
+    if "result" not in assigned:
+        violations.append("必须在模块顶层给 result 赋值")
+    if not {"AXIS_Z", "MOTOR_AXIS_Z"} & assigned:
+        violations.append("必须在模块顶层给 AXIS_Z（轴线高度；电机支架也可写 MOTOR_AXIS_Z）赋值")
     return violations
 
 

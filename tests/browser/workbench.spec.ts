@@ -163,6 +163,17 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
   const fail = page.locator(".check-table tr.fail");
   await expect(fail).toHaveCount(1); await expect(fail).toContainText("轴承孔（H7）"); await expect(fail).toContainText("34.95");
   await expect(page.locator(".outliner").getByText("6202 bearing")).toBeVisible();
+  // Generated code for this family: the editor switches to the housing template, which passes in the sandbox.
+  if (state.capabilities.cad.generatedCode?.available) {
+    await rail(page, /候选设计/).click();
+    await page.getByRole("tab", { name: "CAD 零件" }).click();
+    await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
+    await page.getByRole("radio", { name: /生成代码|代码/ }).first().check();
+    await expect(page.locator("#cad-code")).toHaveValue(/AXIS_Z = 30\.0/);
+    await page.getByRole("button", { name: "在沙箱中运行并检查" }).click();
+    await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 180_000 });
+    await expect(page.locator(".check-table")).toContainText("轴承孔（H7）");
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("pillow-mobile.png"), fullPage: true });

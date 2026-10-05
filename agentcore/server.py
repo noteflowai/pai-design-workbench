@@ -184,7 +184,10 @@ def op_cad_code(body):
         if r["exit"] != 0 or outcome.get("status") != "ok":
             return {"status": outcome.get("status", "error"), "error": outcome.get("message") or ";".join(outcome.get("violations", [])), "type": outcome.get("type"),
                     "layers": layers, "codeSha256": sha(code.encode()), "seconds": r["seconds"]}
-        (work / "in.json").write_text(json.dumps({"requirements": req, "codeSha256": sha(code.encode())}))
+        family = body.get("family", "nema17-bracket")
+        if family not in ("nema17-bracket", "pillow-block"):
+            raise Refused(400, "INVALID_INPUT", "family must be nema17-bracket or pillow-block")
+        (work / "in.json").write_text(json.dumps({"requirements": req, "codeSha256": sha(code.encode()), "family": family}))
         m, _ = sandboxed([PYTHON, "-I", "-W", "ignore", str(NATIVE / "cad_generated.py"), "--input", str(work / "in.json"), "--source", str(src), "--output", str(out)],
                          [str(work / "in.json"), str(src)], [str(out)], 300)
         if m["exit"] != 0:

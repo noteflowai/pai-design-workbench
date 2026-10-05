@@ -114,6 +114,9 @@ function CadLane() {
   const switchFamily = (f: typeof family) => {
     const d = cap && (cap.families?.[f] ?? cap.defaultRequirements);
     setFamily(f); setVariant(f === "pillow-block" ? "pillow-block-light" : "lightweight");
+    // The code editor starts from the family's template unless the user already edited code for it.
+    const t = sandbox?.templates?.[f] ?? (f === "nema17-bracket" ? sandbox?.template : undefined);
+    if (t && (!code.trim() || Object.values(sandbox?.templates ?? {}).concat(sandbox?.template ?? "").includes(code))) setCode(t);
     if (d) { setMass(d.maxMassG); setWall(d.minWallMm); setEdge(d.edgeDistanceFactor); }
     if (f === "pillow-block") setFea(false);
   };
@@ -143,7 +146,7 @@ function CadLane() {
   const generated = variant === "generated";
   const [params, setParams] = useState({ thickness: Number(q.get("t") ?? 3), width: Number(q.get("w") ?? 60), plateHeight: Number(q.get("h") ?? 46), pilotBore: 22.5 });
   if (!cap) return <Empty title="未配置 CadQuery" action={<InstallTool kind="cadquery" />}>运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
-  const familyVariants = Object.entries(CAD_VARIANTS).filter(([id]) => pillow ? id.startsWith("pillow-block") : !id.startsWith("pillow-block"));
+  const familyVariants = Object.entries(CAD_VARIANTS).filter(([id]) => pillow ? id.startsWith("pillow-block") || id === "generated" : !id.startsWith("pillow-block"));
   return <><Card title={pillow ? "6202 轴承座（参数化 B-Rep）" : "NEMA 17 电机安装支架（参数化 B-Rep）"} aside={<small>{cap.engine} · 6061 铝</small>}>
     {!feedback && cap.families?.["pillow-block"] && <div className="segmented" role="group" aria-label="零件族">{([["nema17-bracket", "NEMA 17 电机支架"], ["pillow-block", "6202 轴承座"]] as const).map(([f, label]) =>
       <button key={f} type="button" aria-pressed={family === f} className={family === f ? "active" : ""} onClick={() => switchFamily(f)}>{label}</button>)}</div>}
@@ -155,12 +158,13 @@ function CadLane() {
         <span className="option-tag">{id === "generated" ? "CODE" : id === "parametric" ? "PARAM" : id.replace("pillow-block-", "").replace("pillow-block", "reference").toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
     })}</div>
     {generated && sandbox?.available && <div className="code-editor">
-      <label htmlFor="cad-code">CadQuery 代码<small>只能 import cadquery as cq / math；给 result（一个实体）与 MOTOR_AXIS_Z 赋值。电机安装面 y=0，电机轴经过 x=0、z=MOTOR_AXIS_Z。</small></label>
+      <label htmlFor="cad-code">CadQuery 代码<small>{pillow ? "只能 import cadquery as cq / math；给 result（一个实体）与 AXIS_Z 赋值。底面 z=0，轴线平行于 Y、经过 x=0、z=AXIS_Z，Ø35 H7 轴承孔从 +Y 面加工。"
+        : "只能 import cadquery as cq / math；给 result（一个实体）与 MOTOR_AXIS_Z 赋值。电机安装面 y=0，电机轴经过 x=0、z=MOTOR_AXIS_Z。"}</small></label>
       <textarea id="cad-code" spellCheck={false} rows={18} value={code} onChange={e => setCode(e.target.value)} aria-describedby="cad-code-status" />
       <div className="code-tools" id="cad-code-status" aria-live="polite">
         <button type="button" className="secondary" disabled={c.busy || !code.trim()} onClick={() => void api<{ ok: boolean; violations: string[] }>("/cad/code-check", { code }).then(setCodeCheck)
           .catch(e => c.toast(e instanceof Error ? e.message : String(e), "bad"))}>检查代码策略</button>
-        <button type="button" className="secondary" disabled={c.busy} onClick={() => setCode(sandbox.template)}>恢复模板</button>
+        <button type="button" className="secondary" disabled={c.busy} onClick={() => setCode(sandbox.templates?.[family] ?? sandbox.template)}>恢复模板</button>
         {codeCheck && (codeCheck.ok ? <span className="chip ok">符合沙箱策略</span>
           : <ul className="violations">{codeCheck.violations.map(v => <li key={v}>{v}</li>)}</ul>)}
       </div>
@@ -200,7 +204,7 @@ function CadLane() {
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {
         const original = feedback ? (c.data.cads ?? []).find(x => x.id === feedback.runId) : undefined;
         const requirements = original?.request.requirements ?? formRequirements;
-        void runCad(c, variant, requirements, generated ? code : undefined, feedback, params);
+        void runCad(c, variant, requirements, generated ? code : undefined, feedback, params, pillow && generated ? "pillow-block" : undefined);
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
   {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
