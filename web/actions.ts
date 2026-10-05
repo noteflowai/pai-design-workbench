@@ -104,6 +104,7 @@ export const defaultReason = (f: Feedback, generated = false) => ({
   rechecked: "新复测回执已核对；关闭反馈，原失败记录保留。" } as Record<string, string>)[f.status] ?? "";
 
 /** The latest accepted candidate of the same kind and frozen requirements created after the failure (the proposed fix). */
+const familyReference = (r: { variant: string; family?: string }) => r.variant.startsWith("pillow-block") || r.family === "pillow-block" ? "pillow-block" : "reference";
 function acceptedFix<T extends { id: string; createdAt: string; projectId: string; verdict?: string; state: string; request: { requirements: unknown } }>(
   items: T[], original: T, sameRecipe: (x: T) => boolean): T | undefined {
   return items.filter(x => x.projectId === original.projectId && x.state === "completed" && x.verdict?.startsWith("accepted") && x.createdAt > original.createdAt
@@ -141,7 +142,8 @@ export function advanceFeedback(c: Ctx, f: Feedback, reason: string) {
       const { requestId: _r, feedbackId: _f, fromSweep: _s, fromOptimize: _o, ...base } = (fix ?? original).request;
       r = await c.track(requestId, "CAD 反馈复测", "cad-part", () => api<CadReview>(`/projects/${p.id}/cad`, fix
         ? { ...base, requestId, projectRevision: p.revision, feedbackId: f.id }
-        : { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : "reference", requirements: original.request.requirements, feedbackId: f.id }));
+        // No accepted fix under the same requirements: fall back to the reference design of the part's own family.
+        : { requestId, projectRevision: p.revision, variant: keep ? original.request.variant : familyReference(original.request), requirements: original.request.requirements, feedbackId: f.id }));
     } else if (f.evidenceKind === "aero-body") {
       // The fix is the accepted body of the same requirements created after the failure (e.g. the AI-proposed slant).
       const original = (c.data.aeros ?? []).find(x => x.id === f.runId)!;

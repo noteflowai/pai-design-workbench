@@ -27,7 +27,7 @@ export const CreateFeedback = z.object({
   evidenceKind: z.enum(["robot-review", "blender-scene", "factory-twin", "cad-part", "aero-body"]).default("robot-review"),
   checkId: z.enum(["footprint-area", "declared-target-envelope", "camera-visibility", "aisle-clearance", "guard-clearance", "camera-coverage", "egress-travel", "reach", "collision-free", "cycle-time", "success-rate",
     "output-per-seed", "demand-intervals", "hall-comfort", "ev-service", "closed-failures",
-    "solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope", "max-deflection", "max-stress",
+    "solid-valid", "nema17-interface", "bearing-seat", "shoulder", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope", "max-deflection", "max-stress",
     "drag-coefficient", "grid-convergence", "iterative-convergence", "mesh-quality",
     "machining-setups", "hole-drillability", "fastener-access", "unit-cost", "cam-toolpath", "cycle-time"]).optional(),
   // Robot panels use seeds 0–9; Factory Twin panels use their own recorded seed IDs.

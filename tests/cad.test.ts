@@ -93,3 +93,13 @@ test("CAM runs where it is configured: the PAISolver job when the hosted Batch j
   assert.equal(camRunner({ ...base, physicsPython: "/py", solverBatch: { ...batch, camJobDefinition: undefined } }), undefined);
   assert.equal(camConfigured({ ...base, cadquery: undefined, camPython: "/fc" }), false, "the verifier needs the CadQuery venv");
 });
+
+test("feedback accepts every check a lane can fail (the contract lists them by hand, so this pins it)", async () => {
+  const { CreateFeedback } = await import("../src/contracts.js");
+  const { CAD_CHECKS, FAMILY_CHECKS } = await import("../src/cad.js");
+  const { AERO_CHECKS } = await import("../src/aero.js");
+  const { FACTORY_CHECKS } = await import("../src/factory.js");
+  const ids = new Set([...CAD_CHECKS, ...Object.values(FAMILY_CHECKS).flat(), ...AERO_CHECKS, ...FACTORY_CHECKS]);
+  const shape = (CreateFeedback as unknown as { shape: { checkId: { unwrap(): { options: string[] } } } }).shape.checkId.unwrap().options;
+  assert.deepEqual([...ids].filter(id => !shape.includes(id)), []);
+});

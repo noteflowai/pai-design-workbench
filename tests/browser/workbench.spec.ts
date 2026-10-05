@@ -163,6 +163,13 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
   const fail = page.locator(".check-table tr.fail");
   await expect(fail).toHaveCount(1); await expect(fail).toContainText("轴承孔（H7）"); await expect(fail).toContainText("34.95");
   await expect(page.locator(".outliner").getByText("6202 bearing")).toBeVisible();
+  // The failure goes through feedback; the recheck rebuilds the family's own reference, never the bracket.
+  await page.getByRole("button", { name: "查看证据与回放 →" }).click();
+  await page.getByRole("button", { name: /记录反馈：CAD 轴承孔/ }).click();
+  await advance(page, ["记录复现", "分配处理", "提出回退方案", "按修正方案复测"], 180_000);
+  const after = await (await page.request.get("/api/state")).json();
+  const recheck = after.cads.filter((x: { feedbackId?: string }) => x.feedbackId).at(-1);
+  expect(recheck.request.variant).toBe("pillow-block"); expect(recheck.verdict).toBe("accepted-cad-part");
   // Generated code for this family: the editor switches to the housing template, which passes in the sandbox.
   if (state.capabilities.cad.generatedCode?.available) {
     await rail(page, /候选设计/).click();
