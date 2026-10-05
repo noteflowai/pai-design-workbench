@@ -121,6 +121,15 @@ function cadRows(checks: { id: string; passed: boolean; observed?: unknown; requ
       const v = x.observed as { pilotBore: number; boltHoles: number[]; pitch: number[] };
       return { id: x.id, title, passed: x.passed, observed: `Ø${v.pilotBore} · 4×Ø${v.boltHoles[0] ?? "—"} · ${v.pitch.join("/")}`, required: "≥ Ø22.2 · 4×Ø3.4 · 31", unit: "mm", margin: ge(v.pilotBore, 22.2) };
     }
+    if (x.id === "bearing-seat") {
+      const v = x.observed as { seatDiameter: number | null; seatLength: number; axisOffset: number | null }, rq = x.required as { seatDiameter: [number, number]; seatLengthMin: number };
+      return { id: x.id, title, passed: x.passed, observed: `Ø${v.seatDiameter ?? "—"} · 长 ${v.seatLength} · 偏心 ${v.axisOffset ?? "—"}`, required: `Ø${rq.seatDiameter[0]}–${rq.seatDiameter[1]} · ≥ ${rq.seatLengthMin}`, unit: "mm",
+        margin: v.seatDiameter === null ? undefined : Math.min(v.seatDiameter - rq.seatDiameter[0], rq.seatDiameter[1] - v.seatDiameter) / (rq.seatDiameter[1] - rq.seatDiameter[0]), note: "6202 外圈 Ø35，H7 公差带（ISO 286）" };
+    }
+    if (x.id === "shoulder") {
+      const rq = x.required as [number, number];
+      return { id: x.id, title, passed: x.passed, observed: o.toFixed(2), required: `${rq[0]}–${rq[1]}`, unit: "mm", note: "轴孔留间隙，外圈有足够的止口支承（ISO 355）" };
+    }
     if (x.id === "machining-setups") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "次", margin: le(o, r), note: "三轴主方向集合覆盖；孔按无遮挡钻削通道" };
     if (x.id === "hole-drillability") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "深径比", margin: le(o, r), note: "孔深/孔径，且至少一端钻削通道无遮挡" };
     if (x.id === "fastener-access") return { id: x.id, title, passed: x.passed, observed: String(o), required: "0", unit: "个孔", note: "ISO 4762 螺钉头与内六角扳手在落座侧的空间" };
@@ -142,7 +151,7 @@ function CadDetail({ cad }: { cad?: CadReview }) {
   const [stressView, setStressView] = useState(true);
   const shownModel = model && fea && stressView ? { ...model, stages: [], finalUrl: `/api/cad/${cad!.id}/files/${which}/fea.glb`, title: `${model.title} · von Mises` } : model;
   return <>
-    <Verdict tone={v.tone} eyebrow={`参数化 CAD · NEMA 17 电机支架${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
+    <Verdict tone={v.tone} eyebrow={`参数化 CAD · ${cad?.request.variant.startsWith("pillow-block") || cad?.request.family === "pillow-block" ? "6202 轴承座" : "NEMA 17 电机支架"}${cad ? ` · ${CAD_VARIANTS[cad.request.variant][0]} · CadQuery ${cad.candidate?.cadquery ?? ""}` : ""}`} title={v.label}
       detail={cad?.error ?? (cad?.state === "completed" ? `EvalArc 检测到 ${cad.diff?.blocking_changes ?? "—"} 项丢失的检查；质量 ${cad.baseline?.mass} → ${cad.candidate?.mass} g。名义几何${cad.fea ? "；结构检查为 CalculiX 线性静力 FEA" : "，未冻结结构要求（无 FEA）"}，不含实物测试。` : "每完成一个建模特征，B-Rep 几何即推送到视口；最后叠加 NEMA 17 电机做装配检查。")} />
     <Suspense fallback={<div className="viewport viewport-loading">加载三维视口…</div>}><Viewport model={shownModel} /></Suspense>
     {fea && <div className="fea-bar" role="group" aria-label="FEA 结果">

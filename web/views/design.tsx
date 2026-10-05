@@ -106,8 +106,17 @@ function CadLane() {
   const c = useApp();
   const q = c.route.params;
   const cap = c.data.capabilities.cad;
-  const defaults = cap ? cap.defaultRequirements : { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] as [number, number, number] };
+  // Part family: each has its own presets, interface checks and default requirements (FEA, sweep and code: bracket only).
+  const [family, setFamily] = useState<"nema17-bracket" | "pillow-block">(q.get("family") === "pillow-block" || (q.get("variant") ?? "").startsWith("pillow-block") ? "pillow-block" : "nema17-bracket");
+  const pillow = family === "pillow-block";
+  const defaults = (cap && (cap.families?.[family] ?? cap.defaultRequirements)) || { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] as [number, number, number] };
   const [variant, setVariant] = useState(q.get("variant") ?? "lightweight");
+  const switchFamily = (f: typeof family) => {
+    const d = cap && (cap.families?.[f] ?? cap.defaultRequirements);
+    setFamily(f); setVariant(f === "pillow-block" ? "pillow-block-light" : "lightweight");
+    if (d) { setMass(d.maxMassG); setWall(d.minWallMm); setEdge(d.edgeDistanceFactor); }
+    if (f === "pillow-block") setFea(false);
+  };
   const [mass, setMass] = useState(Number(q.get("mass") ?? defaults.maxMassG));
   const [wall, setWall] = useState(Number(q.get("wall") ?? defaults.minWallMm));
   const [edge, setEdge] = useState(Number(q.get("edge") ?? defaults.edgeDistanceFactor));
@@ -118,7 +127,7 @@ function CadLane() {
   const [fea, setFea] = useState(Boolean(physics) && (q.get("fea") === "true" || (q.get("fea") !== "false" && Boolean(latestCad?.request.requirements.structural))));
   const [load, setLoad] = useState(Number(q.get("forceN") ?? (physics ? physics.defaultStructural.forceN : 60)));
   const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? (physics ? physics.defaultStructural.maxDeflectionMm : 0.06)));
-  const structural = fea && physics ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
+  const structural = fea && physics && !pillow ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
   const [dfmOn, setDfmOn] = useState(Boolean(latestCad?.request.requirements.dfm));
   const [setups, setSetups] = useState(latestCad?.request.requirements.dfm?.maxSetups ?? 2), [cost, setCost] = useState(latestCad?.request.requirements.dfm?.maxUnitCostEur ?? 25);
   const camAvailable = Boolean(c.data.capabilities.cad && c.data.capabilities.cad.cam);
@@ -134,13 +143,16 @@ function CadLane() {
   const generated = variant === "generated";
   const [params, setParams] = useState({ thickness: Number(q.get("t") ?? 3), width: Number(q.get("w") ?? 60), plateHeight: Number(q.get("h") ?? 46), pilotBore: 22.5 });
   if (!cap) return <Empty title="未配置 CadQuery" action={<InstallTool kind="cadquery" />}>运行 npm run setup:cad（哈希锁定的 CadQuery 2.8.0 / OCCT 7.9），或设置 PAI_CADQUERY_PYTHON。</Empty>;
-  return <><Card title="NEMA 17 电机安装支架（参数化 B-Rep）" aside={<small>{cap.engine} · 6061 铝</small>}>
+  const familyVariants = Object.entries(CAD_VARIANTS).filter(([id]) => pillow ? id.startsWith("pillow-block") : !id.startsWith("pillow-block"));
+  return <><Card title={pillow ? "6202 轴承座（参数化 B-Rep）" : "NEMA 17 电机安装支架（参数化 B-Rep）"} aside={<small>{cap.engine} · 6061 铝</small>}>
+    {!feedback && cap.families?.["pillow-block"] && <div className="segmented" role="group" aria-label="零件族">{([["nema17-bracket", "NEMA 17 电机支架"], ["pillow-block", "6202 轴承座"]] as const).map(([f, label]) =>
+      <button key={f} type="button" aria-pressed={family === f} className={family === f ? "active" : ""} onClick={() => switchFamily(f)}>{label}</button>)}</div>}
     {feedback && <p className="notice" role="status">反馈复测：修改代码后提交，新回执将绑定到反馈「{feedback.observed.slice(0, 40)}」；零件要求保持不变。</p>}
-    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{Object.entries(CAD_VARIANTS).map(([id, [label, note]]) => {
+    <div className="options" role="radiogroup" aria-label="CAD 候选参数">{familyVariants.map(([id, [label, note]]) => {
       const off = id === "generated" && !sandbox?.available;
       return <label key={id} className={`option ${variant === id ? "selected" : ""} ${off ? "disabled" : ""}`} title={off ? sandbox?.reason : undefined}>
         <input type="radio" name="cad-variant" value={id} checked={variant === id} disabled={off} onChange={() => setVariant(id)} />
-        <span className="option-tag">{id === "generated" ? "CODE" : id === "parametric" ? "PARAM" : id.toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
+        <span className="option-tag">{id === "generated" ? "CODE" : id === "parametric" ? "PARAM" : id.replace("pillow-block-", "").replace("pillow-block", "reference").toUpperCase()}</span><strong>{label}</strong><small>{off ? `不可用：${sandbox?.reason ?? "沙箱未就绪"}` : note}</small></label>;
     })}</div>
     {generated && sandbox?.available && <div className="code-editor">
       <label htmlFor="cad-code">CadQuery 代码<small>只能 import cadquery as cq / math；给 result（一个实体）与 MOTOR_AXIS_Z 赋值。电机安装面 y=0，电机轴经过 x=0、z=MOTOR_AXIS_Z。</small></label>
@@ -163,9 +175,9 @@ function CadLane() {
       <label>质量上限<span className="unit-input"><input type="number" min={1} max={10000} step={1} disabled={Boolean(feedback)} value={mass} onChange={e => setMass(Number(e.target.value))} /><em>g</em></span></label>
       <label>最小壁厚<span className="unit-input"><input type="number" min={0.5} max={50} step={0.1} disabled={Boolean(feedback)} value={wall} onChange={e => setWall(Number(e.target.value))} /><em>mm</em></span></label>
       <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} disabled={Boolean(feedback)} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
-      <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>
+      {!pillow && <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>}
     </div>
-    {physics && <fieldset className="field-grid"><legend>结构要求（Gmsh + CalculiX 线性静力 FEA）</legend>
+    {physics && !pillow && <fieldset className="field-grid"><legend>结构要求（Gmsh + CalculiX 线性静力 FEA）</legend>
       <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fea} onChange={e => setFea(e.target.checked)} />冻结结构要求并做 FEA</label>
       <label>皮带径向载荷<span className="unit-input"><input type="number" aria-label="皮带径向载荷" min={1} max={2000} step={1} disabled={!fea || Boolean(feedback)} value={load} onChange={e => setLoad(Number(e.target.value))} /><em>N</em></span></label>
       <label>电机轴挠度上限<span className="unit-input"><input type="number" aria-label="电机轴挠度上限" min={0.001} max={10} step={0.005} disabled={!fea || Boolean(feedback)} value={deflection} onChange={e => setDeflection(Number(e.target.value))} /><em>mm</em></span></label>
@@ -182,7 +194,8 @@ function CadLane() {
         <small className="muted">FreeCAD 1.1 CAM + OpenCAMLib 按装夹出程序；独立高度图仿真检查过切、残料、过载与快移碰撞。每个零件约 5–10 分钟</small>
       </>}
     </fieldset>
-    <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>
+    {pillow && <p className="muted">轴承座：在 OCCT B-Rep 上实测 Ø35 H7 轴承孔（35.000–35.025）、同轴度、止口与轴孔、轴承孔四周最薄壁（72 条径向射线）、M8 地脚孔边距、质量与外形。FEA 与参数扫描目前只对电机支架开放。</p>}
+    {!pillow && <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>}
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {
         const original = feedback ? (c.data.cads ?? []).find(x => x.id === feedback.runId) : undefined;
@@ -191,7 +204,7 @@ function CadLane() {
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
   {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
-  {!feedback && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
+  {!feedback && !pillow && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
   </>;
 }
 

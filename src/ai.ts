@@ -11,7 +11,7 @@ import type { LiveBus } from "./live.js";
 import { cadRequirementChanges, compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, RobotTool, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
-import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, PILLOW_PRESETS, FAMILY_DEFAULTS, familyOf, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
@@ -51,7 +51,7 @@ const ModelPayload = {
   "aero-body": z.object({ parameters: AeroParameters, requirements: AeroRequirements.partial().default({}) }).strict(),
   "robot-cell": z.object({ cell: RobotCell, requirements: RobotRequirements.partial().default({}),
     tool: z.object({ cad: z.string().regex(/^cad-\d{1,3}$/), payloadKg: z.number().min(0).max(3).optional() }).strict().optional() }).strict(),
-  "cad-review": z.object({ variant: z.enum(CAD_PRESETS), requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-review": z.object({ variant: z.enum([...CAD_PRESETS, ...PILLOW_PRESETS]), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]),
@@ -75,7 +75,7 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "10 个种子逐一做 IK、五次多项式轨迹与 500 Hz 动力学；检查 reach、collision-free、cycle-time（≤ maxCycleSeconds）、success-rate（≥ minSuccessRate）。经验：参考单元速度 50% 时节拍约 5.9 s，"
     + "节拍大致与 1/speedFraction 成正比（加上约 0.3 s 稳定时间）；guardClearance < 0.2 m 时肘部会碰到围栏；工位距离 > 0.9 m 时 IK 不可达。"
     + "可选 tool：{ cad: \"cad-N\" }，把本项目一个已通过的 CAD 零件（及默认 0.28 kg 的 NEMA 17 电机负载）装到末端，质量和惯量取自精确网格并与 B-Rep 质量交叉核对；省略时沿用上一次的末端工装",
-  "cad-review": "CadQuery NEMA 17 支架：variant reference/lightweight/undersize-bore/compact；requirements 可只写要改的字段",
+  "cad-review": "CadQuery 零件：NEMA 17 支架 variant reference/lightweight/undersize-bore/compact；6202 轴承座 variant pillow-block/pillow-block-light/pillow-block-compact/pillow-block-tight（检查 bearing-seat H7、shoulder、min-wall、hole-edge-distance、mass、envelope；无 FEA）；requirements 可只写要改的字段",
   "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
   "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
     + "（forceN、leverMm、safetyFactor、maxDeflectionMm；缺省 60 N、50 mm、2、0.06 mm）。可以提供最多 4 个 seeds（thickness 2–8、width 46–80、plateHeight 40–60），"
@@ -353,17 +353,19 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     return { ...base, ...step, warnings: [...step.warnings, ...note] };
   }
   if (t === "cad-review") {
-    const p = parsed as { variant: typeof CAD_PRESETS[number]; requirements: Partial<CadRequirements> };
-    const prev = context.lastCad?.request.requirements;
+    const p = parsed as { variant: typeof CAD_PRESETS[number] | typeof PILLOW_PRESETS[number]; requirements: Partial<CadRequirements> };
+    // Requirements carry over only within a part family; a new family starts from its own frozen defaults.
+    const family = familyOf({ variant: p.variant }), sameFamily = context.lastCad && familyOf(context.lastCad.request) === family;
+    const prev = sameFamily ? context.lastCad!.request.requirements : context.lastCad || family !== "nema17-bracket" ? FAMILY_DEFAULTS[family] : undefined;
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
     const payload = { projectRevision: opts.revision, variant: p.variant, requirements };
     CadRequest.parse({ ...payload, requestId: placeholder });
     // Against the previous record, or the lane defaults when there is none, so a first plan that loosens a default
     // is still marked as a relaxation.
-    const was = prev ?? DEFAULT_CAD_REQUIREMENTS;
+    const was = prev ?? FAMILY_DEFAULTS[family];
     const changes: PlanChange[] = [...cadRequirementChanges(was, requirements),
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: p.variant, direction: context.lastCad ? (context.lastCad.request.variant === p.variant ? "same" : "changed") : "new" }];
-    return { ...base, title: opts.title ?? `CadQuery 参数化零件：NEMA 17 电机支架 · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
+    return { ...base, title: opts.title ?? `CadQuery 参数化零件：${family === "pillow-block" ? "6202 轴承座" : "NEMA 17 电机支架"} · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };
   }
   if (t === "cad-sweep") {

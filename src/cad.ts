@@ -20,13 +20,24 @@ import { invokeRuntime } from "./agentcore.js";
  * Nominal geometry and DFM rules of thumb only — no FEA, tolerance stack-up or physical test.
  */
 export const GEOMETRY_CHECKS = ["solid-valid", "nema17-interface", "motor-interference", "min-wall", "hole-edge-distance", "mass", "envelope"] as const;
+/**
+ * Part families. Each has its own trusted recipe and B-Rep interface checks (native script); mass, envelope, wall,
+ * edge distance, DFM and CAM are shared. FEA load cases, sweeps, optimisation and generated code exist for the bracket.
+ */
+export const CAD_FAMILIES = ["nema17-bracket", "pillow-block"] as const;
+export type CadFamily = (typeof CAD_FAMILIES)[number];
+export const FAMILY_CHECKS: Record<CadFamily, readonly string[]> = {
+  "nema17-bracket": GEOMETRY_CHECKS,
+  "pillow-block": ["solid-valid", "bearing-seat", "shoulder", "min-wall", "hole-edge-distance", "mass", "envelope"],
+};
+export const FAMILY_SCRIPT: Record<CadFamily, string> = { "nema17-bracket": "cad_bracket.py", "pillow-block": "cad_bearing.py" };
 /** Structural checks from the native FEA (Gmsh + CalculiX); present only when structural requirements are frozen. */
 export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
 /** 3-axis milling DFM (native/cad_dfm.py on the B-Rep, shop assumptions in native/dfm-shop.json); opt-in like FEA. */
 export const DFM_CHECKS = ["machining-setups", "hole-drillability", "fastener-access", "unit-cost"] as const;
 /** CAM (opt-in under dfm): FreeCAD CAM + OpenCAMLib programs per setup, checked by an independent dexel simulation. */
 export const CAM_CHECKS = ["cam-toolpath", "cycle-time"] as const;
-export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS, ...CAM_CHECKS] as const;
+export const CAD_CHECKS = [...GEOMETRY_CHECKS, "bearing-seat", "shoulder", ...FEA_CHECKS, ...DFM_CHECKS, ...CAM_CHECKS] as const;
 export const CamRequirements = z.object({ maxCycleMinutes: z.number().min(1).max(10000) }).strict();
 export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000),
   cam: CamRequirements.optional() }).strict();
@@ -34,13 +45,21 @@ export const CAM_FILE = /^(cam\.json|cam-verify\.json|cam-job\.json|cam-sim\.png
 export type DfmRequirements = z.infer<typeof DfmRequirements>;
 export const DEFAULT_DFM: DfmRequirements = { maxSetups: 2, maxUnitCostEur: 25 };
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
+/** Pillow-block presets (native/cad_bearing.py PRESETS): 6202 housing reference and three single-fault variants. */
+export const PILLOW_PRESETS = ["pillow-block", "pillow-block-light", "pillow-block-compact", "pillow-block-tight"] as const;
 /** "generated": the candidate solid comes from CadQuery code (AI, external agent or maintainer) run in the OS sandbox. */
-export const CAD_VARIANTS = [...CAD_PRESETS, "parametric", "generated"] as const;
+export const CAD_VARIANTS = [...CAD_PRESETS, ...PILLOW_PRESETS, "parametric", "generated"] as const;
 /** Bounded explicit parameters of the trusted recipe (variant "parametric", e.g. a chosen sweep point); mirrors native/cad_recipe.py BOUNDS. */
 export const CadParameters = z.object({
   thickness: z.number().min(2).max(8), width: z.number().min(46).max(80), plateHeight: z.number().min(40).max(60), pilotBore: z.number().min(21).max(24),
 }).strict();
 export type CadParameters = z.infer<typeof CadParameters>;
+/** Mirrors native/cad_bearing.py BOUNDS. */
+export const PillowParameters = z.object({
+  width: z.number().min(60).max(140), depth: z.number().min(14).max(40), baseDepth: z.number().min(20).max(60), axisHeight: z.number().min(22).max(60),
+  baseThickness: z.number().min(6).max(20), boltPitch: z.number().min(40).max(120), seatDiameter: z.number().min(34.9).max(35.2),
+  shoulderDiameter: z.number().min(17).max(34), crown: z.number().min(2).max(20).optional(),
+}).strict();
 export const CadSource = z.object({ language: z.literal("cadquery-2.8"), code: z.string().min(40).max(20_000) }).strict();
 export type CadSource = z.infer<typeof CadSource>;
 export const CAD_FILES = ["part.step", "part.stl", "part.glb", "assembly.glb", "drawing.svg", "checks.json"] as const;
@@ -61,9 +80,18 @@ export const CadRequirements = z.object({
 }).strict();
 export type CadRequirements = z.infer<typeof CadRequirements>;
 export const DEFAULT_CAD_REQUIREMENTS: CadRequirements = { maxMassG: 80, minWallMm: 3, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [80, 40, 60] };
+export const FAMILY_DEFAULTS: Record<CadFamily, CadRequirements> = {
+  "nema17-bracket": DEFAULT_CAD_REQUIREMENTS,
+  // 6202 housing in 6061: ≥ 5 mm around the bearing seat; footprint ≤ 120 × 40, height ≤ 60 mm.
+  "pillow-block": { maxMassG: 250, minWallMm: 5, edgeDistanceFactor: 1.5, requireNoInterference: true, maxEnvelopeMm: [120, 40, 60] },
+};
+export const familyOf = (r: { variant: string; family?: CadFamily }): CadFamily =>
+  (PILLOW_PRESETS as readonly string[]).includes(r.variant) ? "pillow-block" : r.family ?? "nema17-bracket";
 export const CadRequest = z.object({
   requestId: Id, projectRevision: z.number().int().positive(), variant: z.enum(CAD_VARIANTS),
-  requirements: CadRequirements, feedbackId: Id.optional(), source: CadSource.optional(), parameters: CadParameters.optional(),
+  requirements: CadRequirements, feedbackId: Id.optional(), source: CadSource.optional(), parameters: z.union([CadParameters, PillowParameters]).optional(),
+  /** Part family for "parametric"; presets carry their own family. */
+  family: z.enum(CAD_FAMILIES).optional(),
   /** Provenance only: the sweep and point a parametric candidate was chosen from. */
   fromSweep: z.object({ sweepId: Id, point: z.number().int().min(1).max(36) }).strict().optional(),
   /** Provenance only: the physics optimisation and solved point a parametric candidate was chosen from. */
@@ -72,7 +100,12 @@ export const CadRequest = z.object({
   .refine(r => (r.variant === "generated") === Boolean(r.source), { message: "variant generated requires source code, and only generated takes source", path: ["source"] })
   .refine(r => (r.variant === "parametric") === Boolean(r.parameters), { message: "variant parametric requires parameters, and only parametric takes them", path: ["parameters"] })
   .refine(r => !r.fromSweep || r.variant === "parametric", { message: "fromSweep only applies to parametric candidates", path: ["fromSweep"] })
-  .refine(r => !r.fromOptimize || (r.variant === "parametric" && !r.fromSweep), { message: "fromOptimize only applies to parametric candidates", path: ["fromOptimize"] });
+  .refine(r => !r.fromOptimize || (r.variant === "parametric" && !r.fromSweep), { message: "fromOptimize only applies to parametric candidates", path: ["fromOptimize"] })
+  .refine(r => !r.family || r.variant === "parametric" || familyOf({ variant: r.variant }) === r.family, { message: "family must match the preset", path: ["family"] })
+  .refine(r => r.variant !== "parametric" || (familyOf(r) === "pillow-block" ? PillowParameters : CadParameters).safeParse(r.parameters).success,
+    { message: "parameters must match the part family", path: ["parameters"] })
+  .refine(r => familyOf(r) === "nema17-bracket" || (!r.requirements.structural && r.variant !== "generated" && !r.fromSweep && !r.fromOptimize),
+    { message: "FEA load cases, generated code, sweeps and optimisation exist for the NEMA 17 bracket only", path: ["family"] });
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
@@ -273,11 +306,12 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     }
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const native = (file: string) => join(config.repository, "native", file);
-    const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
+    const family = familyOf(request);
+    const script = native(FAMILY_SCRIPT[family]), lock = native("cadquery-requirements.txt");
     const structural = request.requirements.structural;
     const cam = request.requirements.dfm?.cam;
     if (cam && !camConfigured(config)) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam) or the PAISolver CAM job", 503);
-    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), FAMILY_SCRIPT[family], ...(family === "nema17-bracket" ? ["cad_recipe.py"] : []), "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
       ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
@@ -295,7 +329,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     // lane; both always settle before the record moves on, so a failure never races with the other part's writes.
     const cadquery = config.cadquery;
     const ownReceipts = { baseline: [] as Receipt[], candidate: [] as Receipt[] };
-    const parts = await Promise.allSettled(([["baseline", "reference"], ["candidate", request.variant]] as const).map(async ([name, variant]) => {
+    // The baseline is the family's reference design.
+    const reference = family === "pillow-block" ? "pillow-block" : "reference";
+    const parts = await Promise.allSettled(([["baseline", reference], ["candidate", request.variant]] as const).map(async ([name, variant]) => {
       const target = join(directory, name);
       // Receipts per part, merged in a fixed order (baseline, candidate) once both settle, so records are deterministic.
       const own = ownReceipts[name];
@@ -344,7 +380,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       }
       const checks = CadChecks.parse(JSON.parse(await readFile(join(target, "checks.json"), "utf8")));
       if (checks.variant !== variant) throw new DomainError("CAD_CONTEXT", "Native CAD variant mismatch");
-      if (checks.checks.length !== GEOMETRY_CHECKS.length) throw new DomainError("CAD_CONTEXT", "Native CAD produced unexpected checks");
+      if (canonical(checks.checks.map(c => c.id)) !== canonical(FAMILY_CHECKS[family])) throw new DomainError("CAD_CONTEXT", "Native CAD produced unexpected checks");
       if (structural) {
         const fea = await runFea(config, publish, part, request.requestId, name, target, checks, structural);
         checks.checks.push(...fea.checks);
@@ -366,7 +402,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         checks.checks.push(...measured.checks as typeof checks.checks);
         if (dfm.cam) checks.checks.push(...await runCam(config, publish, part, request.requestId, name, target, dfm.cam) as typeof checks.checks);
       }
-      const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
+      const expected = [...FAMILY_CHECKS[family], ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
       for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       if (dfm?.cam) for (const f of await readdir(target)) if (CAM_FILE.test(f)) record.files[`${name}/${f}`] = sha256(await readFile(join(target, f)));

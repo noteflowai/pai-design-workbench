@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { command } from "../src/adapters.js";
 import { createApp } from "../src/server.js";
-import { camConfigured, DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
+import { camConfigured, FAMILY_DEFAULTS, DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
 import { DEFAULT_FACTORY_CRITERIA, REVIEWED_SAMPLE, type FactoryCriteria, type FactoryReview } from "../src/factory.js";
 import { sha256 } from "../src/domain.js";
 import type { Project, Review } from "../src/contracts.js";
@@ -157,6 +157,14 @@ const cases: Case[] = [
       const c = await cad("reference", { ...DEFAULT_CAD_REQUIREMENTS, maxMassG: 40 });
       return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["mass"]' && c.diff?.blocking_changes === 0,
         actual: `${c.verdict}；${c.candidate!.mass} g > 40 g；blocking ${c.diff?.blocking_changes}`, evidence: { cadId: c.id } };
+    } },
+  { id: "C6", domain: "机械零件（CAD · 第二零件族）", title: "6202 轴承座：轴承孔加工成 Ø34.95", tool: "CadQuery 2.8 / OCCT 7.9 + EvalArc",
+    rationale: "第二个零件族用同一条评审链：轴承外圈 Ø35 需要 H7（35.000–35.025）孔，过盈的孔装不进轴承也会压坏外圈。",
+    expected: "rejected；只有 bearing-seat 失败；blocking 1", run: async () => {
+      const c = await cad("pillow-block-tight", FAMILY_DEFAULTS["pillow-block"]);
+      const seat = c.candidate!.checks.find(x => x.id === "bearing-seat") as unknown as { observed: { seatDiameter: number } };
+      return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["bearing-seat"]' && c.diff?.blocking_changes === 1,
+        actual: `${c.verdict}；轴承孔 Ø${seat.observed.seatDiameter}，H7 下限 35.000；blocking ${c.diff?.blocking_changes}`, evidence: { cadId: c.id } };
     } },
   { id: "D1", domain: "可制造性（DFM / DFA）", title: "紧凑化支架冻结制造要求：M5 安装螺钉能否装上", tool: "CadQuery 2.8 / OCCT 7.9 B-Rep + EvalArc",
     rationale: "底座 M5 孔位置固定，侧加强筋随宽度移动；W = 50 时筋压在孔上方。只看几何和成本会漏掉这种装配问题。",

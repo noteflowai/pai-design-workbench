@@ -63,7 +63,7 @@ export function projectRuns(data: State, projectId?: string): RunItem[] {
     ...data.scenes.filter(r => r.projectId === projectId).map(r => ({ kind: "blender-scene" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: r.request.variant === "robot-cell" ? `MuJoCo 工作单元 · 速度 ${Math.round(r.request.cell.speedFraction * 100)}% · 围栏 ${r.request.cell.guardClearance} m` : r.request.variant === "plant" ? `工厂产线 · ${r.request.layout.stations} 工位 · 通道 ${r.request.layout.aisleWidth} m` : r.request.variant === "occluded" ? "带遮挡候选布局" : "无遮挡布局", revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.cads ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "cad-part" as const, id: r.id, createdAt: r.createdAt, state: r.state,
-      verdict: r.verdict, title: `NEMA 17 支架 · ${CAD_VARIANTS[r.request.variant][0]}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
+      verdict: r.verdict, title: `${r.request.variant.startsWith("pillow-block") ? "6202 轴承座" : "NEMA 17 支架"} · ${CAD_VARIANTS[r.request.variant][0]}`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.aeros ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "aero-body" as const, id: r.id, createdAt: r.createdAt, state: r.state,
       verdict: r.verdict, title: `Ahmed 车身 · 后斜角 ${r.request.parameters.slantAngleDeg}°`, revision: r.projectRevision, recheck: Boolean(r.feedbackId) })),
     ...(data.factoryReviews ?? []).filter(r => r.projectId === projectId).map(r => ({ kind: "factory-twin" as const, id: r.id, createdAt: r.createdAt, state: r.state,

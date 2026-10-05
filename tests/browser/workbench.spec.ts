@@ -146,6 +146,29 @@ test("visual review: recorded inspection views go to the AI with the question, p
   expect(errors).toEqual([]);
 });
 
+test("second part family: 6202 pillow block from the CAD form, single-fault preset rejected on the bearing seat, phone width", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  const state = await (await page.request.get("/api/state")).json();
+  if (!state.capabilities.cad?.families?.["pillow-block"]) throw new Error("CadQuery with the pillow-block family is required");
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
+  await expect(page.getByRole("heading", { name: /6202 轴承座/ })).toBeVisible();
+  await expect(page.getByText("结构要求（Gmsh + CalculiX 线性静力 FEA）")).toHaveCount(0);
+  await page.getByRole("radio", { name: /轴承孔偏小/ }).check();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
+  const fail = page.locator(".check-table tr.fail");
+  await expect(fail).toHaveCount(1); await expect(fail).toContainText("轴承孔（H7）"); await expect(fail).toContainText("34.95");
+  await expect(page.locator(".outliner").getByText("6202 bearing")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("pillow-mobile.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
 test("CAM from the CAD form: G-code per setup, independent simulation, programs downloadable at phone width", async ({ page }, testInfo) => {
   test.setTimeout(1_500_000);
   const state = await (await page.request.get("/api/state")).json();

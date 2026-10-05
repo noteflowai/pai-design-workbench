@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.3.1"
+version: "1.4.0"
 ---
 
 # PAI industrial design
@@ -32,6 +32,15 @@ You cannot relax or change requirements, approve, release or move feedback.
 6. `pai_get_plan` later to see whether the maintainer executed it, then read the new record. A rejected
    result is evidence too: explain it from the numbers and propose the next change.
 
+## Part families
+
+- **NEMA 17 bracket** (`variant` reference/lightweight/undersize-bore/compact, `parametric`, `generated` code): geometry,
+  FEA, sweeps, optimisation, DFM/DFA and CAM.
+- **6202 pillow block** (`variant` pillow-block, pillow-block-light, pillow-block-compact, pillow-block-tight; or
+  `parametric` with `family: "pillow-block"`): Ø35 H7 bearing seat and coaxiality, shoulder and shaft passage,
+  ray-measured wall around the seat, M8 bolt edge distance, mass, envelope, DFM/DFA and CAM. No FEA, sweep or code yet.
+  Its own default requirements apply; never carry the bracket's structural load case over.
+
 ## Tools beyond a single review
 
 - `cad-optimize`: give up to four seeds, each with your own `expectedDeflectionMm` and `expectedMassG`. The solver
@@ -44,8 +53,10 @@ You cannot relax or change requirements, approve, release or move feedback.
   not absolute values. A record may also carry `prescreen` (NVIDIA DoMINO surrogate on the same STL): it is
   advisory, out of distribution for this body and not calibrated for ranking unless `calibration.admittedForRanking`
   is true. Never cite it as a drag result.
-- `requirements.dfm` on a CAD review: 3-axis milling setups, hole drillability and a unit-cost estimate measured on
-  the B-Rep. It is an estimate, not a quote.
+- `requirements.dfm` on a CAD review: 3-axis milling setups, drill corridors, fastener access (ISO 4762 head and key
+  room), and a unit-cost estimate, measured on the B-Rep. It is an estimate, not a quote. `dfm.cam` adds G-code per
+  setup (FreeCAD CAM) checked by an independent stock simulation; a failed `cam-toolpath` names gouge, residual,
+  overload or rapid collision.
 - `pai_get_solver_dataset`: every native measurement as one row (inputs, solver outputs, solver version, record).
   Use it to ground estimates and seeds. `advisory` fields are AI predictions kept as calibration pairs, never
   measurements.

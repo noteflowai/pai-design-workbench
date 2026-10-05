@@ -1,0 +1,45 @@
+{
+  "schema": "pai-pillow-e2e-1",
+  "checkedAt": "2026-10-05T10:52:43.639Z",
+  "result": "passed",
+  "seconds": 28,
+  "results": {
+    "pillow-block": {
+      "verdict": "accepted-cad-part",
+      "mass": 189.601,
+      "failed": [],
+      "wall": 8
+    },
+    "pillow-block-light": {
+      "verdict": "rejected",
+      "mass": 176.719,
+      "failed": [
+        "min-wall"
+      ],
+      "wall": 3.5
+    },
+    "pillow-block-compact": {
+      "verdict": "rejected",
+      "mass": 170.161,
+      "failed": [
+        "hole-edge-distance"
+      ],
+      "wall": 8
+    },
+    "pillow-block-tight": {
+      "verdict": "rejected",
+      "mass": 189.461,
+      "failed": [
+        "bearing-seat"
+      ],
+      "wall": 8
+    },
+    "dfm": {
+      "verdict": "accepted-cad-part",
+      "setups": 2,
+      "fastenerAccess": 0,
+      "unitCostEur": 28.53
+    }
+  },
+  "physicalValidation": false
+}

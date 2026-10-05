@@ -45,8 +45,9 @@ const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", 
   reach: "机械臂可达（MuJoCo）", "collision-free": "运动无碰撞（MuJoCo）", "cycle-time": "节拍（MuJoCo）", "success-rate": "多种子成功率（MuJoCo）" };
 const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络", "max-deflection": "电机轴挠度（FEA）", "max-stress": "峰值应力（FEA）",
-  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "cam-toolpath": "CAM 刀路仿真", "cycle-time": "加工节拍（CAM）", "unit-cost": "单件成本估算（DFM）" };
-export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", parametric: "参数化", generated: "生成代码" };
+  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "bearing-seat": "轴承孔（H7）", "shoulder": "轴承止口与轴孔", "cam-toolpath": "CAM 刀路仿真", "cycle-time": "加工节拍（CAM）", "unit-cost": "单件成本估算（DFM）" };
+export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", parametric: "参数化", generated: "生成代码",
+  "pillow-block": "6202 轴承座基准", "pillow-block-light": "轴承座顶部壁厚 3.5 mm", "pillow-block-compact": "轴承座底座缩短", "pillow-block-tight": "轴承孔 Ø34.95" };
 const CANDIDATE: Record<string, string> = { reference: "基准设置", camera: "相机偏移", dim: "弱光设置" };
 
 function latestBy<T extends { createdAt: string }>(items: T[], key: (item: T) => string): T[] {
@@ -81,7 +82,7 @@ export function failingCases(s: LifecycleSnapshot): FailingCase[] {
   for (const cad of latestBy((s.cads ?? []).filter(x => x.state === "completed" && !x.feedbackId), cadKey)) {
     for (const check of cad.baseline?.checks ?? []) {
       if (check.passed && cad.candidate?.checks.find(c => c.id === check.id)?.passed === false) {
-        cases.push(bind({ kind: "cad-part", runId: cad.id, seed: null, checkId: check.id, label: `CAD ${CAD_CHECK[check.id] ?? check.id}：基准通过，${CAD_VARIANT[cad.request.variant]}${cad.sandbox ? `（代码 ${cad.sandbox.codeSha256.slice(0, 8)}）` : ""}${cad.request.parameters ? `（t=${cad.request.parameters.thickness} W=${cad.request.parameters.width} H=${cad.request.parameters.plateHeight}）` : ""}失败` }));
+        cases.push(bind({ kind: "cad-part", runId: cad.id, seed: null, checkId: check.id, label: `CAD ${CAD_CHECK[check.id] ?? check.id}：基准通过，${CAD_VARIANT[cad.request.variant]}${cad.sandbox ? `（代码 ${cad.sandbox.codeSha256.slice(0, 8)}）` : ""}${cad.request.parameters ? `（${Object.entries(cad.request.parameters).map(([k, v]) => `${k}=${v}`).join(" ")}）` : ""}失败` }));
       }
     }
   }

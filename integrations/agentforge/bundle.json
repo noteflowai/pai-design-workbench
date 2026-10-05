@@ -1,6 +1,6 @@
 {
   "schema": "pai-agentforge-bundle-1",
-  "skillVersion": "1.3.1",
+  "skillVersion": "1.4.0",
   "profile": "mcp-profile.json",
   "skill": "skills/pai-industrial-design",
   "evalTasks": "eval/tasks",
@@ -12,6 +12,6 @@
     "eval/tasks/estimate-bracket-deflection/workspace/estimate.mjs": "18b67dee983445659a0ed8195ba7a10082e93d773abd7235bdb989ad7074a6ca",
     "eval/tasks/estimate-bracket-deflection/workspace/reference.json": "0221ec633353421c189f159869c9c38df23f105a3463d1ab87f92527ae356372",
     "mcp-profile.json": "f8de9185733c92435cadc62455bc5d61a8b126efc0f09a61c902bce59bdf3f86",
-    "skills/pai-industrial-design/SKILL.md": "0fb7f1da241e45d97fbbdff2c7369c637b012cdb38d28bcabb889d4a02efff94"
+    "skills/pai-industrial-design/SKILL.md": "f5cec23454866454c3e47d5275a49dc8beb93d352f47ea07ee979696eb99bee1"
   }
 }

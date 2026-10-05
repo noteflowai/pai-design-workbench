@@ -25,6 +25,12 @@
       "headDiameterMm": 8.5,
       "headHeightMm": 5.0,
       "keyAccessMm": 20.0
+    },
+    "9.0": {
+      "thread": "M8",
+      "headDiameterMm": 13.0,
+      "headHeightMm": 8.0,
+      "keyAccessMm": 25.0
     }
   },
   "fastenersNote": "Keys: clearance hole diameter (ISO 273 medium). Head: ISO 4762 socket head cap screw dk / k; keyAccessMm: straight hex-key engagement above the head.",

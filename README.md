@@ -45,7 +45,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 | 方面 | 实现（只写跑过的结果） | 文档 |
 |---|---|---|
-| 几何 | CadQuery 2.8 / OCCT 7.9：参数化 NEMA 17 支架、AI 生成代码（三层沙箱，AgentCore microVM）、Ahmed 型车身；B-Rep 实测接口、壁厚、孔边距、质量、干涉 | [CAD_CODE.md](docs/CAD_CODE.md) |
+| 几何 | CadQuery 2.8 / OCCT 7.9，两个零件族：NEMA 17 电机支架（参数化、AI 生成代码，三层沙箱 / AgentCore microVM）与 6202 轴承座（Ø35 H7 轴承孔、止口、射线实测壁厚、M8 地脚）；另有 Ahmed 型车身；B-Rep 实测接口、壁厚、孔边距、质量、干涉 | [CAD_CODE.md](docs/CAD_CODE.md) |
 | 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
 | 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟）；NVIDIA DoMINO 预筛在 GPU 上并行给出参考 Cd，按校准门禁决定能否参与排序（目前未通过） | [AERO.md](docs/AERO.md) |
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
@@ -57,7 +57,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
 | 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
-界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[29 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
+界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[30 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
 范围外：认证级 FEA、疲劳、公差叠加、现场安全认证、自动发布。仿真不等于物理验证，所有记录都带 `physicalValidation: false`。
 

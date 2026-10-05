@@ -44,3 +44,14 @@ test("visual review is refused before any claim when the executor does not accep
       /VISUAL_REVIEW_NOT_AVAILABLE|not accept images/);
   } finally { if (prev !== undefined) process.env.PAI_EXECUTOR_IMAGES = prev; }
 });
+
+test("a plan for the second part family starts from that family's frozen defaults, not the bracket's", async () => {
+  const { FAMILY_DEFAULTS, DEFAULT_CAD_REQUIREMENTS } = await import("../src/cad.js");
+  const lastCad = { id: "c1", request: { variant: "reference", requirements: { ...DEFAULT_CAD_REQUIREMENTS, structural: { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 } } } };
+  const ctx = { handles: new Map([["cad-1", { kind: "cad-part", id: "c1", label: "cad-1" }]]), workspace: {}, lastCad, project: { id: "p", revision: 1 } } as unknown as Parameters<typeof interpretOutput>[1];
+  const out = interpretOutput(JSON.stringify({ kind: "plan", interpretation: ["6202 housing"], answer: { text: "t", citations: ["cad-1"] },
+    plans: [{ ref: "p1", tool: "cad-review", title: "轴承座", payload: { variant: "pillow-block-light", requirements: {} } }] }), ctx);
+  const step = out.plans[0];
+  assert.deepEqual(step.payload.requirements, FAMILY_DEFAULTS["pillow-block"], "no bracket structural block or envelope carried over");
+  assert.ok(!step.changes.some(c => c.direction === "relaxed"), JSON.stringify(step.changes));
+});

@@ -9,7 +9,7 @@ import { Id, type Feedback, type Project, type Receipt, type DiffResult } from "
 import { canonical, DomainError, sha256 } from "./domain.js";
 import { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
-import type { CadReview } from "./cad.js";
+import { familyOf, type CadReview } from "./cad.js";
 
 export interface SceneStage { index: number; id: string; label: string; file: string; sha256: string; objects: string[] }
 export interface SceneRay { origin: number[]; target: number[]; hit: number[] | null; firstHit: string | null; visible: boolean; frame: "gltf-y-up" }
@@ -172,6 +172,8 @@ export async function reviewScene(store: Store, config: Config, project: Project
       if (!cad || cad.projectId !== project.id || cad.state !== "completed" || cad.verdict !== "accepted-cad-part") {
         throw new DomainError("TOOL_NOT_ACCEPTED", "The end-effector must be an accepted CAD part of this project", 422);
       }
+      // The gripper mount assumes the bracket frame (motor axis); other part families have no tool interface yet.
+      if (familyOf(cad.request) !== "nema17-bracket") throw new DomainError("TOOL_FAMILY", "Only a NEMA 17 bracket can be mounted on the gripper", 422);
       const stl = join(config.state, "cad", cad.id, "candidate", "part.stl");
       const stlSha256 = sha256(await readFile(stl));
       const brepMassG = Number(cad.candidate?.checks.find(c => c.id === "mass")?.observed);
