@@ -30,7 +30,8 @@ jobs:
       - run: bash scripts/check_cpu.sh infra
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Native lanes run for real (Blender, CadQuery, CalculiX, MuJoCo, FreeCAD CAM); CAM adds ~20 min (test:cam + suite D2).
+    timeout-minutes: 75
     strategy:
       matrix:
         node: ["24.21.0", "26.10.0"]
