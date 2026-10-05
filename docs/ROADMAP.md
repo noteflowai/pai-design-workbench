@@ -76,3 +76,9 @@
 | 不可逆操作（Object Lock） | 默认关闭，开启需要显式确认 |
 | 底座和工作台各自漂移 | 契约测试跨仓核对；版本只登记一处；手动跑 CodeBuild 验证 PR |
 | 把仿真误称为验证 | 所有记录带 `physicalValidation: false`；文案写明适用范围 |
+
+## 试用与判定
+
+First pilot: an authorized robot experiment owner brings a permitted recording and one concrete decision. Record setup time, evidence reopening, whether the decision changed, unresolved questions, second use and existing preferred workflow. Maintainer trials stay separate. Capture actual observations; do not invent outreach, users or conversion.
+
+Go/no-go after 3 independent tasks: at least 2 can be reproduced from supplied evidence; no critical missing artifacts; at least 1 owner uses it a second time. These are proposed pilot criteria, not observed results.

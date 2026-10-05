@@ -89,8 +89,6 @@ the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam
     queueing).
   - The verifier is a per-sample Python loop. Batching samples per move was tried and was slower, because most
     adaptive moves have only 2–3 samples.
-- **Not on the small host:** the hosted host itself has 2 vCPU and 3 GB RAM, so the local FreeCAD lane
-  (`PAI_ENABLE_CAM=1`) stays off there.
 
 ## Limits
 

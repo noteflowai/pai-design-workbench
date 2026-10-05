@@ -47,7 +47,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 |---|---|---|
 | 几何 | CadQuery 2.8 / OCCT 7.9，两个零件族：NEMA 17 电机支架（参数化、AI 生成代码，三层沙箱 / AgentCore microVM）与 6202 轴承座（Ø35 H7 轴承孔、止口、射线实测壁厚、M8 地脚）；另有 Ahmed 型车身；B-Rep 实测接口、壁厚、孔边距、质量、干涉 | [CAD_CODE.md](docs/CAD_CODE.md) |
 | 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
-| 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟）；NVIDIA DoMINO 预筛在 GPU 上并行给出参考 Cd，按校准门禁决定能否参与排序（目前未通过） | [AERO.md](docs/AERO.md) |
+| 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟） | [AERO.md](docs/AERO.md) |
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
 | 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器；Newton 1.6 交叉校验关节树、质量和正运动学） | [PHYSICS.md](docs/PHYSICS.md) |
 | 产线与场景 | Blender 5.2：工作单元与 6 工位产线，BVH 射线实测通道、围栏、相机覆盖 | [PLANT.md](docs/PLANT.md) |
@@ -92,16 +92,9 @@ npm run test:browser
 
 ## 文档
 
-- [主流工业设计软件界面对比](docs/UI_UX_BENCHMARK.md)
-- [工业设计典型测试用例](docs/INDUSTRIAL_TEST_CASES.md)
-- [整体架构（权威）](docs/SYSTEM_DESIGN.md) · [核心需求](docs/REQUIREMENTS.md) · [专业规划](docs/ROADMAP.md) · [行业对标与开源复用](docs/INDUSTRY_BENCHMARK.md)
-- [系统设计与取舍](docs/ARCHITECTURE.md)
-- [Agent 运行时复用决策（acpx / NoteFlow / AgentForge）](docs/AGENT_RUNTIME.md)
-- [API 与闭环操作](docs/API.md)
-- [后续领域接入和试用计划](docs/NEXT.md)
-- [主流工业软件与开源方案](docs/INDUSTRIAL_SOFTWARE.md)
-- [多端与最新版本策略](docs/MULTIPLATFORM.md)
-- [AWS 部署、登录与备份](docs/DEPLOYMENT.md)
-- [Robot Reel Factory Twin 最新复核与接入分工](docs/ROBOT_REEL_INTEGRATION.md)
+- 使用：[API 与闭环操作](docs/API.md) · [典型测试用例](docs/INDUSTRIAL_TEST_CASES.md) · [AWS 部署与登录](docs/DEPLOYMENT.md)
+- 通道：[结构与机器人](docs/PHYSICS.md) · [CAM](docs/CAM.md) · [气动](docs/AERO.md) · [产线](docs/PLANT.md) · [生成代码](docs/CAD_CODE.md)
+- 设计：[整体架构（权威）](docs/SYSTEM_DESIGN.md) · [需求](docs/REQUIREMENTS.md) · [规划](docs/ROADMAP.md) · [实际验证记录](docs/VERIFICATION.md) · [Agent 运行时](docs/AGENT_RUNTIME.md)
+- 背景：[行业对标与开源复用](docs/INDUSTRY_BENCHMARK.md) · [界面对比](docs/UI_UX_BENCHMARK.md) · [各通道设计取舍](docs/ARCHITECTURE.md) · [多端策略](docs/MULTIPLATFORM.md) · [Robot Reel 接入](docs/ROBOT_REEL_INTEGRATION.md)
 
 本仓库新代码使用 MIT；Robot Reel 派生测试数据保留 Apache-2.0 与原始 NOTICE。见 [第三方说明](THIRD_PARTY_NOTICE.md)。

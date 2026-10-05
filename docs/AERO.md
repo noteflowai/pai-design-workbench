@@ -88,11 +88,9 @@ pins (SHA-256 of every file checked; NVIDIA Open Model Agreement, commercial use
   `workflows/domino_design_sensitivities` unchanged and only places the body in the training frame: refine flat CAD
   facets to the DrivAerML surface density (about 0.75 M faces), scale by 4.4 (dynamic similarity; Cd is compared, not
   forces), put the ground plane on the DrivAerML ground and refuse anything outside the checkpoint's surface box.
-- **In the review.** When the body STL exists (first stage event), the prescreen runs on the GPU while OpenFOAM meshes.
-  `prescreen.json` is recorded by digest with a `domino-prescreen` receipt and shown next to the native Cd with its own
-  error. It never enters the checks, the EvalArc comparison or the verdict; a failure is recorded and changes nothing.
-  Each completed review adds a (prescreen, OpenFOAM) pair; `pai_get_solver_dataset` returns it under `advisory`,
-  apart from the solver outputs.
+- **Removed from the review (2026-10-05).** The prescreen ran next to every OpenFOAM solve, but it failed its
+  calibration gate and never informed a decision, so it was taken out of the aero lane, the record, the solver
+  dataset and the UI. The adapter and the calibration tool stay, to re-evaluate a fine-tuned or newer checkpoint.
 - **Calibration gate.** `tools/prescreen_calibrate.py` runs the prescreen on the exact STLs of native solves and admits
   it as a *ranking* signal only with ≥ 6 bodies and Spearman ≥ 0.8 against fine-mesh OpenFOAM Cd. The result is
   [prescreen-calibration.json](evidence/prescreen-calibration.json); the UI and the record carry its status.
@@ -126,23 +124,7 @@ our own OpenFOAM fields (upstream recipe `domino_nim_finetuning`); the 12 solves
 Hybrid initialisation (upstream `hybrid_initialization_example`) needs the volume checkpoint and a transient case; it is
 not used until the surface prescreen passes its gate on our geometry.
 
-## Boundary-layer experiment (not used by reviews)
+## Boundary-layer experiment (removed)
 
-`cfd_case.py --layers N` adds snappyHexMesh prism layers. On the 12.5° body:
-
-| Variant | Level 3 Cd | Level 4 Cd | Two-level change |
-|---|---|---|---|
-| No layers (the review setting) | 0.2537 | 0.2295 | 10.6 % |
-| 3 relative layers (expansion 1.2, final 0.5; 80 % thickness coverage) | 0.3059 | 0.2454 | 24.7 % |
-| 3 absolute layers (first cell for y+ ≈ 50) | 0.2547 (28 % coverage) | diverged (floating-point exception, iteration 9) | — |
-| 5 absolute layers (first cell y+ ≈ 50, expansion 1.3), `potentialFoam` start, SIMPLE with p 0.3 / U 0.7 | 0.2647 (83 % coverage) | 0.2366 (92 % coverage) | 11.9 % |
-
-Prism layers alone increase the mesh dependence. The stabilised layered setup converges on both levels, with
-level-4 Cd 0.2366 against 0.230 measured. Its mesh dependence (11.9 %) is no better than without layers, and it costs
-2–3 times the run time (28 and 63 minutes locally). The remaining work toward mesh independence is:
-- a y+ study per level;
-- a `potentialFoam` initialisation and a first-order start;
-- finer surface refinement so the layers can grow;
-- the 16-vCPU Batch runner, because each case costs 10–30 minutes.
-
-Until that study is done, reviews keep the verified no-layer setup and state its 10 % mesh dependence.
+Five prism layers converged but did not reduce mesh dependence (11.9 % two-level change against 10.6 % without), so the
+experimental `--layers` option was removed from `cfd_case.py`. Generated cases are byte-identical to before.

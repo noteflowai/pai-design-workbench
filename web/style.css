@@ -715,6 +715,3 @@ h1 { font-size: 22px; }
 .ok-text { color: var(--ok); display: block; margin-top: 4px; } .bad-text { color: var(--bad); display: block; margin-top: 4px; }
 /* Phone with the assistant open: notices go to the top so they never cover the composer's send button. */
 @media (max-width: 760px) { body:has(.app.with-assistant) .toasts { top: calc(var(--top) + 8px); bottom: auto; } }
-.prescreen { display: grid; gap: 4px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); background: var(--surface); }
-.prescreen.admitted { border-style: solid; border-color: var(--brand); }
-.prescreen small { color: var(--ink-2); }

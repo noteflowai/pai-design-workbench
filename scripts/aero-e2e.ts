@@ -45,21 +45,11 @@ try {
     f = await req<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "rechecked", reason: "Two-mesh RANS meets the drag target", recheckRunId: fixed.id });
     f = await req<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "closed", reason: "RANS design comparison only" });
   }
-  if (config.prescreenDir) {
-    // Advisory DoMINO prescreen on the same STL: recorded with digest and receipt, never part of the checks or verdict.
-    for (const r of [steep, fixed]) for (const w of ["baseline", "candidate"] as const) {
-      assert.ok(r.prescreen?.results[w], `prescreen ${w}: ${r.prescreen?.error ?? "missing"}`);
-      assert.ok(r.files[`${w}/prescreen.json`]);
-      assert.ok(!r[w]!.checks.some(c => (c.method ?? "").includes("DoMINO")));
-    }
-    assert.ok(steep.receipts.some(x => x.adapter === "domino-prescreen" && x.exitCode === 0));
-  }
   const summary = (r: AeroReview) => ({ verdict: r.verdict, cd: check(r, "drag-coefficient").observed, grid: check(r, "grid-convergence").observed,
     band: check(r, "iterative-convergence").observed, levels: r.cfd?.candidate?.levels.map(l => ({ level: l.level, cells: l.cells, cd: l.cd, seconds: l.seconds })) });
   const report = { schema: "pai-aero-e2e-1", checkedAt: new Date().toISOString(), result: "passed", seconds: Math.round((Date.now() - t0) / 1000), engine: fixed.candidate!.engine,
     image: config.openfoamImage, reference: { cd: fixed.baseline!.checks.find(c => c.id === "drag-coefficient")!.observed }, steep: summary(steep), fixed: summary(fixed),
-    evalarcBlocking: { steep: steep.diff?.blocking_changes, fixed: fixed.diff?.blocking_changes }, feedback: f?.status ?? "none (steep slant passed)",
-    prescreen: config.prescreenDir ? Object.fromEntries([["steep", steep], ["fixed", fixed]].map(([k, r]) => [k, { baseline: (r as AeroReview).prescreen?.results.baseline?.cd, candidate: (r as AeroReview).prescreen?.results.candidate?.cd }])) : null };
+    evalarcBlocking: { steep: steep.diff?.blocking_changes, fixed: fixed.diff?.blocking_changes }, feedback: f?.status ?? "none (steep slant passed)" };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence", "aero-e2e.json"), JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify(report));
