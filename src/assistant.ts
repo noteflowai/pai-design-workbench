@@ -64,6 +64,35 @@ export function compare(field: string, from: unknown, to: unknown, stricter: "hi
   if (typeof from === "boolean" && typeof to === "boolean" && stricter === "true") return { field, from, to, direction: to ? "tightened" : "relaxed" };
   return { field, from, to, direction: "changed" };
 }
+/** Removing a frozen requirement block (structural, dfm, dfm.cam) relaxes it; adding one tightens. */
+function block(field: string, from: unknown, to: unknown): PlanChange[] {
+  if (from === undefined && to === undefined) return [];
+  if (from !== undefined && to === undefined) return [{ field, from: canonical(from), to: null, direction: "relaxed" }];
+  if (from === undefined) return [{ field, from: null, to: canonical(to), direction: "tightened" }];
+  return [];
+}
+type CadReq = { maxMassG: number; minWallMm: number; edgeDistanceFactor: number; requireNoInterference: boolean; maxEnvelopeMm: number[];
+  structural?: { forceN: number; leverMm: number; safetyFactor: number; maxDeflectionMm: number };
+  dfm?: { maxSetups: number; maxUnitCostEur: number; cam?: { maxCycleMinutes: number } } };
+/**
+ * Every frozen CAD requirement compared with the previous one (or the lane defaults), the single source the autonomy
+ * guard reads: geometry limits, envelope per axis, structural load case, DFM limits and the CAM cycle limit.
+ */
+export function cadRequirementChanges(was: CadReq | undefined, now: CadReq): PlanChange[] {
+  const s0 = was?.structural, s1 = now.structural, d0 = was?.dfm, d1 = now.dfm;
+  return [compare("maxMassG", was?.maxMassG, now.maxMassG, "lower"), compare("minWallMm", was?.minWallMm, now.minWallMm, "higher"),
+    compare("edgeDistanceFactor", was?.edgeDistanceFactor, now.edgeDistanceFactor, "higher"),
+    compare("requireNoInterference", was?.requireNoInterference, now.requireNoInterference, "true"),
+    ...now.maxEnvelopeMm.map((v, i) => compare(`maxEnvelopeMm[${i}]`, was?.maxEnvelopeMm[i], v, "lower")),
+    ...block("structural", s0, s1),
+    ...(s0 && s1 ? [compare("structural.forceN", s0.forceN, s1.forceN, "higher"), compare("structural.leverMm", s0.leverMm, s1.leverMm, "higher"),
+      compare("structural.safetyFactor", s0.safetyFactor, s1.safetyFactor, "higher"), compare("structural.maxDeflectionMm", s0.maxDeflectionMm, s1.maxDeflectionMm, "lower")] : []),
+    ...block("dfm", d0, d1),
+    ...(d0 && d1 ? [compare("dfm.maxSetups", d0.maxSetups, d1.maxSetups, "lower"), compare("dfm.maxUnitCostEur", d0.maxUnitCostEur, d1.maxUnitCostEur, "lower"),
+      ...block("dfm.cam", d0.cam, d1.cam),
+      ...(d0.cam && d1.cam ? [compare("dfm.cam.maxCycleMinutes", d0.cam.maxCycleMinutes, d1.cam.maxCycleMinutes, "lower")] : [])] : [])]
+    .filter(c => c.direction !== "same" || ["maxMassG", "minWallMm"].includes(c.field));
+}
 export const relaxWarning = (changes: PlanChange[]) => changes.some(c => c.direction === "relaxed")
   ? ["放宽了已冻结的约束：只会生成新的冻结版本，既有结论和失败案例保持不变。"] : [];
 

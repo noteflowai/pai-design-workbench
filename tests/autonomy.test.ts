@@ -52,3 +52,16 @@ test("autonomy grants: tool scope, relaxation, quota, revocation and project sco
     assert.equal((state.cads ?? []).length, 0, "no native run started");
   } finally { await app.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+test("every frozen CAD requirement is compared, so a grant cannot drop DFM, CAM or loosen the envelope unnoticed", async () => {
+  const { cadRequirementChanges } = await import("../src/assistant.js");
+  const { DEFAULT_CAD_REQUIREMENTS } = await import("../src/cad.js");
+  const frozen = { ...DEFAULT_CAD_REQUIREMENTS, dfm: { maxSetups: 2, maxUnitCostEur: 16, cam: { maxCycleMinutes: 120 } } };
+  const relaxed = (now: typeof frozen) => cadRequirementChanges(frozen, now).filter(c => c.direction === "relaxed").map(c => c.field);
+  assert.deepEqual(relaxed({ ...frozen }), []);
+  assert.deepEqual(relaxed({ ...frozen, dfm: undefined } as never), ["dfm"]);
+  assert.deepEqual(relaxed({ ...frozen, dfm: { maxSetups: 2, maxUnitCostEur: 16 } }), ["dfm.cam"]);
+  assert.deepEqual(relaxed({ ...frozen, dfm: { ...frozen.dfm, cam: { maxCycleMinutes: 200 } } }), ["dfm.cam.maxCycleMinutes"]);
+  assert.deepEqual(relaxed({ ...frozen, maxEnvelopeMm: [90, 40, 60] }), ["maxEnvelopeMm[0]"]);
+  assert.deepEqual(cadRequirementChanges(DEFAULT_CAD_REQUIREMENTS, frozen).filter(c => c.direction === "tightened").map(c => c.field), ["dfm"]);
+});

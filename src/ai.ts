@@ -8,7 +8,7 @@ import { canonical, DomainError, outcomes, sha256 } from "./domain.js";
 import type { Config } from "./config.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
-import { compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
+import { cadRequirementChanges, compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, RobotTool, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
 import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadSource, CAD_PRESETS, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
@@ -361,10 +361,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     // Against the previous record, or the lane defaults when there is none, so a first plan that loosens a default
     // is still marked as a relaxation.
     const was = prev ?? DEFAULT_CAD_REQUIREMENTS;
-    const changes: PlanChange[] = [compare("maxMassG", was.maxMassG, requirements.maxMassG, "lower"),
-      compare("minWallMm", was.minWallMm, requirements.minWallMm, "higher"),
-      compare("edgeDistanceFactor", was.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
-      compare("requireNoInterference", was.requireNoInterference, requirements.requireNoInterference, "true"),
+    const changes: PlanChange[] = [...cadRequirementChanges(was, requirements),
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: p.variant, direction: context.lastCad ? (context.lastCad.request.variant === p.variant ? "same" : "changed") : "new" }];
     return { ...base, title: opts.title ?? `CadQuery 参数化零件：NEMA 17 电机支架 · ${p.variant}`, route: route("cad"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };
@@ -376,9 +373,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const payload = { projectRevision: opts.revision, requirements, grid: p.grid };
     SweepRequest.parse({ ...payload, requestId: placeholder });
     const points = Object.values(p.grid).reduce((n, v) => n * new Set(v).size, 1);
-    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"), compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
-      compare("edgeDistanceFactor", prev?.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
-      compare("requireNoInterference", prev?.requireNoInterference, requirements.requireNoInterference, "true"),
+    const changes: PlanChange[] = [...cadRequirementChanges(prev ?? DEFAULT_CAD_REQUIREMENTS, requirements),
       { field: "grid", from: null, to: `${points} 个点`, direction: "new" }];
     return { ...base, title: opts.title ?? `设计空间扫描：${points} 个点`, route: route("cad-sweeps"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), `约 ${Math.ceil(points * 6 / 60)} 分钟；只比较网格上实测过的点，不作验收结论。`, ...note],
@@ -392,9 +387,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds, ...(p.strategy ? { strategy: p.strategy } : {}) };
     OptimizeRequest.parse({ ...payload, requestId: placeholder });
     const s0 = prev?.structural, s1 = requirements.structural!;
-    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"), compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
-      compare("structural.forceN", s0?.forceN, s1.forceN, "higher"), compare("structural.safetyFactor", s0?.safetyFactor, s1.safetyFactor, "higher"),
-      compare("structural.maxDeflectionMm", s0?.maxDeflectionMm, s1.maxDeflectionMm, "lower"),
+    const changes: PlanChange[] = [...cadRequirementChanges(prev ? { ...prev, structural: prev.structural ?? (s1 && DEFAULT_STRUCTURAL) } : { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL }, requirements),
       { field: "seeds", from: null, to: `${p.seeds.length} 个 AI 种子`, direction: "new" },
       ...(p.strategy ? [{ field: "strategy", from: null, to: p.strategy, direction: "new" } as PlanChange] : [])];
     const evaluations = budget.initial + 1 + budget.rounds * budget.perRound;
@@ -409,10 +402,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
     const payload = { projectRevision: opts.revision, variant: "generated", requirements, source: { language: "cadquery-2.8", code: p.code } };
     CadRequest.parse({ ...payload, requestId: placeholder });
-    const changes: PlanChange[] = [compare("maxMassG", prev?.maxMassG, requirements.maxMassG, "lower"),
-      compare("minWallMm", prev?.minWallMm, requirements.minWallMm, "higher"),
-      compare("edgeDistanceFactor", prev?.edgeDistanceFactor, requirements.edgeDistanceFactor, "higher"),
-      compare("requireNoInterference", prev?.requireNoInterference, requirements.requireNoInterference, "true"),
+    const changes: PlanChange[] = [...cadRequirementChanges(prev ?? DEFAULT_CAD_REQUIREMENTS, requirements),
       { field: "variant", from: context.lastCad?.request.variant ?? null, to: "generated", direction: context.lastCad?.request.variant === "generated" ? "same" : context.lastCad ? "changed" : "new" },
       { field: "code", from: null, to: `${p.code.split("\n").length} 行 · sha256 ${sha256(p.code).slice(0, 12)}`, direction: "new" }];
     return { ...base, title: opts.title ?? "CadQuery 生成代码：NEMA 17 支架新候选", route: route("cad"), method: "POST", payload, changes,
