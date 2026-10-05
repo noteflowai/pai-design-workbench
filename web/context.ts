@@ -67,7 +67,7 @@ export const ISOLATION_LABEL: Record<string, string> = { "no-network": "无网�
   "agentcore-microvm-per-job": "每个任务独立 AgentCore microVM", "no-network-route": "无网络路由（隔离子网）", "no-credentials": "运行时无凭据", "audit-hook": "审计钩子拦截进程/网络/写文件", "restricted-builtins": "受限内置函数" };
 export const CAD_CHECK_LABELS: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络", "max-deflection": "电机轴挠度（FEA）", "max-stress": "峰值应力（FEA）",
-  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "unit-cost": "单件成本估算（DFM）" };
+  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "cam-toolpath": "CAM 刀路仿真", "cycle-time": "加工节拍（CAM）", "unit-cost": "单件成本估算（DFM）" };
 export const MATURITY: Record<string, [string, "ok" | "warn" | "bad" | "muted" | "info"]> = {
   "in-review": ["待审批", "warn"], released: ["已发布", "ok"], rejected: ["已驳回", "bad"], superseded: ["已废止", "muted"],
 };

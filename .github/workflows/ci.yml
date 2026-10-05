@@ -77,6 +77,9 @@ jobs:
         run: |
           sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
           "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py --with-newton && npm run test:fea && npm run test:robot && npm run test:optimize && npm run test:package
+      - name: Pinned FreeCAD 1.1 CAM toolchain and the CAM loop (G-code + independent dexel simulation)
+        if: matrix.node == '24.21.0'
+        run: python3 tools/setup_cam.py && npm run test:cam
       - name: Slim CadQuery runtime lock is current and the AgentCore entrypoint contract holds
         if: matrix.node == '24.21.0'
         run: python3 tools/slim_cadquery_lock.py --python .state/tools/cadquery-2.8.0/bin/python --check && python3 -m pip install -q botocore==1.43.82 && python3 -m unittest discover -s tests/agentcore -p 'test_*.py'

@@ -45,7 +45,7 @@ const SCENE_CHECK: Record<string, string> = { "footprint-area": "静态占地", 
   reach: "机械臂可达（MuJoCo）", "collision-free": "运动无碰撞（MuJoCo）", "cycle-time": "节拍（MuJoCo）", "success-rate": "多种子成功率（MuJoCo）" };
 const CAD_CHECK: Record<string, string> = { "solid-valid": "实体有效性", "nema17-interface": "NEMA 17 接口", "motor-interference": "电机装配干涉",
   "min-wall": "最小壁厚", "hole-edge-distance": "孔边距", mass: "质量", envelope: "外形包络", "max-deflection": "电机轴挠度（FEA）", "max-stress": "峰值应力（FEA）",
-  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "unit-cost": "单件成本估算（DFM）" };
+  "machining-setups": "装夹次数（DFM）", "hole-drillability": "孔可钻性（DFM）", "fastener-access": "紧固件可装配（DFA）", "cam-toolpath": "CAM 刀路仿真", "cycle-time": "加工节拍（CAM）", "unit-cost": "单件成本估算（DFM）" };
 export const CAD_VARIANT: Record<string, string> = { reference: "基准设计", lightweight: "轻量化 2.5 mm 板厚", "undersize-bore": "止口孔 Ø21.5", compact: "紧凑化安装板", parametric: "参数化", generated: "生成代码" };
 const CANDIDATE: Record<string, string> = { reference: "基准设置", camera: "相机偏移", dim: "弱光设置" };
 

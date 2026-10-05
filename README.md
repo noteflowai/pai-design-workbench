@@ -51,7 +51,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
 | 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器；Newton 1.6 交叉校验关节树、质量和正运动学） | [PHYSICS.md](docs/PHYSICS.md) |
 | 产线与场景 | Blender 5.2：工作单元与 6 工位产线，BVH 射线实测通道、围栏、相机覆盖 | [PLANT.md](docs/PLANT.md) |
-| 可制造性 | 三轴铣削 DFM：最少装夹方向、孔深径比、单件成本估算（车间参数已审查） | [REQUIREMENTS.md](docs/REQUIREMENTS.md) |
+| 可制造性 | 三轴铣削 DFM：最少装夹方向、钻孔通道、孔深径比、紧固件可装配性（DFA）、单件成本估算；CAM：FreeCAD 1.1 + OpenCAMLib 按装夹出 G-code，独立高度图仿真检查过切、残料、过载和快移碰撞，给出节拍 | [CAM.md](docs/CAM.md) |
 | 证据 | EvalArc 基准对照、发布准入 5 项；AWS KMS 签名，加 RFC 3161 时间戳，只封存一次；界面内和离线核验 | [VERIFICATION.md](docs/VERIFICATION.md) |
 | AI | 受控执行器调用 Kiro 2.27（主账号 → 备用 → 二备），共享账本、不自动重试；计划带收紧/放宽标记，确认后才执行；模型的物理估算由求解器打分；"带图问 AI"把已记录的渲染图、相机视图和应力云图按摘要发给模型（本机、托管站点和 AgentCore 均可用；盲测 6/6 与射线检查一致） | [AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
 | 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
@@ -82,6 +82,7 @@ npm run test:optimize   # AI 种子 + 代理模型 + 正式复核（PAI_OPTIMIZE
 npm run test:robot      # MuJoCo 碰撞 → 修正；CAD 装到机械臂；MJCF / OpenUSD
 npm run test:aero       # 需要 PAI_OPENFOAM_IMAGE：35° 拒绝 → 12.5° 复测通过
 npm run test:cad        # B-Rep 检查、DFM
+npm run test:cam        # 需要 npm run setup:cam：G-code + 独立切削仿真
 npm run test:package    # 签名发布包、篡改检测
 npm run test:suite      # 典型工业设计用例
 npm run test:browser

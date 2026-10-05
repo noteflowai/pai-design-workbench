@@ -124,6 +124,8 @@ function cadRows(checks: { id: string; passed: boolean; observed?: unknown; requ
     if (x.id === "machining-setups") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "次", margin: le(o, r), note: "三轴主方向集合覆盖；孔按无遮挡钻削通道" };
     if (x.id === "hole-drillability") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "深径比", margin: le(o, r), note: "孔深/孔径，且至少一端钻削通道无遮挡" };
     if (x.id === "fastener-access") return { id: x.id, title, passed: x.passed, observed: String(o), required: "0", unit: "个孔", note: "ISO 4762 螺钉头与内六角扳手在落座侧的空间" };
+    if (x.id === "cam-toolpath") return { id: x.id, title, passed: x.passed, observed: Array.isArray(x.observed) ? (x.observed as string[]).join("、") : String(x.observed), required: "无过切/残料/碰撞", unit: "", note: "G-code 在 0.1 mm 高度图上独立仿真" };
+    if (x.id === "cycle-time") return { id: x.id, title, passed: x.passed, observed: typeof x.observed === "number" ? o.toFixed(1) : "—", required: `≤ ${r}`, unit: "min", margin: Number.isFinite(o) ? le(o, r) : undefined, note: "按程序进给与快移速度，不含换刀与装夹" };
     if (x.id === "unit-cost") return { id: x.id, title, passed: x.passed, observed: o.toFixed(2), required: Number.isFinite(r) ? `≤ ${r}` : "—", unit: "EUR", margin: Number.isFinite(r) ? le(o, r) : undefined, note: "估算，不是报价" };
     return { id: x.id, title, passed: x.passed, observed: String(x.observed), required: "1", unit: "实体", note: "OCCT BRepCheck" };
   });

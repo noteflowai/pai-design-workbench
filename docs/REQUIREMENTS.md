@@ -47,6 +47,7 @@
 | F25 | 多模态评审：已记录的原生图像（渲染图、检查视图）随文本上下文发给模型，结论仍以求解器为准 | `POST /api/assistant/ai` 加 `attachments`（只接受记录里登记过、摘要一致的 PNG/JPEG，最多 3 张）；执行器 PR [noteflow-agent-control#60](https://github.com/noteflowai/noteflow-agent-control/pull/60) 让图像按摘要绑定；本机实测：Kiro 2.27.1 看出遮挡工作单元渲染图里挡住视线的块体；盲测对照 6/6 与射线检查一致（样本小、属容易情形） | 已验证：执行器 PR 已合并，固定版本更新为 `bf438e4`（`accepts: ["images"]`，安装时据此设置 `PAI_EXECUTOR_IMAGES`），用固定版本重跑盲测仍是 6/6。应力云图已导出为 `fea.png`（原生 Blender 渲染，按摘要登记，可作附件）；流场图待做 |
 | F28 | 导出的 OpenUSD 与仿真用的 MJCF 是同一台机器人：Newton 导入为一个关节树，质量一致，正运动学一致 | `npm run test:robot`（配置 Newton 时断言）；[newton-usd.json](evidence/newton-usd.json) | 已验证（本机与托管站点） |
 | F27 | AI 气动预筛：NVIDIA DoMINO（PhysicsNeMo-CFD）在同一 STL 上预估 Cd，与原生求解并行，只作参考；按校准门禁决定能否参与排序 | `tools/prescreen_calibrate.py`；`npm run test:aero` 在配置 GPU 时断言预筛已登记且不进入检查 | 部分：已集成并登记；校准未通过（12 个车身 Spearman −0.35），见 [AERO.md](AERO.md) |
+| F29 | CAM：FreeCAD 1.1 CAM（ocp-freecad-cam）+ OpenCAMLib 按装夹生成 G-code，独立的高度图切削仿真检查过切、残料、刀具过载和快移碰撞，并给出节拍 | `npm run test:cam`；4 个注入故障的反例全部被拒绝，见 [CAM.md](CAM.md) | 已验证（本机，参考支架 2 个程序，94 min） |
 | F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测通过的那一级才把 `physicalValidation` 标为 true；写操作经硬件三道闸 | 待定 | 待做 |
 
 ## N. 非功能需求

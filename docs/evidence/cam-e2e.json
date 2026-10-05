@@ -1,0 +1,95 @@
+{
+  "schema": "pai-cam-e2e-1",
+  "checkedAt": "2026-10-05T01:37:22.772Z",
+  "result": "passed",
+  "seconds": 607,
+  "programs": [
+    "setup+Y.nc",
+    "setup+Z.nc"
+  ],
+  "cycleMinutes": 94.33,
+  "checks": [
+    {
+      "id": "no-gouge",
+      "passed": true,
+      "observed": 0
+    },
+    {
+      "id": "no-residual",
+      "passed": true,
+      "observed": 0
+    },
+    {
+      "id": "tool-engagement",
+      "passed": true,
+      "observed": 0
+    },
+    {
+      "id": "no-rapid-collision",
+      "passed": true,
+      "observed": 0
+    }
+  ],
+  "setups": [
+    {
+      "setup": "+Z",
+      "minutes": 91.56,
+      "cuttingMm": 83537,
+      "toolLimited": {
+        "areaMm2": 17.45,
+        "maxHeightMm": 19.25,
+        "tools": [
+          "endmill",
+          "ballnose"
+        ],
+        "meaning": "material no tool in the library can remove from this side (internal corner fillets)"
+      }
+    },
+    {
+      "setup": "+Y",
+      "minutes": 2.77,
+      "cuttingMm": 1151.8,
+      "toolLimited": {
+        "areaMm2": 0,
+        "maxHeightMm": 0,
+        "tools": [
+          "endmill",
+          "ballnose"
+        ],
+        "meaning": "material no tool in the library can remove from this side (internal corner fillets)"
+      }
+    }
+  ],
+  "physicalValidation": false,
+  "negativeControls": {
+    "description": "the same programs with one fault injected (digest recomputed); each must fail",
+    "tamperedFileWithoutNewDigest": "refused: setup+Y.nc differs from cam.json",
+    "gouge": {
+      "passed": false,
+      "failed": [
+        "no-gouge"
+      ],
+      "observed": {
+        "no-gouge": 18.0039
+      }
+    },
+    "nofinish": {
+      "passed": false,
+      "failed": [
+        "no-residual"
+      ],
+      "observed": {
+        "no-residual": 4.0
+      }
+    },
+    "nobore": {
+      "passed": false,
+      "failed": [
+        "no-residual"
+      ],
+      "observed": {
+        "no-residual": 4.0009
+      }
+    }
+  }
+}

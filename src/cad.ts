@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { command, NativeAdapters, writePrivate } from "./adapters.js";
@@ -23,8 +24,13 @@ export const GEOMETRY_CHECKS = ["solid-valid", "nema17-interface", "motor-interf
 export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
 /** 3-axis milling DFM (native/cad_dfm.py on the B-Rep, shop assumptions in native/dfm-shop.json); opt-in like FEA. */
 export const DFM_CHECKS = ["machining-setups", "hole-drillability", "fastener-access", "unit-cost"] as const;
-export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS] as const;
-export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000) }).strict();
+/** CAM (opt-in under dfm): FreeCAD CAM + OpenCAMLib programs per setup, checked by an independent dexel simulation. */
+export const CAM_CHECKS = ["cam-toolpath", "cycle-time"] as const;
+export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS, ...CAM_CHECKS] as const;
+export const CamRequirements = z.object({ maxCycleMinutes: z.number().min(1).max(10000) }).strict();
+export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000),
+  cam: CamRequirements.optional() }).strict();
+export const CAM_FILE = /^(cam\.json|cam-verify\.json|setup[+-][XYZ]\.nc)$/;
 export type DfmRequirements = z.infer<typeof DfmRequirements>;
 export const DEFAULT_DFM: DfmRequirements = { maxSetups: 2, maxUnitCostEur: 25 };
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
@@ -269,7 +275,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const native = (file: string) => join(config.repository, "native", file);
     const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
     const structural = request.requirements.structural;
-    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+    const cam = request.requirements.dfm?.cam;
+    if (cam && !config.camPython) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam)", 503);
+    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt"] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
       ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
@@ -349,10 +357,12 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(DFM_CHECKS.length) }).passthrough()
           .parse(JSON.parse(await readFile(join(target, "dfm.json"), "utf8")));
         checks.checks.push(...measured.checks as typeof checks.checks);
+        if (dfm.cam) checks.checks.push(...await runCam(config, publish, record, request.requestId, name, target, dfm.cam) as typeof checks.checks);
       }
-      const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : [])];
+      const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
       for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
+      if (dfm?.cam) for (const f of await readdir(target)) if (CAM_FILE.test(f)) record.files[`${name}/${f}`] = sha256(await readFile(join(target, f)));
       if (structural) await readFile(join(target, "fea.png")).then(b => { record.files[`${name}/fea.png`] = sha256(b); }, () => undefined);
       store.put("cad-review", record);
     }
@@ -399,6 +409,46 @@ async function runFea(config: Config, publish: LiveBus["publish"], record: CadRe
   }
   await renderResult(config, record, join(target, "fea.glb"), join(target, "fea.png"));
   return fea;
+}
+
+/**
+ * CAM for one part: FreeCAD 1.1 CAM operations (ocp-freecad-cam) + OpenCAMLib raster write one G-code program per setup;
+ * native/cam_verify.py then simulates material removal from the G-code alone (dexel height map) and reports gouges,
+ * residual material, plunge overload, rapid collisions and cycle time. A part that cannot be programmed as designed
+ * (exit 3: a hole without a free drill corridor) is a failed check, not a tool fault.
+ */
+async function runCam(config: Config, publish: LiveBus["publish"], record: CadReview, requestId: string, name: "baseline" | "candidate",
+  target: string, req: z.infer<typeof CamRequirements>) {
+  const native = (f: string) => join(config.repository, "native", f), who = name === "baseline" ? "基准" : "候选";
+  publish(requestId, { kind: "step", id: `cam-${name}`, label: `CAM：FreeCAD 刀路 + 独立切削仿真（${who}）`, status: "running", which: name });
+  const gen = await command(config.camPython!, ["-I", native("cam_part.py"), "--step", join(target, "part.step"), "--dfm", join(target, "dfm.json"),
+    "--shop", native("dfm-shop.json"), "--output", target], tmpdir(), undefined, 1_800_000);
+  await writePrivate(join(target, "..", `${name}.cam.log`), `${gen.stdout}\n${gen.stderr}`);
+  record.receipts.push({ adapter: "freecad-cam", command: ["python", "cam_part.py"], startedAt: gen.startedAt, finishedAt: gen.finishedAt, exitCode: gen.exitCode,
+    stdoutSha256: sha256(gen.stdout), sourceDigests: { script: sha256(await readFile(native("cam_part.py"))), lock: sha256(await readFile(native("cam-requirements.txt"))),
+      shop: sha256(await readFile(native("dfm-shop.json"))) } });
+  if (gen.exitCode === 3) {
+    publish(requestId, { kind: "step", id: `cam-${name}`, label: `CAM（${who}）：按设计无法编程`, status: "failed", which: name });
+    const why = gen.stderr.trim().split("\n").at(-1) ?? "not machinable as designed";
+    return [{ id: "cam-toolpath", passed: false, observed: why, required: "verified program", unit: "", method: "FreeCAD CAM + OpenCAMLib; no program possible" },
+      { id: "cycle-time", passed: false, observed: null, required: req.maxCycleMinutes, unit: "min", method: "no program" }];
+  }
+  if (gen.exitCode !== 0) throw new DomainError("CAM_FAILED", "Native CAM failed; retain receipts and inspect the log", 422);
+  const ver = await command(config.cadquery!, ["-I", "-W", "ignore", native("cam_verify.py"), "--step", join(target, "part.step"), "--cam", join(target, "cam.json"),
+    "--shop", native("dfm-shop.json"), "--output", join(target, "cam-verify.json")], config.repository, undefined, 1_800_000);
+  record.receipts.push({ adapter: "cam-dexel-verify", command: ["python", "cam_verify.py"], startedAt: ver.startedAt, finishedAt: ver.finishedAt, exitCode: ver.exitCode,
+    stdoutSha256: sha256(ver.stdout), sourceDigests: { script: sha256(await readFile(native("cam_verify.py"))) } });
+  if (ver.exitCode !== 0) throw new DomainError("CAM_VERIFY_FAILED", "CAM verification could not run; retain receipts", 422);
+  const v = z.object({ schema: z.literal("pai-cam-verify-1"), passed: z.boolean(), cycleMinutes: z.number(),
+    checks: z.array(z.object({ id: z.string(), passed: z.boolean(), observed: z.unknown() }).passthrough()) }).passthrough()
+    .parse(JSON.parse(await readFile(join(target, "cam-verify.json"), "utf8")));
+  const failed = v.checks.filter(c => !c.passed).map(c => c.id);
+  publish(requestId, { kind: "step", id: `cam-${name}`, label: `CAM（${who}）`, status: v.passed ? "done" : "failed", which: name,
+    detail: `${v.passed ? "仿真无过切、无残料、无快移碰撞" : `未通过：${failed.join("、")}`} · 节拍 ${v.cycleMinutes} min` });
+  return [{ id: "cam-toolpath", passed: v.passed, observed: failed.length ? failed : "verified", required: "no gouge, residual, overload or rapid collision", unit: "",
+    method: "G-code simulated on a 0.1 mm dexel height map per setup (native/cam_verify.py), independent of FreeCAD" },
+    { id: "cycle-time", passed: v.cycleMinutes <= req.maxCycleMinutes, observed: v.cycleMinutes, required: req.maxCycleMinutes, unit: "min",
+      method: "Feed moves at programmed feeds + rapids at the shop rapid rate; no acceleration, tool change or loading time" }];
 }
 
 /**

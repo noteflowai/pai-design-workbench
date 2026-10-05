@@ -27,5 +27,51 @@
       "keyAccessMm": 20.0
     }
   },
-  "fastenersNote": "Keys: clearance hole diameter (ISO 273 medium). Head: ISO 4762 socket head cap screw dk / k; keyAccessMm: straight hex-key engagement above the head."
+  "fastenersNote": "Keys: clearance hole diameter (ISO 273 medium). Head: ISO 4762 socket head cap screw dk / k; keyAccessMm: straight hex-key engagement above the head.",
+  "rapidMmPerMin": 5000.0,
+  "cam": {
+    "note": "Reviewed tool library and tolerances for native/cam_part.py and cam_verify.py (6061-T6, small VMC; conservative). finishToleranceMm: material allowed above the reachable surface on flat faces; slopeCuspToleranceMm: cusp allowed on sloped (non-mating) faces finished by z-level/raster passes. Change here, not in code.",
+    "endmill": {
+      "diameterMm": 6.0,
+      "feedMmMin": 800.0,
+      "plungeMmMin": 200.0,
+      "rpm": 12000,
+      "stepDownMm": 2.0,
+      "adaptiveStepOverPercent": 15,
+      "maxAxialMm": 6.0,
+      "roughStockMm": 0.2,
+      "roughStepDownMm": 6.0,
+      "adaptiveFeedMmMin": 2500.0,
+      "finishStepMm": 0.25
+    },
+    "ballnose": {
+      "diameterMm": 6.0,
+      "lengthMm": 30.0,
+      "feedMmMin": 1200.0,
+      "plungeMmMin": 300.0,
+      "rpm": 14000,
+      "scallopMm": 0.02,
+      "sampleMm": 0.25,
+      "maxAxialMm": 2.5
+    },
+    "maxDrillMm": 6.0,
+    "drills": [
+      {
+        "diameterMm": 3.4,
+        "feedMmMin": 150.0,
+        "rpm": 6000,
+        "peckMm": 1.5,
+        "pointAngleDeg": 118
+      },
+      {
+        "diameterMm": 5.5,
+        "feedMmMin": 180.0,
+        "rpm": 4500,
+        "peckMm": 2.0,
+        "pointAngleDeg": 118
+      }
+    ],
+    "finishToleranceMm": 0.1,
+    "slopeCuspToleranceMm": 0.4
+  }
 }
