@@ -9,11 +9,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
-import { DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
+import { camConfigured, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "../src/cad.js";
 import type { Project } from "../src/contracts.js";
 
 const config = configuration();
-assert.ok(config.cadquery && config.camPython, "Run npm run setup:cad and npm run setup:cam");
+assert.ok(camConfigured(config), "Run npm run setup:cad and npm run setup:cam, or configure the PAISolver CAM job");
 const state = join(config.state, "cam-e2e", randomUUID());
 const { app } = await createApp({ ...config, state });
 const host = `127.0.0.1:${config.port}`;

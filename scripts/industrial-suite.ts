@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { command } from "../src/adapters.js";
 import { createApp } from "../src/server.js";
-import { DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
+import { camConfigured, DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
 import { DEFAULT_FACTORY_CRITERIA, REVIEWED_SAMPLE, type FactoryCriteria, type FactoryReview } from "../src/factory.js";
 import { sha256 } from "../src/domain.js";
 import type { Project, Review } from "../src/contracts.js";
@@ -167,7 +167,7 @@ const cases: Case[] = [
       return { matched: c.verdict === "rejected" && !f.passed && f.observed === 2 && cost.passed,
         actual: `${c.verdict}；${f.observed} 个 M5 孔被加强筋压住；成本 ${cost.observed} EUR 达标`, evidence: { cadId: c.id } };
     } },
-  ...(config.camPython ? [{ id: "D2", domain: "可制造性（CAM）", title: "基准支架出 G-code 并做独立切削仿真", tool: "FreeCAD 1.1 CAM + OpenCAMLib + 高度图仿真 + EvalArc",
+  ...(camConfigured(config) ? [{ id: "D2", domain: "可制造性（CAM）", title: "基准支架出 G-code 并做独立切削仿真", tool: "FreeCAD 1.1 CAM + OpenCAMLib + 高度图仿真 + EvalArc",
     rationale: "能出程序不等于程序对；刀路要在不依赖 FreeCAD 的仿真里证明不过切、不残料、不撞刀。",
     expected: "accepted；cam-toolpath 通过，2 个装夹程序，节拍 ≤ 120 min", run: async () => {
       const c = await cad("reference", { ...DEFAULT_CAD_REQUIREMENTS, dfm: { maxSetups: 2, maxUnitCostEur: 25, cam: { maxCycleMinutes: 120 } } } as typeof DEFAULT_CAD_REQUIREMENTS);

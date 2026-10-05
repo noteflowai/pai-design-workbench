@@ -30,7 +30,7 @@ export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS, ...
 export const CamRequirements = z.object({ maxCycleMinutes: z.number().min(1).max(10000) }).strict();
 export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000),
   cam: CamRequirements.optional() }).strict();
-export const CAM_FILE = /^(cam\.json|cam-verify\.json|setup[+-][XYZ]\.nc)$/;
+export const CAM_FILE = /^(cam\.json|cam-verify\.json|cam-job\.json|setup[+-][XYZ]\.nc)$/;
 export type DfmRequirements = z.infer<typeof DfmRequirements>;
 export const DEFAULT_DFM: DfmRequirements = { maxSetups: 2, maxUnitCostEur: 25 };
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;
@@ -276,8 +276,8 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const script = native("cad_bracket.py"), lock = native("cadquery-requirements.txt");
     const structural = request.requirements.structural;
     const cam = request.requirements.dfm?.cam;
-    if (cam && !config.camPython) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam)", 503);
-    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt"] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
+    if (cam && !camConfigured(config)) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam) or the PAISolver CAM job", 503);
+    const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), "cad_bracket.py", "cad_recipe.py", "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py"] : []),
       ...(structural ? ["fea_bracket.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
@@ -417,14 +417,23 @@ async function runFea(config: Config, publish: LiveBus["publish"], record: CadRe
  * residual material, plunge overload, rapid collisions and cycle time. A part that cannot be programmed as designed
  * (exit 3: a hole without a free drill corridor) is a failed check, not a tool fault.
  */
+/** Where CAM programs are generated: the PAISolver Batch job when configured (hosted), else the local FreeCAD venv. */
+export const camRunner = (config: Config) => config.solverBatch?.camJobDefinition && config.physicsPython ? "batch" as const : config.camPython ? "local" as const : undefined;
+export const camConfigured = (config: Config) => Boolean(camRunner(config) && config.cadquery);
 async function runCam(config: Config, publish: LiveBus["publish"], record: CadReview, requestId: string, name: "baseline" | "candidate",
   target: string, req: z.infer<typeof CamRequirements>) {
   const native = (f: string) => join(config.repository, "native", f), who = name === "baseline" ? "基准" : "候选";
   publish(requestId, { kind: "step", id: `cam-${name}`, label: `CAM：FreeCAD 刀路 + 独立切削仿真（${who}）`, status: "running", which: name });
-  const gen = await command(config.camPython!, ["-I", native("cam_part.py"), "--step", join(target, "part.step"), "--dfm", join(target, "dfm.json"),
-    "--shop", native("dfm-shop.json"), "--output", target], tmpdir(), undefined, 1_800_000);
+  const b = config.solverBatch;
+  const gen = camRunner(config) === "batch"
+    // Programs from one Batch job (FreeCAD in the PAISolver CAM image); files re-hashed against the job's result here.
+    ? await command(config.physicsPython!, ["-I", native("cam_remote.py"), "--step", join(target, "part.step"), "--dfm", join(target, "dfm.json"), "--output", target,
+        "--queue", b!.queue, "--job-definition", b!.camJobDefinition!, "--bucket", b!.bucket, "--region", b!.region, "--run", record.id, "--name", name,
+        "--timeout-seconds", "3600"], config.repository, undefined, 3_900_000)
+    : await command(config.camPython!, ["-I", native("cam_part.py"), "--step", join(target, "part.step"), "--dfm", join(target, "dfm.json"),
+        "--shop", native("dfm-shop.json"), "--output", target], tmpdir(), undefined, 1_800_000);
   await writePrivate(join(target, "..", `${name}.cam.log`), `${gen.stdout}\n${gen.stderr}`);
-  record.receipts.push({ adapter: "freecad-cam", command: ["python", "cam_part.py"], startedAt: gen.startedAt, finishedAt: gen.finishedAt, exitCode: gen.exitCode,
+  record.receipts.push({ adapter: camRunner(config) === "batch" ? "freecad-cam-batch" : "freecad-cam", command: ["python", camRunner(config) === "batch" ? "cam_remote.py" : "cam_part.py"], startedAt: gen.startedAt, finishedAt: gen.finishedAt, exitCode: gen.exitCode,
     stdoutSha256: sha256(gen.stdout), sourceDigests: { script: sha256(await readFile(native("cam_part.py"))), lock: sha256(await readFile(native("cam-requirements.txt"))),
       shop: sha256(await readFile(native("dfm-shop.json"))) } });
   if (gen.exitCode === 3) {

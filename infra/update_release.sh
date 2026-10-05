@@ -52,7 +52,7 @@ if [ -n "${PAI_EXECUTOR_KEY:-}" ] && [ -n "${PAI_AI_KEYS_ARN:-}" ]; then
   bash "$RELEASE/infra/install_ai.sh"
 fi
 # Release seals: S3 Object Lock archive and RFC 3161 time-stamping authority (each optional).
-for key in PAI_PACKAGE_ARCHIVE_BUCKET PAI_PACKAGE_RETENTION_DAYS PAI_TSA_URL PAI_SOLVER_QUEUE PAI_SOLVER_JOB_DEFINITION PAI_SOLVER_BUCKET PAI_SOLVER_REGION PAI_SOLVER_CFD_JOB_DEFINITION; do
+for key in PAI_PACKAGE_ARCHIVE_BUCKET PAI_PACKAGE_RETENTION_DAYS PAI_TSA_URL PAI_SOLVER_QUEUE PAI_SOLVER_JOB_DEFINITION PAI_SOLVER_BUCKET PAI_SOLVER_REGION PAI_SOLVER_CFD_JOB_DEFINITION PAI_SOLVER_CAM_JOB_DEFINITION; do
   value="${!key:-}"
   if [ -n "$value" ]; then
     sed -i "/^${key}=/d" /etc/pai/runtime.env

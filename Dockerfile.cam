@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+# PAI CAM job image for AWS Batch on Fargate (linux/amd64): one part's G-code programs per job (native/cam_job.py).
+# FreeCAD 1.1 is installed by the same tools/setup_cam.py as the local lane: official AppImage checked against the
+# SHA-256 in tools/runtime-pins.json, extracted, venv from its Python 3.11 + hash-locked native/cam-requirements.txt.
+# boto3 for S3 job I/O from the hash-locked native/cfd-job-requirements.txt (pure-Python wheels).
+ARG BASE=public.ecr.aws/docker/library/ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+FROM ${BASE}
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN useradd --uid 1003 --create-home --home-dir /home/pai --shell /usr/sbin/nologin pai \
+ && apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates python3 \
+      libgl1 libegl1 libglu1-mesa libopengl0 libx11-6 libxrender1 libxext6 libxi6 libxkbcommon0 libsm6 libfontconfig1 libgomp1 libdbus-1-3 \
+ && rm -rf /var/lib/apt/lists/* && install -d -m 0755 /opt/pai/tools /opt/pai/native
+COPY --chmod=0644 tools/setup_cam.py tools/runtime-pins.json /opt/pai/tools/
+COPY --chmod=0644 native/cam-requirements.txt native/cfd-job-requirements.txt /opt/pai/native/
+RUN PAI_TOOLS_DIR=/opt/tools PAI_ENV_FILE=/tmp/cam.env python3 /opt/pai/tools/setup_cam.py \
+ && /opt/tools/freecad-*/venv/bin/python -m pip install -q --no-cache-dir --no-input --require-hashes --no-deps --only-binary :all: \
+      -r /opt/pai/native/cfd-job-requirements.txt && /opt/tools/freecad-*/venv/bin/python -c "import boto3" \
+ && rm -f /opt/tools/freecad-*/FreeCAD.AppImage /tmp/cam.env && ln -s /opt/tools/freecad-* /opt/freecad \
+ && find /opt -name __pycache__ -prune -exec rm -rf {} +
+COPY --chmod=0644 native/cam_part.py native/cam_job.py native/dfm-shop.json /opt/pai/native/
+ARG PAI_IMAGE_VERSION=dev
+ENV PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION}
+USER pai
+WORKDIR /home/pai
+ENTRYPOINT ["/opt/freecad/venv/bin/python", "-I", "/opt/pai/native/cam_job.py"]

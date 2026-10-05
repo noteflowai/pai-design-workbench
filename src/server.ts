@@ -30,7 +30,7 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
-import { CAM_FILE, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
+import { CAM_FILE, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, optimizeCad, type CadOptimization } from "./optimize.js";
@@ -236,7 +236,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         defaultRequirements: DEFAULT_AERO_REQUIREMENTS,
         prescreen: prescreenConfigured(config) ? { engine: "NVIDIA PhysicsNeMo-CFD · DoMINO DrivAerML (advisory, never a result)", calibration: await prescreenCalibration(config) } : false } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
-        cam: config.camPython ? { engine: "FreeCAD 1.1.4 CAM (ocp-freecad-cam) + OpenCAMLib · independent dexel simulation" } : false,
+        cam: camConfigured(config) ? { engine: `FreeCAD 1.1.4 CAM (ocp-freecad-cam) + OpenCAMLib${camRunner(config) === "batch" ? " on AWS Batch" : ""} · independent dexel simulation` } : false,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
@@ -312,7 +312,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
     const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
       "drawing.svg": "image/svg+xml", "checks.json": "application/json", "fea.json": "application/json", "fea.glb": "model/gltf-binary",
-      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json" };
+      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json", "cam-job.json": "application/json" };
     // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb") && !p.file.endsWith(".png")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);

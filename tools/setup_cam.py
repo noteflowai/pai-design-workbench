@@ -45,7 +45,8 @@ if probe.returncode != 0:
 versions = json.loads(probe.stdout.strip().splitlines()[-1])
 if versions["freecad"] != pin["version"]:
     raise SystemExit(f"FreeCAD {versions['freecad']} differs from the pin {pin['version']}")
-env = root / ".state/demo.env"
+env = Path(os.environ["PAI_ENV_FILE"]) if os.environ.get("PAI_ENV_FILE") else root / ".state/demo.env"
+env.parent.mkdir(parents=True, exist_ok=True)
 lines = [l for l in (env.read_text().splitlines() if env.exists() else []) if l and not l.startswith("PAI_CAM_PYTHON=")]
 env.write_text("\n".join([*lines, f"PAI_CAM_PYTHON={venv / 'bin/python'}"]) + "\n"); env.chmod(0o600)
 print(json.dumps({**versions, "appImageSha256": pin["sha256"], "lockSha256": hashlib.sha256((root / "native/cam-requirements.txt").read_bytes()).hexdigest(),

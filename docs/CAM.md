@@ -69,10 +69,19 @@ the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam
 
 ## Where it runs
 
-Locally and in CI (GitHub runner, `python3 tools/setup_cam.py && npm run test:cam`). The hosted site can opt in with
-`PAI_ENABLE_CAM=1` (`tools/aws_operator.py` → `update_release.sh`). It is off on pai.oneai.host: the host has 2 vCPU,
-3 GB RAM and 5.6 GB free, while the extracted FreeCAD needs about 2.5 GB and one part takes about 9 minutes on 8
-cores. The right home for it is a PAISolver Batch job, like FEA and CFD.
+- **Locally and in CI:** `npm run setup:cam` installs the FreeCAD venv; `cam_part.py` runs on the host.
+- **Hosted, on AWS Batch:** when `PAI_SOLVER_CAM_JOB_DEFINITION` is configured, program generation runs as one
+  PAISolver job per part (`Dockerfile.cam`, 4 vCPU / 16 GiB, 1 h, one attempt).
+  - The image installs FreeCAD with the same `tools/setup_cam.py` and the same pins as the local lane.
+  - `native/cam_remote.py` uploads `part.step` and `dfm.json`, submits the job without ever resubmitting it, and
+    re-hashes every returned file against the job's `result.json` and the inputs it sent.
+  - The **verification still runs on the workbench host** (`cam_verify.py` in the CadQuery venv), so the program
+    generator and its checker never share a container.
+  - Locally the image produced the same `setup+Y.nc` as the local lane. Its `setup+Z.nc` differs; two local runs also
+    differ from each other, because FreeCAD Adaptive output depends on thread timing. The container's programs pass
+    the same simulation (94.3 min).
+- **Not on the small host:** the hosted host itself has 2 vCPU and 3 GB RAM, so the local FreeCAD lane
+  (`PAI_ENABLE_CAM=1`) stays off there.
 
 ## Limits
 

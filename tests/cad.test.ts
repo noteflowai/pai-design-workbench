@@ -82,3 +82,14 @@ test("CAD routes fail closed without a configured CadQuery and reject unknown fi
     assert.equal(state.capabilities.cad, false); assert.equal(state.cads.length, 1);
   } finally { await app.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+test("CAM runs where it is configured: the PAISolver job when the hosted Batch job exists, else the local FreeCAD", async () => {
+  const { camRunner, camConfigured } = await import("../src/cad.js");
+  const base = { cadquery: "/cq", repository: "/r" } as never as Parameters<typeof camRunner>[0];
+  assert.equal(camRunner(base), undefined); assert.equal(camConfigured(base), false);
+  assert.equal(camRunner({ ...base, camPython: "/fc" }), "local");
+  const batch = { queue: "q", jobDefinition: "fea", camJobDefinition: "cam", bucket: "b", region: "r" };
+  assert.equal(camRunner({ ...base, camPython: "/fc", physicsPython: "/py", solverBatch: batch }), "batch");
+  assert.equal(camRunner({ ...base, physicsPython: "/py", solverBatch: { ...batch, camJobDefinition: undefined } }), undefined);
+  assert.equal(camConfigured({ ...base, cadquery: undefined, camPython: "/fc" }), false, "the verifier needs the CadQuery venv");
+});
