@@ -107,6 +107,7 @@ their original identities.
 |---|---|
 | 轴承座生成代码 | `npm run test:pillow`：模板代码在 bubblewrap 沙箱中运行，按轴承座检查测量，与配方结果一致（189.601 g），通过；轴承孔改成 Ø34.96 的代码被 `bearing-seat` 拒绝。浏览器测试：切换到轴承座后编辑器换成轴承座模板，沙箱运行通过 |
 | 自主修正（真实 Kiro） | 场景：紧凑型轴承座孔边距 6 mm < 13.5 mm，冻结 ≤ 175 g、≤ 92 × 40 × 60 mm。第 1 轮执行器返回待核对：主账号额度用完；备用账号报 `invalid_output`（协议违规 "Unmatched RPC error"，即收到一个与已发请求对不上的 RPC 错误）。今天第二次出现。执行器没有保存原始 ACP 消息，无法进一步定位；按规则不重试、不绕过账本，待核对记录留给维护者 |
+| 定位 | 离线复现：执行器的 ACP 解析只登记 initialize、session/new、session/prompt 三类请求，对其他任何请求的错误回复都会被判为 "Unmatched RPC error"。修正提交为 [noteflow-agent-control#92](https://github.com/noteflowai/noteflow-agent-control/pull/92)：登记全部请求；Agent 请求文件或终端被拒，记为工具活动；其他错误按额度、认证、传输分类，且都不可重试。回执里新增 `protocol.methods`（只记方法名）。用这个分支实跑一次：备用账号的方法列表里只有 `_kiro.dev/*`、initialize、session/new、session/prompt、session/update，说明 Kiro 发来了一个客户端从未用过的 id 的错误回复。PR 又加上了 id 类型和错误码，下一次实跑就能看出是哪一种。之后当天的提供方次数上限已到，按规则等下一个账本日 |
 
 ## 自主修正 DFA 问题（2026-10-05 下午）
 
