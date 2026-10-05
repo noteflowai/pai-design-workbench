@@ -57,7 +57,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
 | 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
-界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[27 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
+界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[29 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
 范围外：认证级 FEA、疲劳、公差叠加、现场安全认证、自动发布。仿真不等于物理验证，所有记录都带 `physicalValidation: false`。
 

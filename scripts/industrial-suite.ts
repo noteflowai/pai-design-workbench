@@ -158,6 +158,25 @@ const cases: Case[] = [
       return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["mass"]' && c.diff?.blocking_changes === 0,
         actual: `${c.verdict}；${c.candidate!.mass} g > 40 g；blocking ${c.diff?.blocking_changes}`, evidence: { cadId: c.id } };
     } },
+  { id: "D1", domain: "可制造性（DFM / DFA）", title: "紧凑化支架冻结制造要求：M5 安装螺钉能否装上", tool: "CadQuery 2.8 / OCCT 7.9 B-Rep + EvalArc",
+    rationale: "底座 M5 孔位置固定，侧加强筋随宽度移动；W = 50 时筋压在孔上方。只看几何和成本会漏掉这种装配问题。",
+    expected: "rejected；fastener-access 失败（2 个 M5 孔），单件成本达标", run: async () => {
+      const c = await cad("compact", { ...DEFAULT_CAD_REQUIREMENTS, dfm: { maxSetups: 2, maxUnitCostEur: 16 } } as typeof DEFAULT_CAD_REQUIREMENTS);
+      const f = c.candidate!.checks.find(x => x.id === "fastener-access") as unknown as { passed: boolean; observed: number };
+      const cost = c.candidate!.checks.find(x => x.id === "unit-cost") as unknown as { passed: boolean; observed: number };
+      return { matched: c.verdict === "rejected" && !f.passed && f.observed === 2 && cost.passed,
+        actual: `${c.verdict}；${f.observed} 个 M5 孔被加强筋压住；成本 ${cost.observed} EUR 达标`, evidence: { cadId: c.id } };
+    } },
+  ...(config.camPython ? [{ id: "D2", domain: "可制造性（CAM）", title: "基准支架出 G-code 并做独立切削仿真", tool: "FreeCAD 1.1 CAM + OpenCAMLib + 高度图仿真 + EvalArc",
+    rationale: "能出程序不等于程序对；刀路要在不依赖 FreeCAD 的仿真里证明不过切、不残料、不撞刀。",
+    expected: "accepted；cam-toolpath 通过，2 个装夹程序，节拍 ≤ 120 min", run: async () => {
+      const c = await cad("reference", { ...DEFAULT_CAD_REQUIREMENTS, dfm: { maxSetups: 2, maxUnitCostEur: 25, cam: { maxCycleMinutes: 120 } } } as typeof DEFAULT_CAD_REQUIREMENTS);
+      const t = c.candidate!.checks.find(x => x.id === "cam-toolpath") as unknown as { passed: boolean };
+      const m = c.candidate!.checks.find(x => x.id === "cycle-time") as unknown as { passed: boolean; observed: number };
+      const programs = Object.keys(c.files).filter(f => f.startsWith("candidate/setup") && f.endsWith(".nc"));
+      return { matched: c.verdict === "accepted-cad-part" && t.passed && m.passed && programs.length === 2,
+        actual: `${c.verdict}；${programs.length} 个程序；仿真通过；节拍 ${m.observed} min`, evidence: { cadId: c.id } };
+    } } as Case] : []),
   { id: "F1", domain: "工厂维护与能源", title: "预测性维护 + 需量控制方案（默认标准）", tool: "Robot Reel Factory Twin v0.18.0", rationale: "净产出 +133 的方案仍有退化种子与 EV 服务不足；逐种子保留，能耗不抵消。",
     expected: "rejected；seed 3、11 产出下降；seed 10 EV 74%", run: async () => {
       const c = await ok<FactoryCriteria>("POST", `${P}/factory-criteria`, { requestId: randomUUID(), projectRevision: 1, criteria: DEFAULT_FACTORY_CRITERIA, rationale: "Frozen before import" });
