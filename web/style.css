@@ -723,3 +723,5 @@ h1 { font-size: 22px; }
 .fai-table th[scope="row"] small { display: block; font-weight: 400; color: var(--ink-3); font-size: 11px; }
 .fai-input { width: 92px; min-width: 92px; }
 @media (max-width: 760px) { .fai-table td, .fai-table th { padding: 6px; } .fai-input { width: 80px; min-width: 80px; } }
+.fai-import { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.fai-import label.button { cursor: pointer; }

@@ -254,6 +254,7 @@ function FirstArticle({ cad }: { cad: CadReview }) {
   const [plan, setPlan] = useState<Characteristic[]>();
   const [values, setValues] = useState<Record<string, string>>({});
   const [who, setWho] = useState(""), [instrument, setInstrument] = useState(""), [serial, setSerial] = useState("");
+  const [imported, setImported] = useState<{ values: Record<string, string>; unmatched: string[] }>();
   const done = (c.data.inspections ?? []).filter(i => i.cadReviewId === cad.id);
   const open = async () => setPlan((await api<{ characteristics: Characteristic[] }>(`/cad/${cad.id}/inspection-plan`, undefined, "GET")).characteristics);
   const tol = (p: Characteristic) => p.lower !== undefined && p.upper !== undefined ? `${p.lower} – ${p.upper}` : p.lower !== undefined ? `≥ ${p.lower}` : `≤ ${p.upper}`;
@@ -267,6 +268,12 @@ function FirstArticle({ cad }: { cad: CadReview }) {
         <thead><tr><th scope="col">特性 · 量具</th><th scope="col">名义</th><th scope="col">公差</th><th scope="col">实测</th></tr></thead>
         <tbody>{plan.map(p => <tr key={p.id}><th scope="row">{p.label}<small>{p.instrument}</small></th><td className="num">{p.nominal}</td><td className="num">{tol(p)} {p.unit}</td>
           <td><input className="fai-input" type="number" step="any" inputMode="decimal" aria-label={`实测 ${p.label}`} value={values[p.id] ?? ""} onChange={e => setValues({ ...values, [p.id]: e.target.value })} /></td></tr>)}</tbody></table></div>
+      <div className="fai-import"><label className="button secondary">导入 CMM 报告（CSV）<input type="file" accept=".csv,text/csv" className="visually-hidden"
+        aria-label="导入 CMM 报告（CSV）" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(t => {
+          const r = matchCsv(t, plan); setValues({ ...values, ...r.values }); setImported(r);
+        }); e.target.value = ""; }} /></label>
+        <small>每行：特性 ID 或名称，实测值（其余列忽略）。导入后仍可逐项核对和修改</small>
+        {imported && <small role="status">已填入 {Object.keys(imported.values).length} / {plan.length} 项{imported.unmatched.length ? `；未识别：${imported.unmatched.slice(0, 5).join("、")}` : ""}</small>}</div>
       <div className="field-grid">
         <label>检验员<input value={who} onChange={e => setWho(e.target.value)} aria-label="检验员" /></label>
         <label>测量设备<input value={instrument} onChange={e => setInstrument(e.target.value)} aria-label="测量设备" placeholder="例如 CMM、气动量仪" /></label>
@@ -282,5 +289,22 @@ function FirstArticle({ cad }: { cad: CadReview }) {
         }, "首件检验已记录：全部特性在公差内。")}>记录首件检验</button></div>
     </>}
   </Card>;
+}
+
+/**
+ * Map a CMM / gauge export (CSV) onto the plan: a row whose first cell equals a characteristic id or label (ignoring
+ * case, spaces and the ⌀/Ø sign) takes the first numeric cell after it. Nothing is judged here; the server judges.
+ */
+export function matchCsv(text: string, plan: Characteristic[]) {
+  const norm = (x: string) => x.toLowerCase().replace(/[\s"'⌀ø()（）]/g, "");
+  const byKey = new Map(plan.flatMap(p => [[norm(p.id), p.id], [norm(p.label), p.id]] as [string, string][]));
+  const values: Record<string, string> = {}, unmatched: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cells = line.split(/[,;\t]/).map(c => c.trim());
+    if (!cells[0]) continue;
+    const id = byKey.get(norm(cells[0])), value = cells.slice(1).find(c => /^[-+]?\d+(\.\d+)?$/.test(c));
+    if (id && value !== undefined) values[id] = value; else if (!/^(id|characteristic|特性|name)$/i.test(cells[0])) unmatched.push(cells[0]);
+  }
+  return { values, unmatched };
 }
 

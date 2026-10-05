@@ -102,7 +102,8 @@ their original identities.
 | 实测判定 | `POST /api/cad/:id/inspections`：每个计划内特性恰好一个值，缺项或多余项拒绝；逐项判定，按请求身份幂等。浏览器测试：SN-001 全部在公差内为合格；SN-002 孔径 35.031 超出 H7 为不合格，记录保留，不自动重测 |
 | 证据 | 检验记录带 `physicalMeasurement: true`、检验员、设备、序列号、计划摘要；在发布前记录的检验写进签名发布包（`inspections/<id>.json`），`npm run test:package` 断言。仿真评审保持 `physicalValidation: false` |
 | 托管站点 | 以 release `400963e7…` 在 pai.oneai.host 上跑 `release-package-e2e`：检验记录进入 R1 发布包（23 个文件），AWS KMS ECDSA P-256 签名、DigiCert RFC 3161 时间戳，离线核验通过 |
-| 未做 | 这里的实测值由测试填写，还没有真实零件的测量；CMM 报告导入（QIF）待做 |
+| CMM 报告导入 | 界面可导入 CSV（每行：特性 ID 或名称，实测值），自动填表、列出未识别的特性，最终仍由服务器逐项判定；浏览器测试：8 / 8 项填入，`flatness` 列为未识别 |
+| 未做 | 这里的实测值由测试填写，还没有真实零件的测量；QIF 格式导入待做 |
 
 ## 演示 D：从设计到车间（2026-10-05 夜）
 

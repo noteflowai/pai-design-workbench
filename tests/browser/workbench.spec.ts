@@ -210,6 +210,13 @@ test("first-article inspection: measured values against the frozen tolerances, n
   await noOverflow(page);
   await fai.screenshot({ path: testInfo.outputPath("fai-plan-mobile.png") });
   await page.reload(); await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible();
+  // A CMM export fills the form; values are still judged by the server.
+  await fai.getByRole("button", { name: "生成检验计划并录入实测值" }).click();
+  await fai.getByLabel("导入 CMM 报告（CSV）").setInputFiles({ name: "cmm.csv", mimeType: "text/csv", buffer: Buffer.from(
+    "characteristic,measured,unit\nbearing-seat-diameter,35.012,mm\n轴承孔深,11.04,mm\nshoulder-diameter,28.01\nenvelope-x,108.02\nenvelope-y,36.01\nenvelope-z,55.5\nmin-wall,7.96\nmass,189.9,g\nflatness,0.01,mm\n") });
+  await expect(fai.getByRole("status")).toContainText("已填入 8 / 8 项；未识别：flatness");
+  await expect(fai.getByRole("spinbutton", { name: "实测 轴承孔 Ø（H7）" })).toHaveValue("35.012");
+  await page.reload(); await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible();
   await fill("SN-001", "35.011");
   await expect(fai.getByText("SN-001 · 合格")).toBeVisible();
   await fill("SN-002", "35.031");
