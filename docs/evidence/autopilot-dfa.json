@@ -1,0 +1,54 @@
+{
+  "schema": "pai-autopilot-dfa-1",
+  "checkedAt": "2026-10-05T09:40:00Z",
+  "scenario": "compact bracket with frozen DFM (setups <= 2, unit cost <= 16 EUR): M5 base holes under the ribs (fastener-access 2) and hole-edge-distance 5 < 8.25 mm",
+  "autopilot": {
+    "grant": {
+      "tools": [
+        "cad-review",
+        "cad-code"
+      ],
+      "maxRuns": 3
+    },
+    "round1": {
+      "tool": "cad-code",
+      "engine": {
+        "profile": "kiro-backup",
+        "provider": "kiro",
+        "model": "claude-opus-5.5",
+        "engineVersion": "2.27.1",
+        "modelEvidence": "acp_advertised"
+      },
+      "recordId": "5b188eea-e9d9-4ecf-9ab5-9dd701244fb7",
+      "verdictAtTheTime": "rejected",
+      "why": "only the reference baseline failed unit-cost (17.22 > 16 EUR); the candidate passed all 11 checks. The CAD verdict also required the baseline to pass, unlike every other lane: fixed in 6b2c\u2026 (candidate judged against the frozen requirements; the baseline anchors EvalArc)"
+    },
+    "round2": "executor returned reconcile (kiro-primary quota, kiro-backup invalid output); no retry"
+  },
+  "aiChange": "kept W = 50 and t = 4, raised the plate to H 50 for M3 edge distance, moved the M5 holes inboard to x = \u00b112 (head clears the rib face at x = 21 by 4.75 mm)",
+  "rerunWithFixedVerdict": {
+    "id": "02dad0d6-9546-4335-a7ea-28667a7a8213",
+    "verdict": "accepted-cad-part",
+    "candidate": {
+      "solid-valid": 1,
+      "motor-interference": 0,
+      "min-wall": 4,
+      "hole-edge-distance": 6.5,
+      "mass": 40.16,
+      "envelope": [
+        50,
+        30,
+        50
+      ],
+      "machining-setups": 2,
+      "hole-drillability": 1.18,
+      "fastener-access": 0,
+      "unit-cost": 15.15
+    },
+    "baselineFailing": [
+      "unit-cost"
+    ],
+    "blocking": 0
+  },
+  "physicalValidation": false
+}
