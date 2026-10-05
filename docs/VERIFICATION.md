@@ -101,6 +101,7 @@ their original identities.
 | 检验计划 | `GET /api/cad/:id/inspection-plan`：只对验收通过的零件生成，特性、公差和来源都取自该评审冻结的要求和测得的名义几何（轴承座 8 项：H7 孔径 35.000–35.025、孔深 ≥ 11、止口 17–28.6、外形三向、壁厚 ≥ 5、质量 ≤ 250 g） |
 | 实测判定 | `POST /api/cad/:id/inspections`：每个计划内特性恰好一个值，缺项或多余项拒绝；逐项判定，按请求身份幂等。浏览器测试：SN-001 全部在公差内为合格；SN-002 孔径 35.031 超出 H7 为不合格，记录保留，不自动重测 |
 | 证据 | 检验记录带 `physicalMeasurement: true`、检验员、设备、序列号、计划摘要；在发布前记录的检验写进签名发布包（`inspections/<id>.json`），`npm run test:package` 断言。仿真评审保持 `physicalValidation: false` |
+| 托管站点 | 以 release `400963e7…` 在 pai.oneai.host 上跑 `release-package-e2e`：检验记录进入 R1 发布包（23 个文件），AWS KMS ECDSA P-256 签名、DigiCert RFC 3161 时间戳，离线核验通过 |
 | 未做 | 这里的实测值由测试填写，还没有真实零件的测量；CMM 报告导入（QIF）待做 |
 
 ## 演示 D：从设计到车间（2026-10-05 夜）
