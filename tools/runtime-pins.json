@@ -21,8 +21,8 @@
   },
   "executor": {
     "repository": "noteflowai/noteflow-agent-control (private)",
-    "commit": "bf438e49492b85a9ce09f7be7d7d24f3ca337c33",
-    "archiveSha256": "00ee170000767d2d11df540584d1143af130ebce88865ca75c17b0d75fb603ce",
+    "commit": "30b998564986a37f44c9fc5d442b7902d82e6d5f",
+    "archiveSha256": "e0e3e370bea747997b9ceef3004c0e4e1f40122e99761a330dd2854b64b37624",
     "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it.",
     "accepts": [
       "images"
