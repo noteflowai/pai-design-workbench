@@ -55,3 +55,17 @@ test("a plan for the second part family starts from that family's frozen default
   assert.deepEqual(step.payload.requirements, FAMILY_DEFAULTS["pillow-block"], "no bracket structural block or envelope carried over");
   assert.ok(!step.changes.some(c => c.direction === "relaxed"), JSON.stringify(step.changes));
 });
+
+test("a parametric pillow-block plan (short answer) carries its family and bounded parameters, and checks them", async () => {
+  const { FAMILY_DEFAULTS } = await import("../src/cad.js");
+  const ctx = { handles: new Map(), workspace: {}, project: { id: "p", revision: 1 } } as unknown as Parameters<typeof interpretOutput>[1];
+  const parameters = { width: 92, depth: 20, baseDepth: 36, axisHeight: 30, baseThickness: 10, boltPitch: 62, seatDiameter: 35.012, shoulderDiameter: 28 };
+  const out = interpretOutput(JSON.stringify({ kind: "plan", interpretation: ["x"], plans: [{ ref: "p1", tool: "cad-review", title: "t",
+    payload: { variant: "parametric", family: "pillow-block", parameters, requirements: { maxMassG: 175 } } }] }), ctx);
+  const step = out.plans[0];
+  assert.equal(step.payload.family, "pillow-block"); assert.deepEqual(step.payload.parameters, parameters);
+  assert.deepEqual(step.payload.requirements, { ...FAMILY_DEFAULTS["pillow-block"], maxMassG: 175 });
+  const bad = interpretOutput(JSON.stringify({ kind: "plan", interpretation: ["x"], plans: [{ ref: "p1", tool: "cad-review", title: "t",
+    payload: { variant: "parametric", family: "pillow-block", parameters: { ...parameters, seatDiameter: 36 } } }] }), ctx);
+  assert.equal(bad.plans.length, 0, "a seat outside the recipe bounds is refused at plan time");
+});
