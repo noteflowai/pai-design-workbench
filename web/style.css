@@ -653,7 +653,8 @@ h1 { font-size: 22px; }
 .lede { font-size: 13px; }
 
 /* Measured-check table with allowance bars (DFM / interference panels) */
-.check-table caption { caption-side: top; text-align: left; padding: 10px 12px; font-weight: 700; font-size: 13px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.check-table caption { caption-side: top; text-align: left; padding: 10px 12px; font-weight: 700; font-size: 13px; display: table-caption; }
+.check-table caption > * + * { margin-left: 8px; vertical-align: middle; }
 .check-table th[scope="row"] { font-weight: 600; white-space: normal; min-width: 150px; }
 .check-table th[scope="row"] small { display: block; font-weight: 400; color: var(--ink-3); font-size: 11px; }
 .check-table .mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 800; margin-right: 8px; background: var(--ok-soft); color: var(--ok); }

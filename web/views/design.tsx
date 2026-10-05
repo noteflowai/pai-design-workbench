@@ -121,7 +121,9 @@ function CadLane() {
   const structural = fea && physics ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
   const [dfmOn, setDfmOn] = useState(Boolean(latestCad?.request.requirements.dfm));
   const [setups, setSetups] = useState(latestCad?.request.requirements.dfm?.maxSetups ?? 2), [cost, setCost] = useState(latestCad?.request.requirements.dfm?.maxUnitCostEur ?? 25);
-  const dfm = dfmOn ? { maxSetups: setups, maxUnitCostEur: cost } : undefined;
+  const camAvailable = Boolean(c.data.capabilities.cad && c.data.capabilities.cad.cam);
+  const [camOn, setCamOn] = useState(Boolean(latestCad?.request.requirements.dfm?.cam)), [cycle, setCycle] = useState(latestCad?.request.requirements.dfm?.cam?.maxCycleMinutes ?? 120);
+  const dfm = dfmOn ? { maxSetups: setups, maxUnitCostEur: cost, ...(camOn && camAvailable ? { cam: { maxCycleMinutes: cycle } } : {}) } : undefined;
   const formRequirements = { maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm,
     ...(structural ? { structural } : {}), ...(dfm ? { dfm } : {}) };
   const sandbox = cap ? cap.generatedCode : undefined;
@@ -173,7 +175,12 @@ function CadLane() {
       <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={dfmOn} onChange={e => setDfmOn(e.target.checked)} />冻结制造要求并做 DFM</label>
       <label>装夹次数上限<span className="unit-input"><input type="number" aria-label="装夹次数上限" min={1} max={6} step={1} disabled={!dfmOn || Boolean(feedback)} value={setups} onChange={e => setSetups(Number(e.target.value))} /><em>次</em></span></label>
       <label>单件成本上限<span className="unit-input"><input type="number" aria-label="单件成本上限" min={0.1} max={100000} step={0.5} disabled={!dfmOn || Boolean(feedback)} value={cost} onChange={e => setCost(Number(e.target.value))} /><em>EUR</em></span></label>
-      <small className="muted">最少装夹方向（精确覆盖）、孔深径比、6061 棒料 + 工时估算（批量 50，车间参数见 native/dfm-shop.json）；估算，不是报价</small>
+      <small className="muted">最少装夹方向（精确覆盖，孔只算无遮挡通道）、孔深径比、螺钉头与扳手空间、6061 棒料 + 工时估算（批量 50，车间参数见 native/dfm-shop.json）；估算，不是报价</small>
+      {camAvailable && <>
+        <label className="inline"><input type="checkbox" disabled={!dfmOn || Boolean(feedback)} checked={camOn} onChange={e => setCamOn(e.target.checked)} />生成 G-code 并做切削仿真（CAM）</label>
+        <label>加工节拍上限<span className="unit-input"><input type="number" aria-label="加工节拍上限" min={1} max={10000} step={5} disabled={!dfmOn || !camOn || Boolean(feedback)} value={cycle} onChange={e => setCycle(Number(e.target.value))} /><em>min</em></span></label>
+        <small className="muted">FreeCAD 1.1 CAM + OpenCAMLib 按装夹出程序；独立高度图仿真检查过切、残料、过载与快移碰撞。每个零件约 5 分钟</small>
+      </>}
     </fieldset>
     <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>

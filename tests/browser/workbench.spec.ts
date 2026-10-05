@@ -146,6 +146,33 @@ test("visual review: recorded inspection views go to the AI with the question, p
   expect(errors).toEqual([]);
 });
 
+test("CAM from the CAD form: G-code per setup, independent simulation, programs downloadable at phone width", async ({ page }, testInfo) => {
+  test.setTimeout(1_500_000);
+  const state = await (await page.request.get("/api/state")).json();
+  test.skip(!state.capabilities.cad?.cam, "CAM toolchain not installed (npm run setup:cam)");
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  await createProject(page);
+  await rail(page, /候选设计/).click();
+  await page.getByRole("tab", { name: "CAD 零件" }).click();
+  await page.getByRole("radio", { name: /基准设计/ }).check();
+  await page.getByRole("checkbox", { name: "冻结制造要求并做 DFM" }).check();
+  const camBox = page.getByRole("checkbox", { name: "生成 G-code 并做切削仿真（CAM）" });
+  await camBox.check(); await expect(camBox).toBeChecked();
+  await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+  await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 1_400_000 });
+  const table = page.locator(".check-table");
+  await expect(table.locator("tr", { hasText: "CAM 刀路仿真" })).not.toHaveClass(/fail/);
+  await expect(table.locator("tr", { hasText: "加工节拍（CAM）" })).toContainText("min");
+  const programs = page.getByRole("group", { name: "CAM 程序" });
+  await expect(programs.getByRole("link", { name: /下载 G-code · 装夹/ })).toHaveCount(2);
+  const nc = await page.request.get(await programs.getByRole("link", { name: "下载 G-code · 装夹 +Z" }).getAttribute("href") as string);
+  expect(nc.status()).toBe(200); expect(await nc.text()).toMatch(/G21[\s\S]*M2/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("cam-mobile.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
 test("native Blender scene from the professional form: rejection, evidence files and occlusion recheck", async ({ page }, testInfo) => {
   test.setTimeout(360_000);
   const state = await (await page.request.get("/api/state")).json();

@@ -124,7 +124,7 @@ function cadRows(checks: { id: string; passed: boolean; observed?: unknown; requ
     if (x.id === "machining-setups") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "次", margin: le(o, r), note: "三轴主方向集合覆盖；孔按无遮挡钻削通道" };
     if (x.id === "hole-drillability") return { id: x.id, title, passed: x.passed, observed: String(o), required: `≤ ${r}`, unit: "深径比", margin: le(o, r), note: "孔深/孔径，且至少一端钻削通道无遮挡" };
     if (x.id === "fastener-access") return { id: x.id, title, passed: x.passed, observed: String(o), required: "0", unit: "个孔", note: "ISO 4762 螺钉头与内六角扳手在落座侧的空间" };
-    if (x.id === "cam-toolpath") return { id: x.id, title, passed: x.passed, observed: Array.isArray(x.observed) ? (x.observed as string[]).join("、") : String(x.observed), required: "无过切/残料/碰撞", unit: "", note: "G-code 在 0.1 mm 高度图上独立仿真" };
+    if (x.id === "cam-toolpath") return { id: x.id, title, passed: x.passed, observed: x.observed === "verified" ? "仿真通过" : Array.isArray(x.observed) ? (x.observed as string[]).map(id => ({ "no-gouge": "过切", "no-residual": "残料", "tool-engagement": "刀具过载", "no-rapid-collision": "快移碰撞" } as Record<string, string>)[id] ?? id).join("、") : String(x.observed), required: "无过切/残料/碰撞", unit: "", note: "G-code 在 0.1 mm 高度图上独立仿真" };
     if (x.id === "cycle-time") return { id: x.id, title, passed: x.passed, observed: typeof x.observed === "number" ? o.toFixed(1) : "—", required: `≤ ${r}`, unit: "min", margin: Number.isFinite(o) ? le(o, r) : undefined, note: "按程序进给与快移速度，不含换刀与装夹" };
     if (x.id === "unit-cost") return { id: x.id, title, passed: x.passed, observed: o.toFixed(2), required: Number.isFinite(r) ? `≤ ${r}` : "—", unit: "EUR", margin: Number.isFinite(r) ? le(o, r) : undefined, note: "估算，不是报价" };
     return { id: x.id, title, passed: x.passed, observed: String(x.observed), required: "1", unit: "实体", note: "OCCT BRepCheck" };
@@ -166,6 +166,9 @@ function CadDetail({ cad }: { cad?: CadReview }) {
         <figcaption>{which === "baseline" ? "基准" : "候选"} · von Mises 应力云图 · 0 → {fea?.colorScaleMaxMPa ?? "—"} MPa · 原生 Blender 渲染，按摘要登记</figcaption></figure>}
       <VisualAsk message={`附图是${which === "baseline" ? "基准" : "候选"}支架的 von Mises 应力云图（CalculiX 结果，色标 0 → ${fea?.colorScaleMaxMPa ?? "?"} MPa，变形放大 ${fea?.displayScale ?? "?"}×）。请对照图像和 FEA 检查记录指出应力集中和刚度薄弱的位置，并给出不放宽要求的加强方案（预设变体或 cad-code）。`}
         attachments={cad.files[`${which}/fea.png`] ? [{ recordKind: "cad-review", recordId: cad.id, which, file: "fea.png", label: `${which === "baseline" ? "基准" : "候选"}应力云图` }] : []} />
+      {Object.keys(cad.files).some(f => f.startsWith(`${which}/setup`)) && <div className="button-row" role="group" aria-label="CAM 程序">
+        {Object.keys(cad.files).filter(f => f.startsWith(`${which}/setup`) && f.endsWith(".nc")).sort().map(f => <a key={f} className="button secondary" href={`/api/cad/${cad.id}/files/${f}`}>下载 G-code · 装夹 {f.split("setup")[1].replace(".nc", "")}</a>)}
+        <a className="button secondary" href={`/api/cad/${cad.id}/files/${which}/cam-verify.json`}>切削仿真报告</a></div>}
       <div className="scene-previews drawings">{(["baseline", "candidate"] as const).map(w => <figure key={w}><img alt={`${w === "baseline" ? "基准" : "候选"}零件 SVG 工程视图`} src={`/api/cad/${cad.id}/files/${w}/drawing.svg`} />
         <figcaption>{w === "baseline" ? "基准" : "候选"} · OCCT 投影视图（含隐藏线）</figcaption></figure>)}</div>
       <Receipts value={{ request: cad.request, requirementDigest: cad.requirementDigest, receipts: cad.receipts, files: cad.files, parameters: { baseline: cad.baseline?.parameters, candidate: cad.candidate?.parameters } }} />

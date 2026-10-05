@@ -236,6 +236,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         defaultRequirements: DEFAULT_AERO_REQUIREMENTS,
         prescreen: prescreenConfigured(config) ? { engine: "NVIDIA PhysicsNeMo-CFD · DoMINO DrivAerML (advisory, never a result)", calibration: await prescreenCalibration(config) } : false } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS,
+        cam: config.camPython ? { engine: "FreeCAD 1.1.4 CAM (ocp-freecad-cam) + OpenCAMLib · independent dexel simulation" } : false,
         generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
