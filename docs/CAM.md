@@ -80,6 +80,9 @@ the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam
   - Locally the image produced the same `setup+Y.nc` as the local lane. Its `setup+Z.nc` differs; two local runs also
     differ from each other, because FreeCAD Adaptive output depends on thread timing. The container's programs pass
     the same simulation (94.3 min).
+- **Measured on pai.oneai.host** ([cam-batch.json](evidence/cam-batch.json)): the reference bracket was reviewed as
+  baseline and candidate and accepted. Each part's programs came from one Batch job (image `cam-6309cb6ff1a12f2c`,
+  81 s on 4 vCPU). Verification on the 2 vCPU host takes most of the 19 min for both parts.
 - **Not on the small host:** the hosted host itself has 2 vCPU and 3 GB RAM, so the local FreeCAD lane
   (`PAI_ENABLE_CAM=1`) stays off there.
 
