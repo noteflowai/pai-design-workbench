@@ -41,5 +41,12 @@
       "unitCostEur": 28.53
     }
   },
-  "physicalValidation": false
+  "physicalValidation": false,
+  "hosted": {
+    "site": "pai.oneai.host",
+    "release": "4b8c8e118258463322b6c26ad67b2f9967ba5c0205941f3ea0ad05d1b7f4d86f",
+    "result": "passed",
+    "seconds": 27,
+    "sameResults": true
+  }
 }
