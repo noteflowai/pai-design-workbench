@@ -1,0 +1,56 @@
+{
+  "schema": "pai-demo-cam-1",
+  "recordedAt": "2026-10-05T14:30:00Z",
+  "site": "local workbench (CadQuery 2.8 / OCCT 7.9, FreeCAD 1.1.4 CAM, OpenCAMLib, dexel simulation, EvalArc)",
+  "model": "none: no AI call in this demo",
+  "facts": {
+    "tight": {
+      "seat": 34.95,
+      "blocking": 1
+    },
+    "cam": {
+      "verdict": "accepted-cad-part",
+      "setups": 2,
+      "cost": 28.53,
+      "cycle": 78.89,
+      "fasteners": 0,
+      "programs": [
+        "setup+Y.nc",
+        "setup+Z.nc"
+      ]
+    },
+    "signer": "本机 Ed25519 密钥；托管站点使用 AWS KMS"
+  },
+  "marks": [
+    {
+      "name": "freeze",
+      "seconds": 10.4
+    },
+    {
+      "name": "seat",
+      "seconds": 17.7
+    },
+    {
+      "name": "cam",
+      "seconds": 40.7
+    },
+    {
+      "name": "release",
+      "seconds": 762.1
+    }
+  ],
+  "sourceSeconds": 800,
+  "outputSeconds": 221.8,
+  "media": {
+    "cam-demo.mp4": "0692b01032f5acf9925713fe46502beb2887980da51443209c5fcfcbe70f5ac7",
+    "cam-demo.gif": "66cae8d9c485b41dcdf4c2740f846bd7e8a56608b33ac70cc8645910bc18ad7b",
+    "cam-poster.png": "3b78353b364a0d793aa9ae404622ffbee8d868f16a1e1830057ec3012b56bafa"
+  },
+  "rendering": "tools/render_demo.py: visually static spans played 6x after 0.6 s; nothing cut or reordered",
+  "foundWhileRecording": [
+    "feedback contract did not accept bearing-seat/shoulder (fixed daee9ab, test pins every lane check)",
+    "feedback recheck fell back to the bracket reference for a housing failure (fixed daee9ab)",
+    "live header named the bracket while a housing was building; DFM step showed raw JSON (fixed in the next commit)"
+  ],
+  "physicalValidation": false
+}

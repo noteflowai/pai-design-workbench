@@ -94,6 +94,13 @@ their original identities.
 | 底座 PR | #550 `92a677b`、#551 `4bd745f`，合并前 CodeBuild 的 rust、js、delivery 三条全部 SUCCEEDED |
 | 合并后上线 | 审批 Agent 驳回已被取代的 `92a677b`，批准 `4bd745f`：overlay 基于新的 `:full` digest 构建，Deploy 成功。之后改为每 5 分钟由 cron 运行一次（`flock` 防止重叠，`--once` 每次只做一个决定） |
 
+## 演示 D：从设计到车间（2026-10-05 夜）
+
+| 检查 | 实际结果 |
+|---|---|
+| 录制 | `scripts/record-cam-demo.mjs`，本机原生工具，不调用模型；源 800 s，成片 222 s（静止片段 6 倍速，不剪切）。H7 孔被拒绝（Ø34.95，1 项回归）；基准 + DFM/CAM 通过（2 次装夹、28.53 EUR、两份程序、78.9 min）；反馈闭环后 R1 发布并签名。回执 [cam-demo.json](evidence/cam-demo.json) |
+| 录制发现的缺陷 | 反馈接口不接受 `bearing-seat`/`shoulder`（已修，并加测试：所有通道可能失败的检查都必须被反馈接口接受）；轴承座复测回退到了支架基准（已修，按零件族回退）；轴承座建模中页眉写成"电机支架"、DFM 步骤显示原始 JSON（已修）。前两项都会在真实使用中卡住闭环 |
+
 ## 第二零件族与 AI 写代码（2026-10-05 晚）
 
 | 检查 | 实际结果 |

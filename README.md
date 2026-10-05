@@ -27,6 +27,17 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 ![Blender Cycles 渲染：AI 修正后的 6 工位 CNC 产线](docs/media/factory-render.png)
 
+[![从设计到车间：6202 轴承座 H7 孔被拒绝、DFM/DFA、FreeCAD CAM 出 G-code、独立切削仿真、签名交付](docs/media/cam-demo.gif)](docs/media/cam-demo.mp4)
+
+**演示 D · 从设计到车间**：[docs/media/cam-demo.mp4](docs/media/cam-demo.mp4)（约 3.7 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-cam-2026-10-05) 下载。全程只用原生工具，不调用模型。
+
+1. 6202 轴承座冻结需求：Ø35 H7 轴承孔（35.000–35.025）、孔四周壁厚 ≥ 5 mm、M8 地脚孔边距 ≥ 1.5 d、外形 ≤ 120 × 40 × 60 mm。
+2. 候选把轴承孔加工成 Ø34.95。CadQuery 逐个特征建模，OCCT B-Rep 实测孔径低于 H7 下限，其余检查都通过；EvalArc 判定丢失 1 项检查，结论为拒绝。
+3. 回到基准设计并冻结制造要求。DFM 实测 2 次装夹、0 个孔受阻（M8 螺钉头和扳手有空间）、单件成本估算 28.53 EUR。FreeCAD 1.1 CAM 按装夹各出一份 G-code，另一个独立进程只读 G-code，在 0.1 mm 高度图上仿真：无过切、无残料、无过载、无快移碰撞，节拍 78.9 min，并给出仿真图。
+4. 失败案例经反馈、复测、关闭后发布 R1。签名发布包含 STEP、两份 G-code、仿真报告和仿真图，车间拿到的程序与评审过的是同一份字节。
+
+录制时发现并修正了 3 个问题（轴承座检查不能登记反馈、复测误用支架基准、构建中标题写成支架），回执见 [cam-demo.json](docs/evidence/cam-demo.json)。
+
 **演示 C · 生成式 CAD**：
 
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
@@ -39,22 +50,22 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 3. 代码在三层沙箱中建模，通过全部 7 项检查，39.6 g。
 4. 16 点原生设计空间扫描，找到最轻的可行设计 t = 3 mm，37.4 g，作为正式候选也通过了检查。
 
-三段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
+四段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
 
 ## 能力一览
 
 | 方面 | 实现（只写跑过的结果） | 文档 |
 |---|---|---|
-| 几何 | CadQuery 2.8 / OCCT 7.9，两个零件族：NEMA 17 电机支架（参数化、AI 生成代码，三层沙箱 / AgentCore microVM）与 6202 轴承座（Ø35 H7 轴承孔、止口、射线实测壁厚、M8 地脚）；另有 Ahmed 型车身；B-Rep 实测接口、壁厚、孔边距、质量、干涉 | [CAD_CODE.md](docs/CAD_CODE.md) |
+| 几何 | CadQuery 2.8 / OCCT 7.9，两个零件族：NEMA 17 电机支架与 6202 轴承座（Ø35 H7 轴承孔、止口、射线实测壁厚、M8 地脚）；两者都可用参数预设或由 AI 写 CadQuery 代码（三层沙箱，或 AgentCore microVM），由同一套 B-Rep 检查裁决；另有 Ahmed 型车身 | [CAD_CODE.md](docs/CAD_CODE.md) |
 | 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
 | 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟） | [AERO.md](docs/AERO.md) |
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
 | 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器；Newton 1.6 交叉校验关节树、质量和正运动学） | [PHYSICS.md](docs/PHYSICS.md) |
 | 产线与场景 | Blender 5.2：工作单元与 6 工位产线，BVH 射线实测通道、围栏、相机覆盖 | [PLANT.md](docs/PLANT.md) |
-| 可制造性 | 三轴铣削 DFM：最少装夹方向、钻孔通道、孔深径比、紧固件可装配性（DFA）、单件成本估算；CAM：FreeCAD 1.1 + OpenCAMLib 按装夹出 G-code，独立高度图仿真检查过切、残料、过载和快移碰撞，给出节拍 | [CAM.md](docs/CAM.md) |
+| 可制造性 | 三轴铣削 DFM：最少装夹方向、钻孔通道、孔深径比、紧固件可装配性（DFA）、单件成本估算；CAM：FreeCAD 1.1 + OpenCAMLib 按装夹出 G-code，另一个独立进程在 0.1 mm 高度图上仿真，检查过切、残料、过载和快移碰撞，给出节拍和仿真图；托管站点上两者各自是一个 AWS Batch 作业（一次评审 11 分钟） | [CAM.md](docs/CAM.md) |
 | 证据 | EvalArc 基准对照、发布准入 5 项；AWS KMS 签名，加 RFC 3161 时间戳，只封存一次；界面内和离线核验 | [VERIFICATION.md](docs/VERIFICATION.md) |
 | AI | 受控执行器调用 Kiro 2.27（主账号 → 备用 → 二备），共享账本、不自动重试；计划带收紧/放宽标记，确认后才执行；模型的物理估算由求解器打分；"带图问 AI"把已记录的渲染图、相机视图和应力云图按摘要发给模型（本机、托管站点和 AgentCore 均可用；盲测 6/6 与射线检查一致） | [AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
-| 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
+| 自主 | 维护者签发授权（工具、次数、有效期）后，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；所有冻结要求（外形、载荷、DFM、CAM 节拍）都参与放宽判断，不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
 | 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
 界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[30 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。

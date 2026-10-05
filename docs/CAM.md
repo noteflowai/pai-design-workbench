@@ -46,6 +46,12 @@ In the review these become two checks, `cam-toolpath` and `cycle-time`, and go t
 check. `setup±?.nc`, `cam.json` and `cam-verify.json` are recorded by digest and served from the record. A part that
 cannot be programmed as designed (a hole without a free drill corridor) fails `cam-toolpath`; it is not a tool error.
 
+## Demo
+
+Demo D (README, [cam-demo.json](evidence/cam-demo.json)) runs the whole chain on the pillow block: a seat outside H7
+rejected on the B-Rep, then the reference with frozen DFM/CAM requirements (2 setups, 28.53 EUR, 78.9 min) and a
+signed release that carries STEP, both programs and the simulation.
+
 ## Measured
 
 `npm run test:cam` (reference bracket, both as baseline and candidate; 607 s sequentially, 362 s since baseline and

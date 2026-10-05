@@ -64,7 +64,7 @@
 | M5 自主闭环（✓ 第一版） | 授权 + autopilot + `pai_run_plan`；循环由工作台和 AgentForge 承担，不引入新的编排框架 | 本机 autopilot 达成目标；外部 Agent 能在授权内完成提议 → 执行 → 读取结论；托管站点开通 `run` scope 后实测 |
 | M6 代理模型预筛（进行中） | PhysicsNeMo-CFD 固定提交 + DoMINO 检查点（上游 `DoMINOInference` 原样复用）；评审中与 OpenFOAM 并行跑，按摘要登记，只作参考 | 校准门禁：≥ 6 个车身、Spearman ≥ 0.8 才可参与排序。当前 12 个车身 Spearman −0.35，未通过（Ahmed 车身在训练分布外；漏掉 40° 阻力突增和尖头罚分）；下一步用自有 OpenFOAM 场数据按上游 `domino_nim_finetuning` 微调，通过后再做混合初始化 |
 | M7 USD → 机器人策略（第一步 ✓） | Newton / Isaac Lab（L40S）、NVIDIA/skills 挂到 AgentForge、LeRobot + GR00T N1.7 | ✓ 导出的 USD 能被 Newton 1.6 导入为一个关节树，33 个构型的正运动学与 MJCF 一致（0.45 µm），过程中修掉了两个 UsdValidation 没查出的导出错误。待做：在 Newton / Isaac Lab 上跑出策略成功率，作为新的检查项 |
-| M8 设计到制造与实测回流（G-code ✓） | ocp-freecad-cam / OpenCAMLib 出 G-code；ros-mcp-server、asyncua、BaSyx 第一阶段只读；硬件三道闸 | ✓ G-code 经独立切削仿真校验（[CAM.md](CAM.md)）；待做：三坐标或应变实测回写证据，只有这一级才把 `physicalValidation` 标为 true |
+| M8 设计到制造与实测回流（G-code ✓，演示 D） | ocp-freecad-cam / OpenCAMLib 出 G-code；ros-mcp-server、asyncua、BaSyx 第一阶段只读；硬件三道闸 | ✓ G-code 经独立切削仿真校验（[CAM.md](CAM.md)）；待做：三坐标或应变实测回写证据，只有这一级才把 `physicalValidation` 标为 true |
 | 多模态评审（✓ 第一版） | 顶级模型的视觉能力；执行器 PR #60 支持按摘要绑定图像 | ✓ 渲染图、相机视图和 FEA 应力云图（`fea.png`）已能进入评审，界面上有"带图问 AI"；盲测对照 6/6 与射线检查一致（容易情形）。✓ 执行器固定版本已更新（`bf438e4`）。待做：流场图；更难的盲测（局部遮挡、应力集中位置） |
 
 ## 风险与对策

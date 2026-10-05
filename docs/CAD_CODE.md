@@ -19,7 +19,7 @@
 
 | 层 | 内容 |
 |---|---|
-| 1 静态策略 `cad_code_policy.py` | 只允许 `import cadquery as cq` 与 `import math`。禁止：下划线名称和属性、给属性赋值、`exec`/`eval`/`open`/`getattr` 等、导出与导入类 API、子模块链（`occ_impl`、`OCP`…）、class、with、try、生成器、global。必须给 `result` 和 `MOTOR_AXIS_Z` 赋值。上限 20 KB、400 行 |
+| 1 静态策略 `cad_code_policy.py` | 只允许 `import cadquery as cq` 与 `import math`。禁止：下划线名称和属性、给属性赋值、`exec`/`eval`/`open`/`getattr` 等、导出与导入类 API、子模块链（`occ_impl`、`OCP`…）、class、with、try、生成器、global。必须给 `result` 和 `AXIS_Z` 赋值（电机支架也可写 `MOTOR_AXIS_Z`）。上限 20 KB、400 行 |
 | 2 进程锁定 `cad_lockdown.py` | rlimit：CPU 60 s、地址空间 3 GiB、单文件 64 MiB、256 个文件描述符、不产生 core dump。PEP 578 审计钩子拦截创建进程、socket、ctypes，以及输出目录以外的任何写入。只提供受限的内置函数；`cadquery` 只暴露公开的类和函数，不暴露子模块 |
 | 3 OS 沙箱 `src/sandbox.ts` | bubblewrap：`--unshare-all`（无网络，独立的 PID/IPC/UTS/user 命名空间）、`--cap-drop ALL`、`--clearenv`、`--die-with-parent`、`--new-session`。根文件系统只读；主目录、工作台状态、/run、/tmp、/var/lib、/opt/ai、/etc/pai 都替换为空的 tmpfs。只挂回固定版本的 CadQuery venv、native 脚本和本次运行的输入；只有本次输出目录可写。墙钟上限 120 s |
 
@@ -37,6 +37,8 @@
 ## 坐标约定
 
 单位为毫米。电机安装面在 y = 0，电机本体在 y < 0。电机轴平行于 Y，经过 x = 0、z = `MOTOR_AXIS_Z`。底板底面在 z = 0，安装孔竖直。`nema17-interface` 检查会核对止口孔是否与声明的电机轴同轴（偏差 ≤ 0.1 mm），以及安装面是否位于 y = 0；不满足就判失败。可编辑模板见 `native/cad_template.py`：它通过沙箱后的检查结果与预设 reference 逐项相同，这一点由 e2e 测试断言。
+
+轴承座（`family: "pillow-block"`）：底面在 z = 0，轴线平行于 Y，经过 x = 0、z = `AXIS_Z`，Ø35 H7 轴承孔从 +Y 面加工到止口，地脚孔竖直。模板 `native/cad_template_pillow.py` 在沙箱中的测量结果与配方 `pillow-block` 一致（189.601 g），由 `npm run test:pillow` 断言。同一段代码经 AgentCore microVM 运行，结果相同（四层隔离全部启用）。
 
 ## 平台
 

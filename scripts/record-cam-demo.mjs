@@ -35,6 +35,9 @@ await chapter("01", "冻结需求");
 await caption("6202 深沟球轴承座：外圈 Ø35，孔要 H7（35.000–35.025）", "轴承孔四周壁厚 ≥ 5 mm，M8 地脚孔边距 ≥ 1.5 d，外形 ≤ 120 × 40 × 60 mm，≤ 250 g");
 await click(page.getByRole("button", { name: "新建", exact: true }), 600);
 await page.getByRole("button", { name: "创建评审任务" }).waitFor();
+await page.getByLabel("任务名称").fill("");
+await type(page.getByLabel("任务名称"), "6202 轴承座：可加工设计与 G-code");
+await page.getByLabel("准备作出的决策").fill("轴承孔 Ø35 H7、壁厚 ≥ 5 mm、M8 可装配；两次装夹以内、单件 ≤ 40 EUR，交付经仿真校验的程序。");
 await click(page.getByRole("button", { name: "创建评审任务" }), 1400);
 await page.getByText("任务和验收要求已冻结为版本 1。").waitFor(); await pause(1200);
 
