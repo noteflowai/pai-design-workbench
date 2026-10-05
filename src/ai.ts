@@ -507,7 +507,8 @@ async function screenCode(config: Config, result: Pick<AssistantPlan, "interpret
 const STATE: Record<string, NonNullable<AssistantPlan["state"]>> = { done: "done", "deferred-budget": "deferred", "blocked-policy": "blocked", "blocked-engine": "blocked" };
 
 /** Recorded native images only: the file must be listed in the record with a digest, and still match it. */
-const IMAGE_KIND: Record<string, string> = { "preview.png": "检测相机视图 / 原生渲染", "fea.png": "von Mises 应力云图（CalculiX 结果的 Blender 渲染）" };
+const IMAGE_KIND: Record<string, string> = { "preview.png": "检测相机视图 / 原生渲染", "fea.png": "von Mises 应力云图（CalculiX 结果的 Blender 渲染）",
+  "cam-sim.png": "切削仿真结果图（按装夹的高度图：红=过切，橙=残料，蓝=刀具够不到）" };
 async function attachedImages(store: Store, config: Config, list: NonNullable<z.infer<typeof AiInput>["attachments"]>) {
   const DIR: Record<string, string> = { "scene-review": "scenes", "cad-review": "cad", "aero-review": "aero" };
   const out: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[] = [];

@@ -312,7 +312,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
     const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
       "drawing.svg": "image/svg+xml", "checks.json": "application/json", "fea.json": "application/json", "fea.glb": "model/gltf-binary",
-      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json", "cam-job.json": "application/json" };
+      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json", "cam-job.json": "application/json", "cam-sim.png": "image/png" };
     // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb") && !p.file.endsWith(".png")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);

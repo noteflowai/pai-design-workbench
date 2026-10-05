@@ -158,6 +158,27 @@ def samples(start, end, motion, arc, step):
     return [np.array([cx + r * math.cos(a0 + (a1 - a0) * t), cy + r * math.sin(a0 + (a1 - a0) * t), s[2] + (e[2] - s[2]) * t]) for t in np.linspace(0, 1, n + 1)], length
 
 
+def panel(name, H, T, gouge, residual, limited, judged_region):
+    """Shaded relief of the simulated stock (light from the upper left) with findings painted over it: red gouge,
+    orange residual, blue tool-limited material. Rows flipped so +Y is up, as seen from the spindle."""
+    from PIL import Image, ImageDraw
+    gy, gx = np.gradient(H, CELL)
+    shade = np.clip(0.55 + 0.45 * (-gx * 0.7 + gy * 0.7) / np.sqrt(1 + gx * gx + gy * gy), 0, 1)
+    lo, hi = float(np.percentile(H, 1)), float(H.max())
+    height = (H - lo) / max(hi - lo, 1e-6)
+    rgb = np.stack([0.55 + 0.35 * height, 0.62 + 0.30 * height, 0.70 + 0.25 * height], -1) * shade[..., None]
+    for mask, colour in ((limited, (0.25, 0.45, 0.95)), (residual, (1.0, 0.55, 0.0)), (gouge, (0.9, 0.1, 0.1))):
+        rgb[mask] = colour
+    im = Image.fromarray((np.clip(rgb, 0, 1)[::-1] * 255).astype(np.uint8))
+    scale = max(1, int(560 / max(im.size)))
+    im = im.resize((im.size[0] * scale, im.size[1] * scale), Image.NEAREST)
+    canvas = Image.new("RGB", (im.size[0] + 20, im.size[1] + 44), "white"); canvas.paste(im, (10, 34))
+    d = ImageDraw.Draw(canvas)
+    d.text((10, 8), f"setup {name}: {int(gouge.sum())} gouge / {int(residual.sum())} residual cells; red gouge, orange residual, blue left where no tool reaches", fill=(20, 30, 40))
+    return canvas
+
+
+panels = []
 order = [s["setup"] for s in cam["setups"]]
 results, stock_after = [], None
 for idx, setup in enumerate(cam["setups"]):
@@ -312,6 +333,7 @@ for idx, setup in enumerate(cam["setups"]):
         res_example = {"clusters": [{"x": k[0], "y": k[1], "cells": v[0], "maxMm": round(v[1], 3), "partZ": round(v[2], 2), "first": [round(v[3], 2), round(v[4], 2)], "sloped": v[5], "tol": v[6]} for k, v in top], "worst": {"cell": [round(float(xc[ii]), 2), round(float(yc[jj]), 2)], "stock": round(float(H[jj, ii]), 3), "part": round(float(T[jj, ii]), 3)},
                        "over1mm": {"cells": int(big.sum()), "x": [round(float(xc[np.argwhere(big)[:, 1]].min()), 2), round(float(xc[np.argwhere(big)[:, 1]].max()), 2)] if big.any() else None,
                                    "y": [round(float(yc[np.argwhere(big)[:, 0]].min()), 2), round(float(yc[np.argwhere(big)[:, 0]].max()), 2)] if big.any() else None}}
+    panels.append(panel(setup["setup"], H, T, gouge, residual, limited & (H > T_part + RESIDUAL), region | (idx > 0)))
     results.append({"setup": setup["setup"], "samples": nsamples, "cells": int(nx * ny), "cellMm": CELL,
                     "gougeCells": int(gouge.sum()), "maxGougeMm": round(float((T - H)[gouge].max()), 4) if gouge.any() else 0.0,
                     "residualCells": int(residual.sum()), "maxResidualMm": round(float((H - T)[residual].max()), 4) if residual.any() else 0.0,
@@ -332,6 +354,14 @@ checks = [
 ]
 out = {"schema": "pai-cam-verify-1", "method": "dexel height-map material removal per setup", "setups": results, "cycleMinutes": total,
        "checks": checks, "passed": all(c["passed"] for c in checks), "seconds": round(time.time() - t0, 1), "physicalValidation": False}
+# Picture of the simulated result for review (panels side by side); presentation only, recorded with the report.
+from PIL import Image
+sheet = Image.new("RGB", (sum(p.size[0] for p in panels), max(p.size[1] for p in panels)), "white")
+x = 0
+for p_ in panels:
+    sheet.paste(p_, (x, 0)); x += p_.size[0]
+sheet.save(Path(a.output).with_name("cam-sim.png"))
+out["picture"] = "cam-sim.png"
 Path(a.output).write_text(json.dumps(out, indent=2) + "\n")
 print(json.dumps({"passed": out["passed"], "cycleMinutes": total, **{c["id"]: c["observed"] for c in checks},
                   "setups": [(r["setup"], r["gougeCells"], r["residualCells"], r["rapidCollisions"]) for r in results], "seconds": out["seconds"]}))

@@ -132,6 +132,7 @@ export class WorkbenchStack extends cdk.Stack {
       `arn:aws:batch:${this.region}:${this.account}:job-queue/${SOLVER.queue}`, // Submitting by name (latest revision) is authorised against the unversioned ARN.
       `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.jobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.jobDefinition}:*`,
       `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.cfdJobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.cfdJobDefinition}:*`,
+      `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}:*`,
       `arn:aws:batch:${this.region}:${this.account}:job/*`] }));
     role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:DescribeJobs"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
     role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject"], resources: [`arn:aws:s3:::${SOLVER.bucket(this.account, this.region)}/jobs/*`] }));

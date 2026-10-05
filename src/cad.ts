@@ -30,7 +30,7 @@ export const CAD_CHECKS = [...GEOMETRY_CHECKS, ...FEA_CHECKS, ...DFM_CHECKS, ...
 export const CamRequirements = z.object({ maxCycleMinutes: z.number().min(1).max(10000) }).strict();
 export const DfmRequirements = z.object({ maxSetups: z.number().int().min(1).max(6), maxUnitCostEur: z.number().min(0.1).max(100000),
   cam: CamRequirements.optional() }).strict();
-export const CAM_FILE = /^(cam\.json|cam-verify\.json|cam-job\.json|setup[+-][XYZ]\.nc)$/;
+export const CAM_FILE = /^(cam\.json|cam-verify\.json|cam-job\.json|cam-sim\.png|setup[+-][XYZ]\.nc)$/;
 export type DfmRequirements = z.infer<typeof DfmRequirements>;
 export const DEFAULT_DFM: DfmRequirements = { maxSetups: 2, maxUnitCostEur: 25 };
 export const CAD_PRESETS = ["reference", "lightweight", "undersize-bore", "compact"] as const;

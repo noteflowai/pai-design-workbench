@@ -38,10 +38,12 @@ try {
   assert.deepEqual(programs, ["candidate/setup+Y.nc", "candidate/setup+Z.nc"], "one program per DFM setup");
   const nc = await app.inject({ url: `/api/cad/${run.id}/files/${programs[1]}`, headers: { host } });
   assert.equal(nc.statusCode, 200); assert.match(nc.body, /G21/); assert.match(nc.body, /M2/);
+  const sim = await app.inject({ url: `/api/cad/${run.id}/files/candidate/cam-sim.png`, headers: { host } });
+  assert.equal(sim.statusCode, 200); assert.equal(sim.rawPayload.subarray(1, 4).toString(), "PNG");
   const verify = (await app.inject({ url: `/api/cad/${run.id}/files/candidate/cam-verify.json`, headers: { host } })).json();
   assert.ok(run.receipts.some(r => r.adapter === "freecad-cam" && r.exitCode === 0) && run.receipts.some(r => r.adapter === "cam-dexel-verify" && r.exitCode === 0));
   const report = { schema: "pai-cam-e2e-1", checkedAt: new Date().toISOString(), result: "passed", seconds: Math.round((Date.now() - t0) / 1000),
-    programs: programs.map(p => p.split("/")[1]), cycleMinutes: verify.cycleMinutes, checks: verify.checks.map((c: { id: string; passed: boolean; observed: unknown }) => ({ id: c.id, passed: c.passed, observed: c.observed })),
+    runner: run.receipts.find(r => r.adapter.startsWith("freecad-cam"))?.adapter, programs: programs.map(p => p.split("/")[1]), cycleMinutes: verify.cycleMinutes, checks: verify.checks.map((c: { id: string; passed: boolean; observed: unknown }) => ({ id: c.id, passed: c.passed, observed: c.observed })),
     setups: verify.setups.map((s: Record<string, unknown>) => ({ setup: s.setup, minutes: s.minutes, cuttingMm: s.cuttingMm, toolLimited: s.toolLimited })),
     physicalValidation: false };
   await mkdir(join(config.state, "evidence"), { recursive: true });

@@ -166,6 +166,10 @@ function CadDetail({ cad }: { cad?: CadReview }) {
         <figcaption>{which === "baseline" ? "基准" : "候选"} · von Mises 应力云图 · 0 → {fea?.colorScaleMaxMPa ?? "—"} MPa · 原生 Blender 渲染，按摘要登记</figcaption></figure>}
       <VisualAsk message={`附图是${which === "baseline" ? "基准" : "候选"}支架的 von Mises 应力云图（CalculiX 结果，色标 0 → ${fea?.colorScaleMaxMPa ?? "?"} MPa，变形放大 ${fea?.displayScale ?? "?"}×）。请对照图像和 FEA 检查记录指出应力集中和刚度薄弱的位置，并给出不放宽要求的加强方案（预设变体或 cad-code）。`}
         attachments={cad.files[`${which}/fea.png`] ? [{ recordKind: "cad-review", recordId: cad.id, which, file: "fea.png", label: `${which === "baseline" ? "基准" : "候选"}应力云图` }] : []} />
+      {cad.files[`${which}/cam-sim.png`] && <figure className="result-image"><img alt={`${which === "baseline" ? "基准" : "候选"}零件切削仿真结果（每个装夹一幅高度图）`} src={`/api/cad/${cad.id}/files/${which}/cam-sim.png`} />
+        <figcaption>切削仿真 · 由 G-code 独立计算的 0.1 mm 高度图 · 红=过切，橙=残料，蓝=刀具够不到的内角</figcaption></figure>}
+      <VisualAsk message={`附图是${which === "baseline" ? "基准" : "候选"}零件的切削仿真结果（按装夹的高度图）。请对照图像和 CAM 检查记录说明残料、过切或刀具够不到的位置及其原因，并给出不放宽要求的改进（设计圆角、换刀或调整装夹）。`}
+        attachments={cad.files[`${which}/cam-sim.png`] ? [{ recordKind: "cad-review", recordId: cad.id, which, file: "cam-sim.png", label: `${which === "baseline" ? "基准" : "候选"}切削仿真` }] : []} />
       {Object.keys(cad.files).some(f => f.startsWith(`${which}/setup`)) && <div className="button-row" role="group" aria-label="CAM 程序">
         {Object.keys(cad.files).filter(f => f.startsWith(`${which}/setup`) && f.endsWith(".nc")).sort().map(f => <a key={f} className="button secondary" href={`/api/cad/${cad.id}/files/${f}`}>下载 G-code · 装夹 {f.split("setup")[1].replace(".nc", "")}</a>)}
         <a className="button secondary" href={`/api/cad/${cad.id}/files/${which}/cam-verify.json`}>切削仿真报告</a></div>}
