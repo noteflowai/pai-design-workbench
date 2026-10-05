@@ -76,18 +76,19 @@ the +Y holes, and a raster too coarse on the 45° slopes. Each was fixed in `cam
   - The image installs FreeCAD with the same `tools/setup_cam.py` and the same pins as the local lane.
   - `native/cam_remote.py` uploads `part.step` and `dfm.json`, submits the job without ever resubmitting it, and
     re-hashes every returned file against the job's `result.json` and the inputs it sent.
-  - The **verification still runs on the workbench host** (`cam_verify.py` in the CadQuery venv), so the program
-    generator and its checker never share a container.
+  - Verification runs as a **second, separate job** (`cam_job.py --mode verify`). It downloads the programs, checks
+    each one against its digest in `cam.json`, runs `cam_verify.py`, and returns `cam-verify.json` and `cam-sim.png`
+    with digests. The host re-hashes them. The generator and the checker never share a container.
   - Locally the image produced the same `setup+Y.nc` as the local lane. Its `setup+Z.nc` differs; two local runs also
     differ from each other, because FreeCAD Adaptive output depends on thread timing. The container's programs pass
     the same simulation (94.3 min).
-- **Measured on pai.oneai.host** ([cam-batch.json](evidence/cam-batch.json)): the reference bracket was reviewed as
-  baseline and candidate and accepted. Each part's programs came from one Batch job (image `cam-6309cb6ff1a12f2c`,
-  81 s on 4 vCPU). Verification on the 2 vCPU host takes most of the 19 min for both parts; reviewing baseline and candidate
-  concurrently brought it to 14 min. It is a per-sample Python loop
-  (about 3.5 min per part on one core); batching the samples per move was tried and was slower, because most adaptive
-  moves have only 2–3 samples. Next step: run the verifier as its own Batch job from a separate image, so the
-  generator and the checker still never share a container.
+- **Measured on pai.oneai.host** ([cam-batch.json](evidence/cam-batch.json)): the reference bracket, reviewed as
+  baseline and candidate, was accepted.
+  - Wall time 19 min with verification on the host and parts in sequence, 14 min with parts concurrent, and 11 min
+    with verification as its own job (generate 45 s + verify 302 s on 4 vCPU per part; the rest is image pulls and
+    queueing).
+  - The verifier is a per-sample Python loop. Batching samples per move was tried and was slower, because most
+    adaptive moves have only 2–3 samples.
 - **Not on the small host:** the hosted host itself has 2 vCPU and 3 GB RAM, so the local FreeCAD lane
   (`PAI_ENABLE_CAM=1`) stays off there.
 

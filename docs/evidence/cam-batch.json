@@ -36,5 +36,30 @@
     "cycle": 94.3,
     "jobSeconds": 82.3,
     "note": "baseline and candidate reviewed concurrently (two Batch jobs, two host verifications)"
+  },
+  "separateVerifyJob": {
+    "release": "3732c99c9a4fac9f59bd7809fb9f9a6e3a1ece2f38e64724afeb4e3488dcb358",
+    "seconds": 660,
+    "verdict": "accepted-cad-part",
+    "cycle": 94.32,
+    "jobs": {
+      "generate": {
+        "image": "cam-afee24f12ae055e0",
+        "seconds": 45.1,
+        "nproc": 4
+      },
+      "verify": {
+        "image": "cam-afee24f12ae055e0",
+        "seconds": 301.7,
+        "nproc": 4
+      }
+    },
+    "adapters": [
+      "cadquery-native",
+      "cadquery-dfm",
+      "freecad-cam-batch",
+      "cam-dexel-verify-batch",
+      "evalarc-native"
+    ]
   }
 }
