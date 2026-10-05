@@ -48,7 +48,8 @@ cannot be programmed as designed (a hole without a free drill corridor) fails `c
 
 ## Measured
 
-`npm run test:cam` (reference bracket, both as baseline and candidate; 607 s):
+`npm run test:cam` (reference bracket, both as baseline and candidate; 607 s sequentially, 362 s since baseline and
+candidate are reviewed concurrently):
 - Two programs, `setup+Z.nc` and `setup+Y.nc`.
 - All four simulation checks pass. Cycle time is 94.3 min (91.6 + 2.8).
 - Tool-limited material: 17.5 mm², the R 3 corners where the ribs meet the plate.

@@ -291,8 +291,15 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const remote = Boolean(generated && config.agentcoreSandboxArn);
     const runtime = generated && !remote ? await sandboxRuntime(config) : undefined;
     const bwrap = config.bwrap ?? "bwrap";
-    for (const [name, variant] of [["baseline", "reference"], ["candidate", request.variant]] as const) {
+    // Reference and candidate are produced concurrently (each its own directory and native processes), like the aero
+    // lane; both always settle before the record moves on, so a failure never races with the other part's writes.
+    const cadquery = config.cadquery;
+    const ownReceipts = { baseline: [] as Receipt[], candidate: [] as Receipt[] };
+    const parts = await Promise.allSettled(([["baseline", "reference"], ["candidate", request.variant]] as const).map(async ([name, variant]) => {
       const target = join(directory, name);
+      // Receipts per part, merged in a fixed order (baseline, candidate) once both settle, so records are deterministic.
+      const own = ownReceipts[name];
+      const part = new Proxy(record, { get: (t, k) => k === "receipts" ? own : Reflect.get(t, k), set: (t, k, v) => k === "receipts" ? false : Reflect.set(t, k, v) });
       const label = `CadQuery ${name === "baseline" ? "基准零件" : "候选零件"}（${variant}）`;
       publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: "running", which: name });
       const input = join(directory, `${name}-input.json`);
@@ -301,9 +308,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       await mkdir(target, { recursive: true, mode: 0o700 });
       const sandboxed = Boolean(generated && name === "candidate");
       if (sandboxed && remote) {
-        await buildRemote(config, publish, record, target, generated!, codeSha256!, request.requirements, request.requestId);
+        await buildRemote(config, publish, part, target, generated!, codeSha256!, request.requirements, request.requestId);
         publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: "done", which: name, detail: "AgentCore microVM" });
-      } else if (sandboxed) await buildGenerated(config, publish, record, directory, runtime!, generated!, codeSha256!, request.requestId);
+      } else if (sandboxed) await buildGenerated(config, publish, part, directory, runtime!, generated!, codeSha256!, request.requestId);
       let observed = Promise.resolve();
       const observe = (line: string) => {
         if (!line.startsWith("PAI_EVENT ")) return;
@@ -324,11 +331,11 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         ? sandboxArgs(config, runtime!, { readOnly: [input, join(directory, "candidate-src")], writable: [target] },
           [runtime!.python, "-I", "-W", "ignore", join(runtime!.native, "cad_generated.py"), "--input", input, "--source", join(directory, "candidate-src"), "--output", target])
         : ["-I", "-W", "ignore", script, "--input", input, "--output", target];
-      const r = await command(sandboxed ? bwrap : config.cadquery, args, config.repository, undefined, 180_000, observe);
+      const r = await command(sandboxed ? bwrap : cadquery, args, config.repository, undefined, 180_000, observe);
       await observed;
       await writePrivate(join(directory, `${name}.stdout.log`), r.stdout);
       await writePrivate(join(directory, `${name}.stderr.log`), r.stderr);
-      record.receipts.push({ adapter: sandboxed ? "cadquery-sandbox-check" : "cadquery-native", command: sandboxed ? ["bwrap", "…", "python", "cad_generated.py"] : ["python", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt,
+      own.push({ adapter: sandboxed ? "cadquery-sandbox-check" : "cadquery-native", command: sandboxed ? ["bwrap", "…", "python", "cad_generated.py"] : ["python", ...args], startedAt: r.startedAt, finishedAt: r.finishedAt,
         exitCode: r.exitCode, stdoutSha256: sha256(r.stdout),
         sourceDigests: sandboxed ? { script: scriptsBefore["cad-generated.py"], checks: scriptsBefore["cad-checks.py"] } : { script: scriptHash, checks: scriptsBefore["cad-checks.py"] } });
       publish(request.requestId, { kind: "step", id: `cad-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: `exit ${r.exitCode}` });
@@ -339,7 +346,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       if (checks.variant !== variant) throw new DomainError("CAD_CONTEXT", "Native CAD variant mismatch");
       if (checks.checks.length !== GEOMETRY_CHECKS.length) throw new DomainError("CAD_CONTEXT", "Native CAD produced unexpected checks");
       if (structural) {
-        const fea = await runFea(config, publish, record, request.requestId, name, target, checks, structural);
+        const fea = await runFea(config, publish, part, request.requestId, name, target, checks, structural);
         checks.checks.push(...fea.checks);
         const { checks: _measured, ...summary } = fea;
         record.fea = { ...record.fea, [name]: summary };
@@ -348,16 +355,16 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       const dfm = request.requirements.dfm;
       if (dfm) {
         publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM：三轴铣削装夹、钻孔与单件成本（${name === "baseline" ? "基准" : "候选"}）`, status: "running", which: name });
-        const r = await command(config.cadquery, ["-I", "-W", "ignore", native("cad_dfm.py"), "--step", join(target, "part.step"), "--shop", native("dfm-shop.json"),
+        const r = await command(cadquery, ["-I", "-W", "ignore", native("cad_dfm.py"), "--step", join(target, "part.step"), "--shop", native("dfm-shop.json"),
           "--requirements", JSON.stringify(dfm), "--output", join(target, "dfm.json")], config.repository, undefined, 180_000);
-        record.receipts.push({ adapter: "cadquery-dfm", command: ["python", "cad_dfm.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
+        own.push({ adapter: "cadquery-dfm", command: ["python", "cad_dfm.py"], startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode,
           stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(native("cad_dfm.py"))), shop: sha256(await readFile(native("dfm-shop.json"))) } });
         publish(request.requestId, { kind: "step", id: `dfm-${name}`, label: `DFM（${name === "baseline" ? "基准" : "候选"}）`, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: r.stdout.trim().slice(0, 160) });
         if (r.exitCode !== 0) throw new DomainError("DFM_FAILED", "Native DFM analysis failed; retain receipts", 422);
         const measured = z.object({ schema: z.literal("pai-dfm-1"), checks: z.array(z.object({ id: z.enum(DFM_CHECKS), passed: z.boolean() }).passthrough()).length(DFM_CHECKS.length) }).passthrough()
           .parse(JSON.parse(await readFile(join(target, "dfm.json"), "utf8")));
         checks.checks.push(...measured.checks as typeof checks.checks);
-        if (dfm.cam) checks.checks.push(...await runCam(config, publish, record, request.requestId, name, target, dfm.cam) as typeof checks.checks);
+        if (dfm.cam) checks.checks.push(...await runCam(config, publish, part, request.requestId, name, target, dfm.cam) as typeof checks.checks);
       }
       const expected = [...GEOMETRY_CHECKS, ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
@@ -365,7 +372,10 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       if (dfm?.cam) for (const f of await readdir(target)) if (CAM_FILE.test(f)) record.files[`${name}/${f}`] = sha256(await readFile(join(target, f)));
       if (structural) await readFile(join(target, "fea.png")).then(b => { record.files[`${name}/fea.png`] = sha256(b); }, () => undefined);
       store.put("cad-review", record);
-    }
+    }));
+    record.receipts.push(...ownReceipts.baseline, ...ownReceipts.candidate);
+    const failedPart = parts.find((p): p is PromiseRejectedResult => p.status === "rejected");
+    if (failedPart) throw failedPart.reason;
     publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选零件", status: "running" });
     const diff = await adapters.diff(directory);
     publish(request.requestId, { kind: "step", id: "evalarc", label: "EvalArc 独立对照基准与候选零件", status: "done", detail: `blocking ${diff.value.blocking_changes}` });
