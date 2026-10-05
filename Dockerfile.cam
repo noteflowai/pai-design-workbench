@@ -17,7 +17,7 @@ RUN PAI_TOOLS_DIR=/opt/tools PAI_ENV_FILE=/tmp/cam.env python3 /opt/pai/tools/se
       -r /opt/pai/native/cfd-job-requirements.txt && /opt/tools/freecad-*/venv/bin/python -c "import boto3" \
  && rm -f /opt/tools/freecad-*/FreeCAD.AppImage /tmp/cam.env && ln -s /opt/tools/freecad-* /opt/freecad \
  && find /opt -name __pycache__ -prune -exec rm -rf {} +
-COPY --chmod=0644 native/cam_part.py native/cam_job.py native/dfm-shop.json /opt/pai/native/
+COPY --chmod=0644 native/cam_part.py native/cam_verify.py native/cam_job.py native/dfm-shop.json /opt/pai/native/
 ARG PAI_IMAGE_VERSION=dev
 ENV PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION}
 USER pai

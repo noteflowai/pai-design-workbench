@@ -453,9 +453,14 @@ async function runCam(config: Config, publish: LiveBus["publish"], record: CadRe
       { id: "cycle-time", passed: false, observed: null, required: req.maxCycleMinutes, unit: "min", method: "no program" }];
   }
   if (gen.exitCode !== 0) throw new DomainError("CAM_FAILED", "Native CAM failed; retain receipts and inspect the log", 422);
-  const ver = await command(config.cadquery!, ["-I", "-W", "ignore", native("cam_verify.py"), "--step", join(target, "part.step"), "--cam", join(target, "cam.json"),
-    "--shop", native("dfm-shop.json"), "--output", join(target, "cam-verify.json")], config.repository, undefined, 1_800_000);
-  record.receipts.push({ adapter: "cam-dexel-verify", command: ["python", "cam_verify.py"], startedAt: ver.startedAt, finishedAt: ver.finishedAt, exitCode: ver.exitCode,
+  // Hosted: the simulation is its own Batch job (a separate container from the generator; the 2 vCPU host stays free).
+  const ver = camRunner(config) === "batch"
+    ? await command(config.physicsPython!, ["-I", native("cam_remote.py"), "--verify", "--step", join(target, "part.step"), "--dfm", join(target, "dfm.json"), "--output", target,
+        "--queue", b!.queue, "--job-definition", b!.camJobDefinition!, "--bucket", b!.bucket, "--region", b!.region, "--run", record.id, "--name", name,
+        "--timeout-seconds", "3600"], config.repository, undefined, 3_900_000)
+    : await command(config.cadquery!, ["-I", "-W", "ignore", native("cam_verify.py"), "--step", join(target, "part.step"), "--cam", join(target, "cam.json"),
+        "--shop", native("dfm-shop.json"), "--output", join(target, "cam-verify.json")], config.repository, undefined, 1_800_000);
+  record.receipts.push({ adapter: camRunner(config) === "batch" ? "cam-dexel-verify-batch" : "cam-dexel-verify", command: ["python", camRunner(config) === "batch" ? "cam_remote.py --verify" : "cam_verify.py"], startedAt: ver.startedAt, finishedAt: ver.finishedAt, exitCode: ver.exitCode,
     stdoutSha256: sha256(ver.stdout), sourceDigests: { script: sha256(await readFile(native("cam_verify.py"))) } });
   if (ver.exitCode !== 0) throw new DomainError("CAM_VERIFY_FAILED", "CAM verification could not run; retain receipts", 422);
   const v = z.object({ schema: z.literal("pai-cam-verify-1"), passed: z.boolean(), cycleMinutes: z.number(),
