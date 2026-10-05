@@ -60,7 +60,7 @@ test("every frozen CAD requirement is compared, so a grant cannot drop DFM, CAM 
   const relaxed = (now: typeof frozen) => cadRequirementChanges(frozen, now).filter(c => c.direction === "relaxed").map(c => c.field);
   assert.deepEqual(relaxed({ ...frozen }), []);
   assert.deepEqual(relaxed({ ...frozen, dfm: undefined } as never), ["dfm"]);
-  assert.deepEqual(relaxed({ ...frozen, dfm: { maxSetups: 2, maxUnitCostEur: 16 } }), ["dfm.cam"]);
+  assert.deepEqual(relaxed({ ...frozen, dfm: { maxSetups: 2, maxUnitCostEur: 16 } } as never), ["dfm.cam"]);
   assert.deepEqual(relaxed({ ...frozen, dfm: { ...frozen.dfm, cam: { maxCycleMinutes: 200 } } }), ["dfm.cam.maxCycleMinutes"]);
   assert.deepEqual(relaxed({ ...frozen, maxEnvelopeMm: [90, 40, 60] }), ["maxEnvelopeMm[0]"]);
   assert.deepEqual(cadRequirementChanges(DEFAULT_CAD_REQUIREMENTS, frozen).filter(c => c.direction === "tightened").map(c => c.field), ["dfm"]);
