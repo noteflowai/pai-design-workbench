@@ -19,7 +19,7 @@ Toolpaths are reused, not written here:
   - A ball-nose raster over the sloped faces, from OpenCAMLib `AdaptivePathDropCutter`. FreeCAD's 3D Surface op with
     selected faces fails on 1.1.4, so its engine is used directly. The step-over is corrected for the face tilt.
 - **Holes:** FreeCAD Drill (peck) and Helix for the bores.
-- **Post-processor:** grbl. A rapid that would travel below the part top is turned into a feed move.
+- **Post-processor:** grbl. A rapid that would travel below the stock top (part top plus allowance) is turned into a feed move. The guard was the part top until CI found a rapid collision in the first Adaptive layer, which faces the allowance at z = 0: its links crossed uncut stock in an order that floating point varies between CPUs. With the stock-top guard the bracket converts 7355 rapids instead of 6988, and the cycle time goes from 94.33 to 94.56 min.
 
 The tool library, feeds and tolerances live in `native/dfm-shop.json` (`cam`), reviewed data and conservative for
 6061-T6 on a small VMC.

@@ -210,8 +210,12 @@ for setup in setups:
         lines.append("(Finish operation: Raster3D)")
         at = gcode.find("(Begin operation: ProfileOp")
         gcode = gcode[:at] + "\n".join(lines) + "\n" + gcode[at:]
-    # Safety post-process: a rapid with XY travel below the part top (z < 0 in this frame) becomes a feed move at the
-    # current operation's feed, so a short "keep tool down" link can never rapid through stock that is left.
+    # Safety post-process: a rapid with XY travel below the stock top (part top + allowance in this frame) becomes a
+    # feed move at the current operation's feed, so a short "keep tool down" link can never rapid through stock that
+    # is left. The guard is the stock top, not the part top: the first Adaptive layer (z = 0) faces the allowance and
+    # its links at z = 0 cross uncut stock depending on path order, which floating point varies between CPUs (seen in
+    # CI as a rapid collision that did not reproduce locally).
+    guard = shop["stockAllowanceMm"]
     fixed, z, feed, converted = [], None, None, 0
     for line in gcode.splitlines():
         words = dict(re.findall(r"([XYZF])(-?\d*\.?\d+)", line))
@@ -219,7 +223,7 @@ for setup in setups:
             feed = words["F"]
         if line.startswith("G0 ") and ("X" in words or "Y" in words):
             zn = float(words.get("Z", z if z is not None else 1e9))
-            if z is not None and min(z, zn) < -1e-6 and feed:
+            if z is not None and min(z, zn) < guard - 1e-6 and feed:
                 line = "G1" + line[2:] + f" F{feed}"; converted += 1
         if "Z" in words and line[:2] in ("G0", "G1", "G2", "G3"):
             z = float(words["Z"])
