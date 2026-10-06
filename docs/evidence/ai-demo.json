@@ -1,0 +1,163 @@
+{
+  "schema": "pai-demo-ai-1",
+  "recordedAt": "2026-10-06T15:50:00Z",
+  "site": "local workbench (bounded NoteFlow executor e77ee43, shared ledger; CadQuery 2.8 / OCCT 7.9; Gmsh + CalculiX 2.21; GP + NSGA-II)",
+  "model": {
+    "profile": "claude",
+    "provider": "claude",
+    "adapter": "claude-agent-acp 0.85.1",
+    "route": "Claude Code on Amazon Bedrock (operator configuration CLAUDE_CODE_USE_BEDROCK=1)",
+    "modelEvidence": "acp_advertised",
+    "attempts": [
+      {
+        "profile": "claude",
+        "provider": "claude",
+        "status": "succeeded",
+        "errorKind": null,
+        "model": "default"
+      }
+    ],
+    "executorAction": "reconcile",
+    "reconciliation": "回执显示只读模式、没有工具活动，回答已人工审阅"
+  },
+  "facts": {
+    "compact": {
+      "mass": 170.161,
+      "edge": 6,
+      "required": 13.5
+    },
+    "ai": {
+      "engine": "Claude",
+      "profile": "claude",
+      "parameters": {
+        "width": 96,
+        "depth": 30,
+        "baseDepth": 32,
+        "axisHeight": 30,
+        "baseThickness": 9,
+        "boltPitch": 68,
+        "seatDiameter": 35.012,
+        "shoulderDiameter": 26,
+        "crown": 6
+      },
+      "verdict": "rejected",
+      "mass": 208.859,
+      "edge": 14,
+      "estimate": "用 parametric 轴承座：底座宽 96、孔距 68，孔边距 (96−68)/2=14 mm ≥ 13.5 mm；底座深 32，横向边距 16 mm。孔距 68 时，孔内缘离轴心约 29.5 mm，壳体外半径约 25.5 mm，估计壁厚有余量。加宽会增重，所以把底座厚度降到 9、轴向深度降到 30（座孔长度仍 ≥ 11），预计质量不超过 cad-1 的 170 g。这只是估算，原有参数是从 ",
+      "reconciled": true
+    },
+    "optimize": {
+      "points": 17,
+      "solved": 15,
+      "feasible": 10,
+      "reference": {
+        "mass": 189.601,
+        "bore": 0.00516
+      },
+      "best": {
+        "origin": "exploit",
+        "parameters": {
+          "width": 89.15,
+          "depth": 19.13,
+          "baseDepth": 36,
+          "axisHeight": 30,
+          "baseThickness": 6.12,
+          "boltPitch": 59.77,
+          "seatDiameter": 35.012,
+          "shoulderDiameter": 28,
+          "crown": 8
+        },
+        "mass": 145.335,
+        "bore": 0.00594,
+        "deflection": 0.0043
+      },
+      "calibration": [
+        {
+          "index": 10,
+          "predicted": 0.0042,
+          "measured": 0.0036,
+          "relativeError": 0.1667
+        },
+        {
+          "index": 11,
+          "predicted": 0.0039,
+          "measured": 0.0031,
+          "relativeError": 0.2581
+        },
+        {
+          "index": 12,
+          "predicted": 0.0046,
+          "measured": 0.005,
+          "relativeError": 0.08
+        },
+        {
+          "index": 13,
+          "predicted": 0.0044,
+          "measured": 0.0048,
+          "relativeError": 0.0833
+        },
+        {
+          "index": 14,
+          "predicted": 0.0018,
+          "measured": 0.0021,
+          "relativeError": 0.1429
+        },
+        {
+          "index": 15,
+          "predicted": 0.0049,
+          "measured": 0.0051,
+          "relativeError": 0.0392
+        },
+        {
+          "index": 16,
+          "predicted": 0.0043,
+          "measured": 0.0043,
+          "relativeError": 0
+        },
+        {
+          "index": 17,
+          "predicted": 0.0025,
+          "measured": 0.0022,
+          "relativeError": 0.1364
+        }
+      ]
+    },
+    "formal": {
+      "verdict": "accepted-cad-part",
+      "mass": 145.335,
+      "bore": 0.00594,
+      "convergence": {
+        "axisDisplacement": 0.0128,
+        "peakVonMises": 0.125,
+        "boreDistortion": 0.0094
+      }
+    },
+    "signer": "本机 Ed25519 密钥；托管站点使用 AWS KMS"
+  },
+  "marks": [
+    {
+      "name": "freeze",
+      "seconds": 8.8
+    },
+    {
+      "name": "ai",
+      "seconds": 33.5
+    },
+    {
+      "name": "optimize",
+      "seconds": 103.6
+    },
+    {
+      "name": "release",
+      "seconds": 584
+    }
+  ],
+  "sourceSeconds": 632,
+  "notes": [
+    "Real model call (1 ledger attempt). Claude proposed W 96 / depth 30 / base 32 x 9 / pitch 68: edge distance fixed (14 mm >= 13.5) but it raised the housing depth from 20 to 30 mm and estimated <= 170 g; CadQuery measured 208.859 g and rejected it on mass (limit 175 g). The solver decided against the AI.",
+    "An earlier take the same evening (1 ledger attempt) had Claude propose W 98 / base 32 x 8 / pitch 70 / crown 6, accepted at 137.957 g; it was re-recorded only because the caption printed the engine as 'default'. Both outcomes are real; this take is published.",
+    "In chapter 3 the family switch reset the mass limit to the family default 250 g, so the optimisation ran against 250 g, not 175 g; its lightest feasible housing (145.335 g) meets 175 g as well. The recorder now keeps 175 g.",
+    "Local recording: the release is signed with the local Ed25519 key; the hosted site signs with AWS KMS."
+  ],
+  "physicalValidation": false
+}

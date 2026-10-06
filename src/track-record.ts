@@ -40,7 +40,9 @@ export function outcomeOf(kind: string, r: Native | undefined): Outcome {
 }
 
 export const agentOf = (p: AssistantPlan) => p.source === "external" ? `${p.external?.agent ?? "external"} (MCP)`
-  : p.ai?.engine ? `${p.ai.engine.model ?? p.ai.engine.provider} · ${p.ai.engine.profile}` : "model";
+  // "default" means the engine's own configured model (Claude Code: its provider default), so name the provider instead.
+  : p.ai?.engine ? `${p.ai.engine.model && p.ai.engine.model !== "default" ? p.ai.engine.model : PROVIDER[p.ai.engine.provider] ?? p.ai.engine.provider} · ${p.ai.engine.profile}` : "model";
+const PROVIDER: Record<string, string> = { claude: "Claude", codex: "Codex", kiro: "Kiro" };
 
 export function trackRecord(store: Store, projectId: string): TrackRecord {
   const plans = store.list<AssistantPlan>("assistant-plan").filter(p => p.projectId === projectId && (p.source === "model" || p.source === "external"));

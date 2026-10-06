@@ -86,13 +86,14 @@ await busyDone(); await pause(1500); await orbit(200, -30);
 s = await state();
 const aiPlan = s.assistantPlans.filter(p => p.source === "model").at(-1);
 const aiCad = s.cads.at(-1);
-facts.ai = { engine: aiPlan?.ai?.engine?.model ?? null, profile: aiPlan?.ai?.engine?.profile ?? null, parameters: aiCad.request.parameters ?? null,
+const engineName = e => !e ? "模型" : e.model && e.model !== "default" ? e.model : ({ claude: "Claude", codex: "Codex", kiro: "Kiro" })[e.provider] ?? e.provider;
+facts.ai = { engine: engineName(aiPlan?.ai?.engine), profile: aiPlan?.ai?.engine?.profile ?? null, parameters: aiCad.request.parameters ?? null,
   verdict: aiCad.verdict, mass: aiCad.candidate.mass, edge: check(aiCad, "hole-edge-distance").observed, estimate: aiPlan?.answer?.text?.slice(0, 200) ?? null,
   reconciled: Boolean(aiPlan?.ai?.reconciliation) };
 await page.locator(".check-table").scrollIntoViewIfNeeded(); await pause(300);
 const p = facts.ai.parameters ?? {};
 await caption(`AI（${facts.ai.engine}）：底座 ${p.width ?? "?"} × ${p.baseDepth ?? "?"} × ${p.baseThickness ?? "?"} mm，孔距 ${p.boltPitch ?? "?"} mm`,
-  `原生实测：孔边距 ${facts.ai.edge} mm，${facts.ai.mass} g，${facts.ai.verdict === "accepted-cad-part" ? "全部检查通过" : "仍有检查未通过"}`);
+  `原生实测：孔边距 ${facts.ai.edge} mm，${facts.ai.mass} g，${facts.ai.verdict === "accepted-cad-part" ? "全部检查通过" : `未通过：${aiCad.candidate.checks.filter(c => !c.passed).map(c => c.id).join("、")}`}`);
 await spot(page.locator(".check-table"), 3600);
 
 // ---------------------------------------------------------------- 3 bearing load + physics optimisation
@@ -100,6 +101,8 @@ mark("optimize");
 await chapter("03", "冻结轴承载荷，物理寻优");
 await cadForm();
 await caption("再冻结结构要求：1 kN 上拔载荷经轴承作用在轴承孔上", "轴心位移 ≤ 10 µm，受载轴承孔失圆 ≤ 6 µm（接近 Ø35 轴承座的形状公差）");
+// Switching the family resets the form to its defaults: keep the frozen 175 g budget.
+await page.locator("label", { hasText: "质量上限" }).locator("input").fill("175");
 await click(page.getByRole("checkbox", { name: "冻结结构要求并做 FEA" }), 600);
 await spot(page.locator("fieldset", { hasText: "轴承径向载荷" }), 3000);
 const opt = page.locator("section.card", { hasText: "物理寻优（FEA + 代理模型）" });

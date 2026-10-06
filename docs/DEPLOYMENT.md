@@ -78,6 +78,8 @@ python3 tools/aws_operator.py result --command-id <ID>
 - **沙箱。** 服务单元使用 `ProtectSystem=strict`，Kiro 和 acpx 的状态目录 `~/.kiro`、`~/.acpx`、`~/.cache`、`~/.local` 单独设为可写，存放凭据的 `~/.config` 对服务保持只读。
 - **出错时。** 引擎回执显示 `work_started=false`、`effects=unknown` 时，界面要求人工核对，不会自动重放。
 
+Claude 引擎（`claude` profile）：`claude-agent-acp` 只继承服务进程的环境，不读 `~/.claude/settings.json`。如果 Claude Code 走 Amazon Bedrock，把 `CLAUDE_CODE_USE_BEDROCK=1` 和 `AWS_REGION` 放进服务环境（或 `.state/demo.env`）；凭据仍由 AWS 默认凭据链提供，不写入文件。
+
 ## 生成代码沙箱
 
 发布脚本会安装 bubblewrap，并加载 `infra/apparmor-bwrap`。这是 Ubuntu 24.04 推荐的按应用授权配置：只给 `/usr/bin/bwrap` 开放非特权用户命名空间，系统级限制保持开启。沙箱内部仍然丢弃全部特权、不能联网。服务启动时会做一次探测，不通过就禁用该通道，见 [CAD_CODE.md](CAD_CODE.md)。

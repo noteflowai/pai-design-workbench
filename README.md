@@ -38,6 +38,18 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 录制时发现并修正了 3 个问题（轴承座检查不能登记反馈、复测误用支架基准、构建中标题写成支架），回执见 [cam-demo.json](docs/evidence/cam-demo.json)。
 
+[![AI 设计轴承座，求解器裁决：维护者授权、真实模型提议、原生检查否决、物理寻优、正式复核、签名发布](docs/media/ai-demo.gif)](docs/media/ai-demo.mp4)
+
+**演示 E · AI 设计轴承座，求解器裁决**：[docs/media/ai-demo.mp4](docs/media/ai-demo.mp4)（约 4 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-ai-2026-10-06) 下载。
+
+1. 紧凑化轴承座（底座 88 mm、孔距 76 mm）的地脚孔边距只有 6 mm（要求 ≥ 13.5 mm），被 B-Rep 实测拒绝。
+2. 维护者在总览签发授权（只允许 CAD 评审、最多 3 次）并给出目标。真实模型 Claude 经受控执行器和共享账本被调用一次。执行器无法自动确认模型调用没有副作用，停下等人核对；维护者记录理由后，在同一授权内执行。
+3. AI 修好了孔边距（14 mm），但把轴承座厚度从 20 mm 加到 30 mm，并估计质量不超过 170 g。CadQuery 实测 208.9 g，超过 175 g 的上限，被否决：结论来自求解器，不来自模型。
+4. 冻结 1 kN 上拔轴承载荷后做物理寻优：15 次 CalculiX 求解、10 个可行点，最轻 145.3 g，受载失圆 5.94 µm（上限 6 µm）；两级网格正式复核通过。
+5. AI 战绩记录了这次被否决的提案；最初的失败经反馈、复测、关闭后发布 R1 并签名。
+
+同一晚的前一次录制里，Claude 的提案被接受（137.957 g）；只因字幕把引擎写成了 "default" 才重录。两次结果都是真实的，回执与说明见 [ai-demo.json](docs/evidence/ai-demo.json)。
+
 **演示 C · 生成式 CAD**：
 
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
@@ -50,7 +62,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 3. 代码在三层沙箱中建模，通过全部 7 项检查，39.6 g。
 4. 16 点原生设计空间扫描，找到最轻的可行设计 t = 3 mm，37.4 g，作为正式候选也通过了检查。
 
-四段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
+五段成片都没有剪切或调换顺序，只把画面静止的等待片段加速播放。CAD 演示的回执见 [demo.json](docs/evidence/demo.json)。
 
 ## 能力一览
 
