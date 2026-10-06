@@ -60,7 +60,7 @@ PAI_SEND_E2E=pillow-e2e python3 tools/aws_operator.py send --script tools/hosted
 python3 tools/aws_operator.py result --command-id <ID>
 ```
 
-`PAI_SEND_*` 环境变量会加引号后传给脚本。脚本直接用 Node 的类型擦除运行发布包里的 `dist/src`，最后输出报告行。
+`PAI_SEND_*` 环境变量会加引号后传给脚本。脚本直接用 Node 的类型擦除运行发布包里的 `dist/src`；成功时输出脚本写下的证据报告（每份一行 JSON），失败时输出日志末尾，退出码与脚本相同。
 
 ## AI 引擎
 

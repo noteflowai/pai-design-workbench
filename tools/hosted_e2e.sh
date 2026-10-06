@@ -20,6 +20,13 @@ cd "$W"
 set -a; . /etc/pai/runtime.env; set +a
 for kv in $(systemctl show pai-workbench -p Environment --value); do export "$kv"; done
 export PAI_STATE="$W/state"
-/usr/sbin/runuser -u pai -p -- timeout 3000 "$NODE" --env-file-if-exists="$REL/.state/demo.env" "$W/$E2E.ts" 2>&1 \
-  | /usr/bin/grep -v -e Warning -e trace-warnings | /usr/bin/tail -1
+status=0
+/usr/sbin/runuser -u pai -p -- timeout 3000 "$NODE" --env-file-if-exists="$REL/.state/demo.env" "$W/$E2E.ts" > "$W/out.log" 2>&1 || status=$?
+# The script's evidence report (one compact line), or the tail of its output when it failed.
+if [ "$status" -eq 0 ] && ls "$W"/state/evidence/*.json >/dev/null 2>&1; then
+  for f in "$W"/state/evidence/*.json; do /usr/bin/python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])), ensure_ascii=False))' "$f"; done
+else
+  /usr/bin/grep -v -e Warning -e trace-warnings -e "^\s*at " "$W/out.log" | /usr/bin/tail -20
+fi
 rm -rf "$W"
+exit "$status"
