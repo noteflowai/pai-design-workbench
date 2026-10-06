@@ -229,10 +229,18 @@ test("first-article inspection: measured values against the frozen tolerances, n
   await page.reload(); await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible();
   // A CMM export fills the form; values are still judged by the server.
   await fai.getByRole("button", { name: "生成检验计划并录入实测值" }).click();
-  await fai.getByLabel("导入 CMM 报告（CSV）").setInputFiles({ name: "cmm.csv", mimeType: "text/csv", buffer: Buffer.from(
+  await fai.getByLabel("导入 CMM 报告（QIF / CSV）").setInputFiles({ name: "cmm.csv", mimeType: "text/csv", buffer: Buffer.from(
     "characteristic,measured,unit\nbearing-seat-diameter,35.012,mm\n轴承孔深,11.04,mm\nshoulder-diameter,28.01\nenvelope-x,108.02\nenvelope-y,36.01\nenvelope-z,55.5\nmin-wall,7.96\nmass,189.9,g\nflatness,0.01,mm\n") });
-  await expect(fai.getByRole("status")).toContainText("已填入 8 / 8 项；未识别：flatness");
+  await expect(fai.getByRole("status")).toContainText("CSV：已填入 8 / 8 项；未识别：flatness");
   await expect(fai.getByRole("spinbutton", { name: "实测 轴承孔 Ø（H7）" })).toHaveValue("35.012");
+  // QIF 3.0 Results from the CMM software: the bore value is joined through its characteristic item, in inches here.
+  await fai.getByLabel("导入 CMM 报告（QIF / CSV）").setInputFiles({ name: "cmm.QIF", mimeType: "application/xml", buffer: Buffer.from(
+    '<?xml version="1.0"?><QIFDocument xmlns="http://qifstandards.org/xsd/qif3" versionQIF="3.0.0"><FileUnits><PrimaryUnits><LinearUnit><SIUnitName>meter</SIUnitName>'
+    + '<UnitName>in</UnitName><UnitConversion><Factor>0.0254</Factor></UnitConversion></LinearUnit></PrimaryUnits></FileUnits>'
+    + '<DiameterCharacteristicItem id="49"><Name>bearing-seat-diameter</Name></DiameterCharacteristicItem>'
+    + '<DiameterCharacteristicMeasurement id="50"><CharacteristicItemId>49</CharacteristicItemId><Value>1.3784</Value></DiameterCharacteristicMeasurement></QIFDocument>') });
+  await expect(fai.getByRole("status")).toContainText("QIF：已填入 1 / 8 项（已从 in 换算为 mm）");
+  await expect(fai.getByRole("spinbutton", { name: "实测 轴承孔 Ø（H7）" })).toHaveValue("35.01136");
   await page.reload(); await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible();
   await fill("SN-001", "35.011");
   await expect(fai.getByText("SN-001 · 合格")).toBeVisible();

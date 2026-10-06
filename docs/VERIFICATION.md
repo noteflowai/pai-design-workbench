@@ -103,7 +103,8 @@ their original identities.
 | 证据 | 检验记录带 `physicalMeasurement: true`、检验员、设备、序列号、计划摘要；在发布前记录的检验写进签名发布包（`inspections/<id>.json`），`npm run test:package` 断言。仿真评审保持 `physicalValidation: false` |
 | 托管站点 | 以 release `400963e7…` 在 pai.oneai.host 上跑 `release-package-e2e`：检验记录进入 R1 发布包（23 个文件），AWS KMS ECDSA P-256 签名、DigiCert RFC 3161 时间戳，离线核验通过 |
 | CMM 报告导入 | 界面可导入 CSV（每行：特性 ID 或名称，实测值），自动填表、列出未识别的特性，最终仍由服务器逐项判定；浏览器测试：8 / 8 项填入，`flatness` 列为未识别 |
-| 未做 | 这里的实测值由测试填写，还没有真实零件的测量；QIF 格式导入待做 |
+| QIF 导入 | 首件表单也能导入 QIF 3.0 Results（ISO 23952）：每个 `…CharacteristicMeasurement` 经 `CharacteristicItemId` 对应到特性项，按名称或 Designator 匹配；按文件自己的 `LinearUnit` 换算到 mm，单位没有换算系数时拒绝导入（`tests/fai-import.test.ts`）。用官方样例 `qif-community` `WIDGET_QIF_RESULTS.QIF`（commit 64268c1）核对：特性 10 读到 19.007 mm，与文件一致。浏览器测试：英寸单位的 QIF，1.3784 in 换算后填入 35.01136 |
+| 未做 | 这里的实测值由测试填写，还没有真实零件的测量 |
 
 ## 演示 D：从设计到车间（2026-10-05 夜）
 
