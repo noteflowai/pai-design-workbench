@@ -734,3 +734,16 @@ h1 { font-size: 22px; }
 .track-recent { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
 .track-recent li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .track-recent time { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+.grant-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.grant-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.grant-list li div { display: flex; flex-direction: column; min-width: 0; }
+.grant-form { border: 1px solid var(--line, #d0d7de); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 10px; }
+.tool-choices { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.tool-choices label.check { display: inline-flex; gap: 6px; align-items: center; }
+.autopilot-form { display: grid; gap: 8px; margin: 8px 0; }
+.autopilot-form textarea { width: 100%; box-sizing: border-box; }
+.autopilot-form label.inline { display: inline-flex; gap: 6px; align-items: center; }
+.autopilot-form label.inline input { width: 4.5em; }
+.autopilot-run header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.autopilot-run ol { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.autopilot-run li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

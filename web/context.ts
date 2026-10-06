@@ -1,6 +1,8 @@
 import type { AeroReview, AeroParameters, AeroRequirementsValue } from "../src/aero";
 import type { Inspection } from "../src/inspection";
 import type { TrackRecord } from "../src/track-record";
+import type { AutonomyGrant } from "../src/autonomy";
+import type { Autopilot } from "../src/autopilot";
 import type { CadOptimization } from "../src/optimize";
 import { createContext, useContext } from "react";
 import type { Campaign, Feedback, Project, Review } from "../src/contracts";
@@ -19,7 +21,7 @@ export type RunKind = EvidenceKind;
 export type ViewId = "overview" | StageId;
 export type State = {
   projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; aeros?: AeroReview[]; cadSweeps?: CadSweep[]; cadOptimizations?: CadOptimization[];
-  factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; inspections?: Inspection[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>; aiTrackRecords?: Record<string, TrackRecord>;
+  factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; inspections?: Inspection[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>; aiTrackRecords?: Record<string, TrackRecord>; autonomyGrants?: AutonomyGrant[]; autopilots?: Autopilot[];
   releases?: Release[]; projectVersions?: ProjectVersion[];
   metrics: { independentParticipants: number; independentEvents: number; independentRepeatUsers: number; maintainerEvents: number; fixtureEvents: number };
   capabilities: { aero?: false | { engine: string; reference: AeroParameters; defaultRequirements: AeroRequirementsValue }; modelProposal: boolean; assistant?: { modelInvocation: boolean; engines: string[]; images?: boolean }; blender: boolean; cad?: false | { engine: string; defaultRequirements: CadRequirements; families?: Record<string, CadRequirements>; cam?: false | { engine: string };

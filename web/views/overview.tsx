@@ -1,6 +1,7 @@
 import { useApp, VIEWS } from "../context";
 import { Card, Chip, Empty, ViewHeader, time, type Tone } from "../ui";
 import type { Outcome, TrackRecord } from "../../src/track-record";
+import { AutonomyCard } from "./autonomy";
 
 const OUTCOME: Record<Outcome, [string, Tone]> = { accepted: ["通过", "ok"], rejected: ["被否决", "bad"], inconclusive: ["证据不足", "warn"], running: ["运行中", "live"], failed: ["未完成", "muted"], applied: ["已应用", "info"] };
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -67,6 +68,7 @@ export function Overview() {
         const evidence = ({ "cad-review": "cad-part", "scene-review": "blender-scene", review: "robot-review", "aero-review": "aero-body", "factory-review": "factory-twin" } as Record<string, string>)[kind];
         if (evidence) c.navigate("validate", { kind: evidence, id }); else c.navigate("design");
       }} />}
+    <AutonomyCard />
     <div className="split">
       <Card title="最近活动" aside={<small>{l.activity.length} 条</small>}>
         <ol className="activity">{l.activity.slice(0, 12).map((a, i) => <li key={i}>

@@ -600,6 +600,38 @@ test("MCP: an external agent reads the workspace and proposes; only the maintain
   expect(errors).toEqual([]);
 });
 
+test("AI autonomy from the overview: grant, autopilot round judged by native CAD, track record, revoke, phone width", async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
+  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+  await createProject(page);
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(".state/browser/fake-executor.json", JSON.stringify({ attempts: [{ profile: "kiro-primary", status: "succeeded", answer: "```json\n" + JSON.stringify({
+    kind: "plan", interpretation: ["先确认基准支架满足冻结要求"], plans: [{ ref: "p1", tool: "cad-review", title: "基准支架评审", rationale: "不放宽任何要求", payload: { variant: "reference" } }] }) + "\n```" }] }));
+  await rail(page, /项目总览/).click();
+  const card = page.getByRole("region", { name: "AI 自主迭代" });
+  await expect(card.getByRole("button", { name: "让 AI 自主迭代" })).toHaveCount(0);
+  await card.getByRole("checkbox", { name: "AI 写 CadQuery 代码" }).uncheck();
+  await card.getByRole("spinbutton", { name: "最多运行次数" }).fill("2");
+  await card.getByRole("button", { name: "签发授权" }).click();
+  const grants = card.getByRole("list", { name: "有效授权" });
+  await expect(grants).toContainText("CAD 零件评审"); await expect(grants).toContainText("已用 0 / 2 次");
+  await card.getByRole("textbox", { name: "目标" }).fill("确认基准支架在冻结要求下通过全部原生检查，不放宽任何要求");
+  await card.getByRole("button", { name: "让 AI 自主迭代" }).click();
+  const run = card.getByRole("region", { name: "最近一次自主迭代" });
+  await expect(run).toContainText("目标达成", { timeout: 240_000 });
+  await expect(run).toContainText("原生检查通过");
+  await expect(grants).toContainText("已用 1 / 2 次");
+  // The executed proposal now counts in the agent's measured track record.
+  await expect(page.getByText("通过 · 否决").first().locator("..")).toContainText("1 · 0");
+  await expect(page.getByText("授权内自主").first().locator("..")).toContainText("1");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await noOverflow(page);
+  await card.getByRole("button", { name: "撤销" }).click();
+  await expect(card.getByRole("button", { name: "签发授权" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("generated CadQuery code: policy check, sandboxed build, native failure, recheck with revised code; AI code plan", async ({ page }, testInfo) => {
   test.setTimeout(420_000);
   const state = await (await page.request.get("/api/state")).json();
