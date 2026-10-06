@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.8.0"
+version: "1.9.0"
 ---
 
 # PAI industrial design
@@ -45,7 +45,9 @@ You cannot relax or change requirements, approve, release or move feedback.
   ray-measured wall around the seat, M8 bolt edge distance, mass, envelope, DFM/DFA and CAM. `cad-code` with
   `family: "pillow-block"` starts from the workspace's pillow-block template and must assign `AXIS_Z`. Its FEA uses its own load case: a radial bearing load
   (`structural: {forceN, leverMm: 0, direction, safetyFactor, maxDeflectionMm, maxBoreDistortionMm}`) and adds
-  `bore-distortion`, the seat out-of-roundness under load. No sweep or optimisation yet.
+  `bore-distortion`, the seat out-of-roundness under load. `cad-sweep` with `family: "pillow-block"` explores
+  `{width, depth, baseThickness, boltPitch}` on geometry only; freeze the load on the chosen point, because the
+  geometry-lightest housing can still fail on seat distortion. No optimisation yet.
 - Prefer the shortest proposal that can work: a `cad-review` with `variant: "parametric"` and bounded recipe
   parameters (add `family: "pillow-block"` for the housing) is checked at plan time and answers fast; write
   `cad-code` only when the recipe cannot express the change. Executor turns are bounded (60 s).
