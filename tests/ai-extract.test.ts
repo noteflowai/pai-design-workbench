@@ -80,3 +80,17 @@ test("a focused planner (autopilot grant) sees only its tools and the template o
   assert.ok(Buffer.byteLength(focused) < Buffer.byteLength(full) / 2, `${Buffer.byteLength(focused)} vs ${Buffer.byteLength(full)}`);
   assert.ok(focused.includes("pillow template") && !focused.includes("bracket template"));
 });
+
+test("structural load cases are family-specific; a pillow-block distortion limit counts toward relaxation", async () => {
+  const { CadRequest, FAMILY_DEFAULTS, PILLOW_STRUCTURAL, DEFAULT_STRUCTURAL } = await import("../src/cad.js");
+  const { cadRequirementChanges } = await import("../src/assistant.js");
+  const base = { requestId: "00000000-0000-4000-8000-000000000001", projectRevision: 1 };
+  const pillow = { ...FAMILY_DEFAULTS["pillow-block"], structural: PILLOW_STRUCTURAL };
+  assert.ok(CadRequest.safeParse({ ...base, variant: "pillow-block", requirements: pillow }).success);
+  assert.ok(!CadRequest.safeParse({ ...base, variant: "pillow-block", requirements: { ...pillow, structural: DEFAULT_STRUCTURAL } }).success, "bracket load case on a housing");
+  assert.ok(!CadRequest.safeParse({ ...base, variant: "reference", requirements: { ...FAMILY_DEFAULTS["nema17-bracket"], structural: PILLOW_STRUCTURAL } }).success, "housing load case on a bracket");
+  const looser = cadRequirementChanges(pillow, { ...pillow, structural: { ...PILLOW_STRUCTURAL, maxBoreDistortionMm: 0.01 } });
+  assert.equal(looser.find(c => c.field === "structural.maxBoreDistortionMm")?.direction, "relaxed");
+  const flipped = cadRequirementChanges(pillow, { ...pillow, structural: { ...PILLOW_STRUCTURAL, direction: "toward-base" } });
+  assert.equal(flipped.find(c => c.field === "structural.direction")?.direction, "changed");
+});

@@ -8,7 +8,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
-import { FAMILY_DEFAULTS, type CadReview } from "../src/cad.js";
+import { FAMILY_DEFAULTS, PILLOW_STRUCTURAL, type CadReview } from "../src/cad.js";
 import type { Project } from "../src/contracts.js";
 
 const config = configuration();
@@ -59,7 +59,29 @@ try {
     assert.deepEqual(failed(tight), ["bearing-seat"]);
     results.generated = { template: { verdict: ok.verdict, mass: ok.candidate!.mass, isolation: ok.sandbox!.isolation.length }, seatOutsideH7: { verdict: tight.verdict, failed: failed(tight) } };
   }
-  // Bracket-only lanes are refused for this family, before anything runs.
+  // Structural FEA on the housing: radial bearing load as a cosine pressure on the seat, M8 bores fixed. The reference
+  // passes; a lighter parametric housing (base 10 -> 6 mm) passes every geometry check but CalculiX rejects it: the
+  // bearing centre moves and the seat goes out of round beyond the frozen limits.
+  if (config.physicsPython && config.ccx) {
+    const structural = PILLOW_STRUCTURAL;
+    const ref = await review("pillow-block", { structural });
+    assert.equal(ref.state, "completed", ref.error ?? "fea");
+    assert.deepEqual(failed(ref), [], JSON.stringify(ref.candidate!.checks.filter(c => !c.passed)));
+    const f = ref.fea!.candidate!, load = (f.meshes.fine as unknown as { load: { peakPressureMPa: number; transverseResidual: number; seatRadiusMm: number; axisAt: number[] } }).load;
+    assert.ok(Math.abs(load.peakPressureMPa - 2 * structural.forceN / (Math.PI * load.seatRadiusMm * 11)) / load.peakPressureMPa < 0.01, "discrete seat pressure matches 2F/(pi R B)");
+    assert.ok(load.transverseResidual < 0.01 && Math.abs(load.axisAt[1] - 30) < 0.05, "load resultant and the seat found on the mesh");
+    assert.ok((f.convergence.boreDistortion ?? 1) < 0.05 && f.convergence.axisDisplacement < 0.05, `two-mesh convergence ${JSON.stringify(f.convergence)}`);
+    const thin = await post<CadReview>(`/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "parametric", family: "pillow-block",
+      parameters: { width: 108, depth: 20, baseDepth: 36, axisHeight: 30, baseThickness: 6, boltPitch: 78, seatDiameter: 35.012, shoulderDiameter: 28 },
+      requirements: { ...requirements, structural } });
+    assert.equal(thin.state, "completed", thin.error ?? "thin");
+    assert.deepEqual(failed(thin), ["max-deflection", "bore-distortion"], JSON.stringify(thin.candidate!.checks.filter(c => !c.passed)));
+    const v = (r: CadReview, id: string) => (r.candidate!.checks.find(c => c.id === id) as unknown as { observed: number }).observed;
+    results.fea = { load: structural, reference: { verdict: ref.verdict, mass: ref.candidate!.mass, deflectionMm: v(ref, "max-deflection"), boreDistortionMm: v(ref, "bore-distortion"),
+      stressMPa: v(ref, "max-stress"), convergence: f.convergence, peakPressureMPa: load.peakPressureMPa },
+      thinBase: { verdict: thin.verdict, mass: thin.candidate!.mass, deflectionMm: v(thin, "max-deflection"), boreDistortionMm: v(thin, "bore-distortion"), stressMPa: v(thin, "max-stress") } };
+  }
+  // A bracket load case is refused for this family, before anything runs.
   await post("/api/projects/" + project.id + "/cad", { requestId: randomUUID(), projectRevision: 1, variant: "pillow-block",
     requirements: { ...requirements, structural: { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 } } }, 400);
   const report = { schema: "pai-pillow-e2e-1", checkedAt: new Date().toISOString(), result: "passed", seconds: Math.round((Date.now() - t0) / 1000), results, physicalValidation: false };

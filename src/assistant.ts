@@ -72,7 +72,7 @@ function block(field: string, from: unknown, to: unknown): PlanChange[] {
   return [];
 }
 type CadReq = { maxMassG: number; minWallMm: number; edgeDistanceFactor: number; requireNoInterference: boolean; maxEnvelopeMm: number[];
-  structural?: { forceN: number; leverMm: number; safetyFactor: number; maxDeflectionMm: number };
+  structural?: { forceN: number; leverMm: number; safetyFactor: number; maxDeflectionMm: number; direction?: string; maxBoreDistortionMm?: number };
   dfm?: { maxSetups: number; maxUnitCostEur: number; cam?: { maxCycleMinutes: number } } };
 /**
  * Every frozen CAD requirement compared with the previous one (or the lane defaults), the single source the autonomy
@@ -86,7 +86,10 @@ export function cadRequirementChanges(was: CadReq | undefined, now: CadReq): Pla
     ...now.maxEnvelopeMm.map((v, i) => compare(`maxEnvelopeMm[${i}]`, was?.maxEnvelopeMm[i], v, "lower")),
     ...block("structural", s0, s1),
     ...(s0 && s1 ? [compare("structural.forceN", s0.forceN, s1.forceN, "higher"), compare("structural.leverMm", s0.leverMm, s1.leverMm, "higher"),
-      compare("structural.safetyFactor", s0.safetyFactor, s1.safetyFactor, "higher"), compare("structural.maxDeflectionMm", s0.maxDeflectionMm, s1.maxDeflectionMm, "lower")] : []),
+      compare("structural.safetyFactor", s0.safetyFactor, s1.safetyFactor, "higher"), compare("structural.maxDeflectionMm", s0.maxDeflectionMm, s1.maxDeflectionMm, "lower"),
+      ...(s0.maxBoreDistortionMm !== undefined || s1.maxBoreDistortionMm !== undefined ? [compare("structural.maxBoreDistortionMm", s0.maxBoreDistortionMm, s1.maxBoreDistortionMm, "lower")] : []),
+      // A different load direction is a different load case: neither stricter nor looser, so it is flagged as changed.
+      ...(s0.direction !== s1.direction ? [{ field: "structural.direction", from: s0.direction ?? null, to: s1.direction ?? null, direction: "changed" as const }] : [])] : []),
     ...block("dfm", d0, d1),
     ...(d0 && d1 ? [compare("dfm.maxSetups", d0.maxSetups, d1.maxSetups, "lower"), compare("dfm.maxUnitCostEur", d0.maxUnitCostEur, d1.maxUnitCostEur, "lower"),
       ...block("dfm.cam", d0.cam, d1.cam),

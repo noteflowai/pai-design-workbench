@@ -107,7 +107,7 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     if (project.revision !== request.projectRevision) throw new DomainError("REVISION_CONFLICT", "Freeze the current requirement revision");
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const native = (f: string) => join(config.repository, "native", f);
-    const scripts = ["cad_optimize.py", "cad_point.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
+    const scripts = ["cad_optimize.py", "cad_point.py", "fea_core.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const before = await digests();
     // Warm start from the solver dataset: same recipe (pilot bore 22.5 mm), same load and lever, fine-mesh FEA.

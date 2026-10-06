@@ -18,7 +18,7 @@ RUN python3 -m venv /opt/cadquery && /opt/cadquery/bin/python -m pip install -q 
  && python3 -m venv /opt/physics && /opt/physics/bin/python -m pip install -q --no-cache-dir --no-input --require-hashes --no-deps --only-binary :all: \
       -r /opt/pai/solver-requirements.txt && /opt/physics/bin/python -c "import gmsh, numpy, boto3; assert gmsh.__version__ == '4.15.2'" \
  && find /opt -name __pycache__ -prune -exec rm -rf {} + && rm -rf /opt/*/lib/python3*/site-packages/pip
-COPY --chmod=0644 native/cad_point.py native/cad_recipe.py native/cad_checks.py native/fea_bracket.py native/solver_job.py /opt/pai/native/
+COPY --chmod=0644 native/cad_point.py native/cad_recipe.py native/cad_checks.py native/fea_core.py native/fea_bracket.py native/solver_job.py /opt/pai/native/
 ARG PAI_IMAGE_VERSION=dev
 ENV PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} PAI_CADQUERY_PYTHON=/opt/cadquery/bin/python PAI_CCX=/usr/bin/ccx HOME=/home/pai
 USER pai

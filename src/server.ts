@@ -32,7 +32,7 @@ import type { Campaign, Feedback, Project, Review } from "./contracts.js";
 import type { Proposal } from "./proposals.js";
 import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
-import { CAM_FILE, CAD_TEMPLATES, FAMILY_DEFAULTS, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
+import { CAM_FILE, CAD_TEMPLATES, FAMILY_DEFAULTS, FAMILY_STRUCTURAL, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
 import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, optimizeCad, type CadOptimization } from "./optimize.js";
@@ -238,7 +238,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
       blender: Boolean(config.blender),
       signing: { kms: Boolean(config.signingKmsKeyId), keyId: (await signer(config)).keyId, algorithm: (await signer(config)).algorithm },
-      physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL,
+      physics: config.physicsPython && config.ccx ? { fea: "Gmsh 4.15 + CalculiX 2.21 (C3D10, linear static)", defaultStructural: DEFAULT_STRUCTURAL, familyStructural: FAMILY_STRUCTURAL,
         optimize: { engine: "Optuna 5 NSGA-II + scikit-learn GP surrogate (ranking only)", defaultBudget: DEFAULT_OPTIMIZE_BUDGET, maxEvaluations: MAX_OPTIMIZE_EVALUATIONS,
           strategies: (await botorchVersion(config)) ? ["gp-nsga2", "botorch-qlognehvi"] : ["gp-nsga2"], botorch: await botorchVersion(config) } } : false,
       aero: aeroConfigured(config) ? { engine: `OpenFOAM v2512 (OpenCFD image${aeroRunner(config) === "batch" ? ", AWS Batch 16 vCPU" : ""}) · snappyHexMesh + simpleFoam k-ω SST · two mesh levels`, reference: AERO_REFERENCE,
@@ -327,7 +327,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (sha256(content) !== cad.files[`${p.which}/${p.file}`]) throw new DomainError("CAD_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
     const types: Record<string, string> = { "part.step": "application/step", "part.stl": "model/stl", "part.glb": "model/gltf-binary", "assembly.glb": "model/gltf-binary",
       "drawing.svg": "image/svg+xml", "checks.json": "application/json", "fea.json": "application/json", "fea.glb": "model/gltf-binary",
-      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json", "cam-job.json": "application/json", "cam-sim.png": "image/png" };
+      "bracket-fine.inp": "text/plain", "bracket-fine.frd": "text/plain", "pillow-fine.inp": "text/plain", "pillow-fine.frd": "text/plain", "dfm.json": "application/json", "fea.png": "image/png", "cam.json": "application/json", "cam-verify.json": "application/json", "cam-job.json": "application/json", "cam-sim.png": "image/png" };
     // Generated SVG is displayed as an image only; forbid any script or external fetch inside it.
     if (p.file === "drawing.svg") reply.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
     else if (!p.file.endsWith(".glb") && !p.file.endsWith(".png")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);

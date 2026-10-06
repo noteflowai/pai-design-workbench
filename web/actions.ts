@@ -65,6 +65,7 @@ const CHECK_TEXT: Record<string, [string, string]> = {
   "declared-target-envelope": ["目标位于声明的静态包络内", "目标超出声明的静态包络"],
   "min-wall": ["所有板与孔间韧带壁厚不低于冻结下限", "候选零件实测最小壁厚低于下限，需要恢复板厚并复测"],
   "max-deflection": ["电机轴在冻结载荷下的 FEA 位移不超过上限", "CalculiX 实测电机轴位移超过上限，需要提高安装板刚度并复测"],
+  "bore-distortion": ["冻结载荷下轴承孔的失圆不超过上限", "CalculiX 实测轴承孔受载失圆超过上限，需要加厚孔周或底座并复测"],
   "max-stress": ["远离约束的峰值应力不超过许用应力", "CalculiX 实测峰值应力超过许用应力，需要加厚或加筋并复测"],
   "aisle-clearance": ["AGV 通道净宽不低于冻结下限", "射线实测通道净宽低于下限，需要调整布局并复测"],
   "nema17-interface": ["NEMA 17 止口与 4× M3 孔符合接口尺寸", "候选零件接口尺寸不符，需要恢复止口孔并复测"],

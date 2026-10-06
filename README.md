@@ -57,7 +57,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 方面 | 实现（只写跑过的结果） | 文档 |
 |---|---|---|
 | 几何 | CadQuery 2.8 / OCCT 7.9，两个零件族：NEMA 17 电机支架与 6202 轴承座（Ø35 H7 轴承孔、止口、射线实测壁厚、M8 地脚）；两者都可用参数预设或由 AI 写 CadQuery 代码（三层沙箱，或 AgentCore microVM），由同一套 B-Rep 检查裁决；另有 Ahmed 型车身 | [CAD_CODE.md](docs/CAD_CODE.md) |
-| 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
+| 结构 | Gmsh C3D10 + CalculiX 2.21，两级网格收敛；电机支架按皮带载荷算挠度和应力，轴承座按轴承余弦载荷再加测受载轴承孔失圆（底座减到 6 mm 时几何检查全过，但被 CalculiX 否决）；可在 AWS Batch 上运行（每个点一个作业，核对摘要和版本） | [PHYSICS.md](docs/PHYSICS.md) |
 | 流体 | OpenFOAM v2512（固定 digest 的官方镜像）：snappyHexMesh 两级网格 + simpleFoam k-ω SST；托管站点经 Batch 运行（16 vCPU，9 分钟） | [AERO.md](docs/AERO.md) |
 | 优化 | GP + NSGA-II、BoTorch qLogNEHVI（配对比较）；代理模型只排序，用求解数据集预热（46.3 → 44.1 g）；推荐点必须实测并正式复核 | [PHYSICS.md](docs/PHYSICS.md) |
 | 机器人 | MuJoCo 工作单元（IK、500 Hz 动力学、碰撞、节拍、10 个种子配对）；CAD 零件装到机械臂末端；导出 MJCF 和 OpenUSD（28 个 UsdValidation 校验器；Newton 1.6 交叉校验关节树、质量和正运动学） | [PHYSICS.md](docs/PHYSICS.md) |

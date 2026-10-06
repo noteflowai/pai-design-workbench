@@ -146,8 +146,8 @@ test("visual review: recorded inspection views go to the AI with the question, p
   expect(errors).toEqual([]);
 });
 
-test("second part family: 6202 pillow block from the CAD form, single-fault preset rejected on the bearing seat, phone width", async ({ page }, testInfo) => {
-  test.setTimeout(300_000);
+test("second part family: 6202 pillow block from the CAD form, single-fault preset rejected on the bearing seat, FEA on the seat, phone width", async ({ page }, testInfo) => {
+  test.setTimeout(900_000);
   const state = await (await page.request.get("/api/state")).json();
   if (!state.capabilities.cad?.families?.["pillow-block"]) throw new Error("CadQuery with the pillow-block family is required");
   const errors: string[] = []; page.on("pageerror", e => errors.push(e.message));
@@ -156,7 +156,7 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
   await page.getByRole("tab", { name: "CAD 零件" }).click();
   await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
   await expect(page.getByRole("heading", { name: /6202 轴承座/ })).toBeVisible();
-  await expect(page.getByText("结构要求（Gmsh + CalculiX 线性静力 FEA）")).toHaveCount(0);
+  await expect(page.getByRole("spinbutton", { name: "轴承孔失圆上限" })).toHaveCount(state.capabilities.physics ? 1 : 0);
   await page.getByRole("radio", { name: /轴承孔偏小/ }).check();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
@@ -180,6 +180,20 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
     await page.getByRole("button", { name: "在沙箱中运行并检查" }).click();
     await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 180_000 });
     await expect(page.locator(".check-table")).toContainText("轴承孔（H7）");
+  }
+  // Structural FEA on the housing from the same form: the bearing load is measured on the seat (distortion row).
+  if (state.capabilities.physics) {
+    await rail(page, /候选设计/).click();
+    await page.getByRole("tab", { name: "CAD 零件" }).click();
+    await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
+    await page.getByRole("radio", { name: /6202 轴承座基准/ }).check();
+    await page.getByRole("checkbox", { name: "冻结结构要求并做 FEA" }).check();
+    await expect(page.getByRole("spinbutton", { name: "轴承径向载荷" })).toHaveValue("1000");
+    await expect(page.getByRole("combobox", { name: "载荷方向" })).toHaveValue("away-from-base");
+    await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
+    await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 300_000 });
+    const row = page.locator(".check-table tr", { hasText: "轴承孔变形（FEA）" });
+    await expect(row).toContainText("µm"); await expect(row).not.toHaveClass(/fail/);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
@@ -803,10 +817,10 @@ test("physics lanes: FEA stress view on a CAD review and a MuJoCo robot cell wit
   await expect(page.getByLabel("电机轴挠度上限", { exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 600_000 });
-  await expect(page.locator(".check-table")).toContainText("电机轴挠度（FEA）");
+  await expect(page.locator(".check-table")).toContainText("轴心挠度（FEA）");
   // Geometry accepts t = 3 mm; only the native FEA rejects it.
   await expect(page.locator(".check-table tr.fail")).toHaveCount(1);
-  await expect(page.locator(".check-table tr.fail")).toContainText("电机轴挠度（FEA）");
+  await expect(page.locator(".check-table tr.fail")).toContainText("轴心挠度（FEA）");
   await expect(page.getByRole("group", { name: "FEA 结果" })).toContainText("CalculiX");
   await expect(page.locator(".viewport")).toHaveAttribute("data-objects", /[1-9]/, { timeout: 60_000 });
   await page.screenshot({ path: testInfo.outputPath("fea-view.png") });

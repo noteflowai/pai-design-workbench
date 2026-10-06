@@ -118,7 +118,8 @@ function CadLane() {
     const t = sandbox?.templates?.[f] ?? (f === "nema17-bracket" ? sandbox?.template : undefined);
     if (t && (!code.trim() || Object.values(sandbox?.templates ?? {}).concat(sandbox?.template ?? "").includes(code))) setCode(t);
     if (d) { setMass(d.maxMassG); setWall(d.minWallMm); setEdge(d.edgeDistanceFactor); }
-    if (f === "pillow-block") setFea(false);
+    const s = physics && (physics.familyStructural?.[f] ?? (f === "nema17-bracket" ? physics.defaultStructural : undefined));
+    if (s) { setLoad(s.forceN); setDeflection(s.maxDeflectionMm); setBore(s.maxBoreDistortionMm ?? 0.006); setDirection(s.direction ?? "away-from-base"); }
   };
   const [mass, setMass] = useState(Number(q.get("mass") ?? defaults.maxMassG));
   const [wall, setWall] = useState(Number(q.get("wall") ?? defaults.minWallMm));
@@ -128,9 +129,16 @@ function CadLane() {
   // Structural requirements are a deliberate decision: off unless asked for (or already frozen by the latest part).
   const latestCad = (c.data.cads ?? []).filter(x => x.projectId === c.project?.id).at(-1);
   const [fea, setFea] = useState(Boolean(physics) && (q.get("fea") === "true" || (q.get("fea") !== "false" && Boolean(latestCad?.request.requirements.structural))));
-  const [load, setLoad] = useState(Number(q.get("forceN") ?? (physics ? physics.defaultStructural.forceN : 60)));
-  const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? (physics ? physics.defaultStructural.maxDeflectionMm : 0.06)));
-  const structural = fea && physics && !pillow ? { ...physics.defaultStructural, forceN: load, maxDeflectionMm: deflection } : undefined;
+  const initial = physics ? physics.familyStructural?.[family] ?? physics.defaultStructural : undefined;
+  const [load, setLoad] = useState(Number(q.get("forceN") ?? latestCad?.request.requirements.structural?.forceN ?? initial?.forceN ?? 60));
+  const [deflection, setDeflection] = useState(Number(q.get("deflection") ?? latestCad?.request.requirements.structural?.maxDeflectionMm ?? initial?.maxDeflectionMm ?? 0.06));
+  // Each family has its own load case (bracket: belt pull at the pulley; pillow block: radial bearing load on the seat).
+  const familyStructural = physics ? physics.familyStructural?.[family] ?? (pillow ? undefined : physics.defaultStructural) : undefined;
+  const frozen = latestCad?.request.requirements.structural;
+  const [bore, setBore] = useState(Number(q.get("bore") ?? frozen?.maxBoreDistortionMm ?? familyStructural?.maxBoreDistortionMm ?? 0.006));
+  const [direction, setDirection] = useState<"away-from-base" | "toward-base">(frozen?.direction ?? familyStructural?.direction ?? "away-from-base");
+  const structural = fea && familyStructural ? { ...familyStructural, forceN: load, maxDeflectionMm: deflection,
+    ...(pillow ? { direction, maxBoreDistortionMm: bore } : {}) } : undefined;
   const [dfmOn, setDfmOn] = useState(Boolean(latestCad?.request.requirements.dfm));
   const [setups, setSetups] = useState(latestCad?.request.requirements.dfm?.maxSetups ?? 2), [cost, setCost] = useState(latestCad?.request.requirements.dfm?.maxUnitCostEur ?? 25);
   const camAvailable = Boolean(c.data.capabilities.cad && c.data.capabilities.cad.cam);
@@ -181,6 +189,15 @@ function CadLane() {
       <label>孔边距系数<span className="unit-input"><input type="number" min={1} max={4} step={0.1} disabled={Boolean(feedback)} value={edge} onChange={e => setEdge(Number(e.target.value))} /><em>× d</em></span></label>
       {!pillow && <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fit} onChange={e => setFit(e.target.checked)} />要求与 NEMA 17 电机无装配干涉</label>}
     </div>
+    {familyStructural && pillow && <fieldset className="field-grid"><legend>结构要求（Gmsh + CalculiX 线性静力 FEA）</legend>
+      <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fea} onChange={e => setFea(e.target.checked)} />冻结结构要求并做 FEA</label>
+      <label>轴承径向载荷<span className="unit-input"><input type="number" aria-label="轴承径向载荷" min={1} max={20000} step={50} disabled={!fea || Boolean(feedback)} value={load} onChange={e => setLoad(Number(e.target.value))} /><em>N</em></span></label>
+      <label>载荷方向<select aria-label="载荷方向" disabled={!fea || Boolean(feedback)} value={direction} onChange={e => setDirection(e.target.value as typeof direction)}>
+        <option value="away-from-base">背离底座（上拔，螺栓受拉）</option><option value="toward-base">指向底座（下压）</option></select></label>
+      <label>轴心位移上限<span className="unit-input"><input type="number" aria-label="轴心位移上限" min={0.001} max={10} step={0.001} disabled={!fea || Boolean(feedback)} value={deflection} onChange={e => setDeflection(Number(e.target.value))} /><em>mm</em></span></label>
+      <label>轴承孔失圆上限<span className="unit-input"><input type="number" aria-label="轴承孔失圆上限" min={0.0005} max={1} step={0.0005} disabled={!fea || Boolean(feedback)} value={bore} onChange={e => setBore(Number(e.target.value))} /><em>mm</em></span></label>
+      <small className="muted">6202 静额定载荷 C0 3.75 kN；载荷按余弦分布加在轴承孔受载半圈（合力精确等于冻结载荷），M8 地脚孔固定；安全系数 {familyStructural.safetyFactor}（6061-T6 屈服 276 MPa）；失圆默认 6 µm，接近 Ø35 轴承座形状公差 IT5/2（5.5 µm）；两级网格收敛对照</small>
+    </fieldset>}
     {physics && !pillow && <fieldset className="field-grid"><legend>结构要求（Gmsh + CalculiX 线性静力 FEA）</legend>
       <label className="inline"><input type="checkbox" disabled={Boolean(feedback)} checked={fea} onChange={e => setFea(e.target.checked)} />冻结结构要求并做 FEA</label>
       <label>皮带径向载荷<span className="unit-input"><input type="number" aria-label="皮带径向载荷" min={1} max={2000} step={1} disabled={!fea || Boolean(feedback)} value={load} onChange={e => setLoad(Number(e.target.value))} /><em>N</em></span></label>
@@ -198,7 +215,7 @@ function CadLane() {
         <small className="muted">FreeCAD 1.1 CAM + OpenCAMLib 按装夹出程序；独立高度图仿真检查过切、残料、过载与快移碰撞。每个零件约 5–10 分钟</small>
       </>}
     </fieldset>
-    {pillow && <p className="muted">轴承座：在 OCCT B-Rep 上实测 Ø35 H7 轴承孔（35.000–35.025）、同轴度、止口与轴孔、轴承孔四周最薄壁（72 条径向射线）、M8 地脚孔边距、质量与外形。FEA 与参数扫描目前只对电机支架开放。</p>}
+    {pillow && <p className="muted">轴承座：在 OCCT B-Rep 上实测 Ø35 H7 轴承孔（35.000–35.025）、同轴度、止口与轴孔、轴承孔四周最薄壁（72 条径向射线）、M8 地脚孔边距、质量与外形；勾选结构要求后用 CalculiX 实测轴心位移、峰值应力和受载轴承孔失圆。参数扫描与寻优目前只对电机支架开放。</p>}
     {!pillow && <p className="muted">基准参数与候选各生成一次：可编辑 STEP、STL、GLB 与 SVG 工程视图；在 OCCT B-Rep 上实测接口尺寸、壁厚、孔边距、质量与电机装配干涉。名义几何与 DFM 经验规则；勾选结构要求后再做线性静力 FEA。不含公差叠加、疲劳或实物测试。</p>}
     <div className="form-foot"><small>CadQuery 原生建模 → B-Rep 检查 → EvalArc 独立对照</small>
       <button type="button" disabled={c.busy || (generated && (!sandbox?.available || !code.trim()))} onClick={() => {

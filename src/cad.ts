@@ -32,7 +32,14 @@ export const FAMILY_CHECKS: Record<CadFamily, readonly string[]> = {
 };
 export const FAMILY_SCRIPT: Record<CadFamily, string> = { "nema17-bracket": "cad_bracket.py", "pillow-block": "cad_bearing.py" };
 /** Structural checks from the native FEA (Gmsh + CalculiX); present only when structural requirements are frozen. */
-export const FEA_CHECKS = ["max-deflection", "max-stress"] as const;
+export const FEA_CHECKS = ["max-deflection", "max-stress", "bore-distortion"] as const;
+/** FEA checks per family: the bearing housing also measures how much the load distorts its seat. */
+export const FAMILY_FEA_CHECKS: Record<CadFamily, readonly (typeof FEA_CHECKS)[number][]> = {
+  "nema17-bracket": ["max-deflection", "max-stress"], "pillow-block": ["max-deflection", "max-stress", "bore-distortion"] };
+/** Native FEA script and its deck/result stem per family (native/fea_core.py holds the shared mesher, deck and solve). */
+export const FAMILY_FEA: Record<CadFamily, { script: string; stem: string }> = {
+  "nema17-bracket": { script: "fea_bracket.py", stem: "bracket" }, "pillow-block": { script: "fea_pillow.py", stem: "pillow" } };
+export const feaFiles = (family: CadFamily) => ["fea.json", "fea.glb", `${FAMILY_FEA[family].stem}-fine.inp`, `${FAMILY_FEA[family].stem}-fine.frd`];
 /** 3-axis milling DFM (native/cad_dfm.py on the B-Rep, shop assumptions in native/dfm-shop.json); opt-in like FEA. */
 export const DFM_CHECKS = ["machining-setups", "hole-drillability", "fastener-access", "unit-cost"] as const;
 /** CAM (opt-in under dfm): FreeCAD CAM + OpenCAMLib programs per setup, checked by an independent dexel simulation. */
@@ -63,14 +70,32 @@ export const PillowParameters = z.object({
 export const CadSource = z.object({ language: z.literal("cadquery-2.8"), code: z.string().min(40).max(20_000) }).strict();
 export type CadSource = z.infer<typeof CadSource>;
 export const CAD_FILES = ["part.step", "part.stl", "part.glb", "assembly.glb", "drawing.svg", "checks.json"] as const;
-export const FEA_FILES = ["fea.json", "fea.glb", "bracket-fine.inp", "bracket-fine.frd"] as const;
-/** Belt-driven stepper load case: radial force at the pulley, lever from the mounting face; nominal 6061-T6. */
+/** Every FEA artefact name a review may hold (both families); a review records only its family's (feaFiles). */
+export const FEA_FILES = ["fea.json", "fea.glb", "bracket-fine.inp", "bracket-fine.frd", "pillow-fine.inp", "pillow-fine.frd"] as const;
+/**
+ * Structural load case, nominal 6061-T6.
+ * - NEMA 17 bracket: belt-driven stepper, radial force at the pulley, `leverMm` from the mounting face.
+ * - Pillow block: radial shaft load through the bearing (`leverMm` 0, at the bearing centre), `direction` away from or
+ *   toward the base, and the seat distortion limit `maxBoreDistortionMm` (out-of-roundness under load).
+ */
 export const StructuralRequirements = z.object({
-  forceN: z.number().min(1).max(2000), leverMm: z.number().min(0).max(200),
+  forceN: z.number().min(1).max(20000), leverMm: z.number().min(0).max(200),
   safetyFactor: z.number().min(1).max(10), maxDeflectionMm: z.number().min(0.001).max(10),
+  direction: z.enum(["away-from-base", "toward-base"]).optional(), maxBoreDistortionMm: z.number().min(0.0005).max(1).optional(),
 }).strict();
 export type StructuralRequirements = z.infer<typeof StructuralRequirements>;
 export const DEFAULT_STRUCTURAL: StructuralRequirements = { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 };
+/**
+ * Pillow-block default: 1 kN lifting the shaft (about 0.27 of the 6202 static rating C0 = 3.75 kN), bearing centre
+ * moving ≤ 10 µm and seat out-of-roundness ≤ 6 µm, close to the IT5/2 seat form practice for Ø35 (5.5 µm).
+ */
+export const PILLOW_STRUCTURAL: StructuralRequirements = { forceN: 1000, leverMm: 0, safetyFactor: 2, maxDeflectionMm: 0.01,
+  direction: "away-from-base", maxBoreDistortionMm: 0.006 };
+export const FAMILY_STRUCTURAL: Record<CadFamily, StructuralRequirements> = { "nema17-bracket": DEFAULT_STRUCTURAL, "pillow-block": PILLOW_STRUCTURAL };
+/** Whether a structural block fits the family's load case. */
+export const structuralFits = (family: CadFamily, s: StructuralRequirements) => family === "pillow-block"
+  ? s.leverMm === 0 && s.direction !== undefined && s.maxBoreDistortionMm !== undefined && s.forceN <= 20000
+  : s.direction === undefined && s.maxBoreDistortionMm === undefined && s.forceN <= 2000;
 const mm = z.number().min(1).max(2000);
 export const CadRequirements = z.object({
   maxMassG: z.number().min(1).max(10000), minWallMm: z.number().min(0.5).max(50),
@@ -104,8 +129,10 @@ export const CadRequest = z.object({
   .refine(r => !r.family || r.variant === "parametric" || r.variant === "generated" || familyOf({ variant: r.variant }) === r.family, { message: "family must match the preset", path: ["family"] })
   .refine(r => r.variant !== "parametric" || (familyOf(r) === "pillow-block" ? PillowParameters : CadParameters).safeParse(r.parameters).success,
     { message: "parameters must match the part family", path: ["parameters"] })
-  .refine(r => familyOf(r) === "nema17-bracket" || (!r.requirements.structural && !r.fromSweep && !r.fromOptimize),
-    { message: "FEA load cases, sweeps and optimisation exist for the NEMA 17 bracket only", path: ["family"] });
+  .refine(r => !r.requirements.structural || structuralFits(familyOf(r), r.requirements.structural),
+    { message: "structural load case must match the part family (pillow block: leverMm 0, direction, maxBoreDistortionMm; bracket: forceN ≤ 2000 without them)", path: ["requirements", "structural"] })
+  .refine(r => familyOf(r) === "nema17-bracket" || (!r.fromSweep && !r.fromOptimize),
+    { message: "sweeps and optimisation exist for the NEMA 17 bracket only", path: ["family"] });
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),
@@ -133,8 +160,8 @@ const FeaResult = z.object({
   schema: z.literal("pai-fea-1"), solver: z.string(), mesher: z.string(), element: z.string(), material: z.object({ name: z.string(), E: z.number(), nu: z.number(), yield: z.number() }).passthrough(),
   load: z.object({ forceN: z.number(), leverMm: z.number() }).passthrough(),
   meshes: z.record(z.string(), z.object({ nodes: z.number().int(), elements: z.number().int(), axisDisplacementMm: z.number(), peakVonMisesMPa: z.number(), seconds: z.number() }).passthrough()),
-  convergence: z.object({ axisDisplacement: z.number(), peakVonMises: z.number() }), displayScale: z.number(), colorScaleMaxMPa: z.number(),
-  checks: z.array(z.object({ id: z.enum(FEA_CHECKS), passed: z.boolean(), observed: z.number(), required: z.number() }).passthrough()).length(2),
+  convergence: z.object({ axisDisplacement: z.number(), peakVonMises: z.number(), boreDistortion: z.number().optional() }).strict(), displayScale: z.number(), colorScaleMaxMPa: z.number(),
+  checks: z.array(z.object({ id: z.enum(FEA_CHECKS), passed: z.boolean(), observed: z.number(), required: z.number() }).passthrough()).min(2).max(3),
   scope: z.literal("linear-static-nominal"), physicalValidation: z.literal(false),
 }).strict();
 export type FeaSummary = Omit<z.infer<typeof FeaResult>, "checks">;
@@ -150,12 +177,15 @@ function checksXml(value: CadChecks, expected: readonly string[]) {
     + "</testsuite>\n";
 }
 export function cadCaseText(run: CadReview) {
-  return `# Parametric CAD part review — NEMA 17 motor-mount bracket\n\nDecision: ${run.verdict ?? "pending"}; variant: ${run.request.variant}.\n`
+  const family = familyOf(run.request);
+  return `# Parametric CAD part review — ${family === "pillow-block" ? "6202 pillow-block bearing housing" : "NEMA 17 motor-mount bracket"}\n\nDecision: ${run.verdict ?? "pending"}; variant: ${run.request.variant}.\n`
     + `Native CadQuery ${run.candidate?.cadquery ?? "unknown"} / OCCT ${run.candidate?.ocp ?? "unknown"}; EvalArc blocking changes: ${run.diff?.blocking_changes ?? "unknown"}.\n`
     + `Checks: ${run.candidate?.checks.map(c => `${c.id}=${c.passed}`).join(", ") ?? "unknown"}.\n`
     + (run.sandbox ? `Generated CadQuery code SHA-256 ${run.sandbox.codeSha256}, executed in an OS sandbox (${run.sandbox.isolation.join(", ")}); outcome ${run.sandbox.status}.\n` : "")
     + `Mass ${run.candidate?.mass ?? "?"} g (6061 aluminium, nominal). Review: ${run.id}; requirement SHA-256: ${run.requirementDigest}.\n`
-    + "Scope: nominal parametric geometry with editable STEP and DFM rules of thumb. No FEA, tolerance stack-up, process simulation or physical test.\n";
+    + (run.fea?.candidate ? `FEA: ${run.fea.candidate.solver}, ${run.fea.candidate.element}, ${run.fea.candidate.load.forceN} N; linear static, nominal material.\n` : "")
+    + (run.fea ? "Scope: nominal parametric geometry with editable STEP, DFM rules of thumb and linear static FEA. No tolerance stack-up, fatigue or physical test.\n"
+      : "Scope: nominal parametric geometry with editable STEP and DFM rules of thumb. No FEA, tolerance stack-up, process simulation or physical test.\n");
 }
 
 /**
@@ -312,7 +342,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
     const cam = request.requirements.dfm?.cam;
     if (cam && !camConfigured(config)) throw new DomainError("CAM_NOT_CONFIGURED", "CAM needs the pinned FreeCAD toolchain (npm run setup:cam) or the PAISolver CAM job", 503);
     const used = [...(request.requirements.dfm ? ["cad_dfm.py", "dfm-shop.json"] : []), ...(cam ? ["cam_part.py", "cam_verify.py", "cam-requirements.txt", ...(camRunner(config) === "batch" ? ["cam_remote.py", "cam_job.py"] : [])] : []), FAMILY_SCRIPT[family], ...(family === "nema17-bracket" ? ["cad_recipe.py"] : []), "cad_checks.py", ...(generated ? ["cad_code_policy.py", "cad_sandbox.py", "cad_generated.py", "cad_bearing.py"].filter(f => f !== FAMILY_SCRIPT[family]) : []),
-      ...(structural ? ["fea_bracket.py"] : [])];
+      ...(structural ? [FAMILY_FEA[family].script, "fea_core.py"] : [])];
     const scriptDigests = async () => Object.fromEntries(await Promise.all(used.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const adapters = new NativeAdapters(config);
     const scriptHash = sha256(await readFile(script));
@@ -382,7 +412,7 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
       if (checks.variant !== variant) throw new DomainError("CAD_CONTEXT", "Native CAD variant mismatch");
       if (canonical(checks.checks.map(c => c.id)) !== canonical(FAMILY_CHECKS[family])) throw new DomainError("CAD_CONTEXT", "Native CAD produced unexpected checks");
       if (structural) {
-        const fea = await runFea(config, publish, part, request.requestId, name, target, checks, structural);
+        const fea = await runFea(config, publish, part, request.requestId, name, target, checks, structural, family);
         checks.checks.push(...fea.checks);
         const { checks: _measured, ...summary } = fea;
         record.fea = { ...record.fea, [name]: summary };
@@ -403,9 +433,9 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
         checks.checks.push(...measured.checks as typeof checks.checks);
         if (dfm.cam) checks.checks.push(...await runCam(config, publish, part, request.requestId, name, target, dfm.cam) as typeof checks.checks);
       }
-      const expected = [...FAMILY_CHECKS[family], ...(structural ? FEA_CHECKS : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
+      const expected = [...FAMILY_CHECKS[family], ...(structural ? FAMILY_FEA_CHECKS[family] : []), ...(dfm ? DFM_CHECKS : []), ...(dfm?.cam ? CAM_CHECKS : [])];
       await writeFile(join(directory, name === "baseline" ? "baseline.xml" : "current.xml"), checksXml(checks, expected), { mode: 0o600, flag: "wx" });
-      for (const file of [...CAD_FILES, ...(structural ? FEA_FILES : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
+      for (const file of [...CAD_FILES, ...(structural ? feaFiles(family) : []), ...(dfm ? ["dfm.json"] : [])]) record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       if (dfm?.cam) for (const f of await readdir(target)) if (CAM_FILE.test(f)) record.files[`${name}/${f}`] = sha256(await readFile(join(target, f)));
       if (structural) await readFile(join(target, "fea.png")).then(b => { record.files[`${name}/fea.png`] = sha256(b); }, () => undefined);
       store.put("cad-review", record);
@@ -435,27 +465,34 @@ export async function reviewCad(store: Store, config: Config, project: Project, 
 
 /** Native structural analysis of one built part: Gmsh mesh → CalculiX → measured deflection and stress. */
 async function runFea(config: Config, publish: LiveBus["publish"], record: CadReview, requestId: string, name: "baseline" | "candidate",
-  target: string, checks: CadChecks, structural: StructuralRequirements) {
-  const parameters = (checks as { parameters?: Record<string, number> }).parameters
+  target: string, checks: CadChecks, structural: StructuralRequirements, family: CadFamily = "nema17-bracket") {
+  const pillow = family === "pillow-block";
+  // The bracket load sits on the motor bores, placed from the declared axis height; the pillow block finds its seat
+  // and bolt bores on the mesh by cylinder fits, so it needs no declared parameters.
+  const parameters = pillow ? {} : (checks as { parameters?: Record<string, number> }).parameters
     ?? (record.sandbox?.motorAxisZ !== undefined ? { motorAxisHeight: record.sandbox.motorAxisZ } : undefined);
-  if (!parameters?.motorAxisHeight) throw new DomainError("FEA_CONTEXT", "The part does not declare its motor axis height; FEA load cannot be placed", 422);
-  const label = `CalculiX 结构分析：${name === "baseline" ? "基准零件" : "候选零件"}（Gmsh C3D10，两级网格）`;
+  if (!pillow && !parameters?.motorAxisHeight) throw new DomainError("FEA_CONTEXT", "The part does not declare its motor axis height; FEA load cannot be placed", 422);
+  const label = `CalculiX 结构分析：${name === "baseline" ? "基准零件" : "候选零件"}（Gmsh C3D10，两级网格${pillow ? "，轴承孔余弦载荷" : ""}）`;
   publish(requestId, { kind: "step", id: `fea-${name}`, label, status: "running", which: name });
   const input = join(target, "..", `${name}-fea-input.json`);
+  const description = pillow ? `radial bearing load ${structural.direction}, cosine pressure over the loaded half of the seat; M8 bores fixed`
+    : "radial pulley force, statically equivalent on the four M3 bores";
   await writePrivate(input, JSON.stringify({ step: join(target, "part.step"), parameters, ccx: config.ccx, requirements: structural,
-    load: { forceN: structural.forceN, leverMm: structural.leverMm, description: "radial pulley force, statically equivalent on the four M3 bores" } }));
-  const script = join(config.repository, "native/fea_bracket.py");
+    load: { forceN: structural.forceN, leverMm: structural.leverMm, ...(pillow ? { direction: structural.direction } : {}), description } }));
+  const { script: file } = FAMILY_FEA[family];
+  const script = join(config.repository, "native", file);
   const r = await command(config.physicsPython!, ["-I", script, "--input", input, "--output", target], config.repository, undefined, 900_000);
   await writePrivate(join(target, "..", `${name}.fea.stdout.log`), r.stdout);
   await writePrivate(join(target, "..", `${name}.fea.stderr.log`), r.stderr);
-  record.receipts.push({ adapter: "calculix-fea", command: ["python", "fea_bracket.py"], startedAt: r.startedAt, finishedAt: r.finishedAt,
-    exitCode: r.exitCode, stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)), ccx: sha256(await readFile(config.ccx!)) } });
+  record.receipts.push({ adapter: "calculix-fea", command: ["python", file], startedAt: r.startedAt, finishedAt: r.finishedAt,
+    exitCode: r.exitCode, stdoutSha256: sha256(r.stdout), sourceDigests: { script: sha256(await readFile(script)), core: sha256(await readFile(join(config.repository, "native/fea_core.py"))),
+      ccx: sha256(await readFile(config.ccx!)) } });
   publish(requestId, { kind: "step", id: `fea-${name}`, label, status: r.exitCode === 0 ? "done" : "failed", which: name, detail: `exit ${r.exitCode}` });
   if (r.exitCode !== 0) throw new DomainError("FEA_FAILED", "Native FEA failed; retain receipts and inspect the solver log", 422);
   const fea = FeaResult.parse(JSON.parse(await readFile(join(target, "fea.json"), "utf8")));
-  if (canonical(fea.load) !== canonical({ forceN: structural.forceN, leverMm: structural.leverMm, description: fea.load.description })) {
-    throw new DomainError("FEA_CONTEXT", "FEA load differs from the frozen structural requirements");
-  }
+  if (canonical(fea.checks.map(c => c.id)) !== canonical(FAMILY_FEA_CHECKS[family])) throw new DomainError("FEA_CONTEXT", "Native FEA produced unexpected checks");
+  const expected = { forceN: structural.forceN, leverMm: structural.leverMm, ...(pillow ? { direction: structural.direction } : {}), description: fea.load.description };
+  if (canonical(fea.load) !== canonical(expected)) throw new DomainError("FEA_CONTEXT", "FEA load differs from the frozen structural requirements");
   await renderResult(config, record, join(target, "fea.glb"), join(target, "fea.png"));
   return fea;
 }

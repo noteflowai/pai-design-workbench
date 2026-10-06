@@ -42,6 +42,30 @@ Measured with the default load (60 N, 50 mm, SF 2, deflection ≤ 0.06 mm):
 
 Physics changes the decision: the geometry-only optimum is too flexible. Widening the plate also makes it *more* flexible (W 80 at t 3: 0.126 mm), because the ribs sit at the plate edges and move away from the bores.
 
+### 6202 pillow block (`native/fea_pillow.py`)
+
+The housing has its own load case and a third check. The mesher, deck, solve and stress view are shared with the bracket in `native/fea_core.py`; the bracket script was moved onto it with a byte-identical deck and GLB.
+
+| Check | Method |
+|---|---|
+| `max-deflection` | Displacement of the bearing centre: the mean displacement of the seat surface |
+| `bore-distortion` | Out-of-roundness of the loaded seat: the range of radial displacement after removing the mean translation. A distorted seat pinches the outer ring |
+| `max-stress` | Peak integration-point von Mises stress away from fixed nodes, at most yield / SF |
+
+- **Load case:** a radial shaft load `forceN` through the bearing, `direction` away from the base (lift: the bolts carry it) or toward it. The outer ring presses on the loaded half of the seat as a cosine pressure p(θ) = p₀ cos θ, applied as CalculiX face pressures. p₀ is set so that the discrete resultant on the meshed seat equals F exactly. On the reference, p₀ = 3.307 MPa matches 2F/(πRB) for R = 17.506 mm and B = 11 mm; the transverse residual is 2·10⁻⁴. `leverMm` is 0, at the bearing centre.
+- **Supports:** the M8 bore surfaces are fixed; for `toward-base`, the base bottom is also supported in Z. Bolt preload and contact are ignored, which is conservative for lift.
+- **Recognition:** the seat and bolt bores are found on the mesh by least-squares cylinder fits (axis, centre, radius), not from recipe parameters. Generated code is analysed the same way.
+- **Default** (`PILLOW_STRUCTURAL`): 1 kN lifting, about 0.27 of the 6202 static rating C₀ = 3.75 kN. Centre displacement ≤ 10 µm and seat out-of-roundness ≤ 6 µm, close to the IT5/2 seat form practice for Ø35 (5.5 µm). Both limits are project assumptions, frozen with the requirement and visible in the form.
+
+Measured with the default (`npm run test:pillow`):
+
+| Housing | Mass | Geometry checks | Centre displacement | Seat out-of-round | Peak stress |
+|---|---|---|---|---|---|
+| Reference (base 10 mm) | 189.6 g | pass | 5.2 µm | 5.16 µm | 14.8 MPa |
+| Base 6 mm | 160.4 g | pass | **10.8 µm (fails)** | **6.85 µm (fails)** | 20.3 MPa |
+
+Two-mesh convergence on the reference: centre displacement 0.5 %, out-of-round 0.7 %, peak stress 16 % (mesh-dependent at sharp corners, not used for a margin claim). Lifting at 1 kN is far from yield; stiffness and seat distortion decide this part, not strength.
+
 ## Physics-aware optimisation (`cad-optimize`)
 
 `native/cad_optimize.py` works in rounds, using the standard practice "surrogate ranks, solver decides":
