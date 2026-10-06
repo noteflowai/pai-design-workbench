@@ -37,7 +37,7 @@ function choosePoint(c: Ctx, sweep: CadSweep, point: SweepPoint) {
   const requestId = requestIdFor(`pai-cad-sweep-${sweep.id}-${point.index}-${p.revision}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
-    const r = await c.track(requestId, `参数化候选 · ${label(point)}`, "cad-part", () => api<{ id: string; state: string; error?: string }>(`/projects/${p.id}/cad`,
+    const r = await c.track(requestId, `${family === "pillow-block" ? "6202 轴承座 · " : ""}参数化候选 · ${label(point)}`, "cad-part", () => api<{ id: string; state: string; error?: string }>(`/projects/${p.id}/cad`,
       { requestId, projectRevision: p.revision, variant: "parametric", requirements: sweep.request.requirements, parameters: point.parameters,
         ...(family === "pillow-block" ? { family } : {}), fromSweep: { sweepId: sweep.id, point: point.index } }));
     c.navigate("validate", { kind: "cad-part", id: r.id });

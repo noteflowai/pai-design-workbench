@@ -29,7 +29,7 @@ function formalize(c: Ctx, run: CadOptimization, point: OptimizePoint) {
   const requestId = requestIdFor(`pai-cad-optimize-${run.id}-${point.index}-${p.revision}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
-    const r = await c.track(requestId, `寻优候选 · ${label(point)}`, "cad-part", () => api<{ id: string; state: string; error?: string }>(`/projects/${p.id}/cad`,
+    const r = await c.track(requestId, `${familyOfRun(run) === "pillow-block" ? "6202 轴承座 · " : ""}寻优候选 · ${label(point)}`, "cad-part", () => api<{ id: string; state: string; error?: string }>(`/projects/${p.id}/cad`,
       { requestId, projectRevision: p.revision, variant: "parametric", requirements: run.request.requirements, parameters: point.parameters,
         ...(familyOfRun(run) === "pillow-block" ? { family: "pillow-block" } : {}), fromOptimize: { optimizeId: run.id, point: point.index } }));
     c.navigate("validate", { kind: "cad-part", id: r.id });

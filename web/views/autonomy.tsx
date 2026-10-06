@@ -63,7 +63,14 @@ export function AutonomyCard() {
   const resume = () => c.perform(async () => {
     if (!pausedPlan!.ai?.reconciliation) await api(`/assistant/plans/${pausedPlan!.id}/reconciliation`, { reason: why.trim() });
     const r = await api<{ recordKind: string; recordId: string }>(`/assistant/plans/${pausedPlan!.id}/autonomous-runs`, { grantId: live.at(-1)!.id, step: pausedStep!.id });
-    if (r.recordKind === "cad-review") c.navigate("validate", { kind: "cad-part", id: r.recordId });
+    const at = ({ "cad-review": ["cad", "cad-part"], "scene-review": ["scenes", "blender-scene"], "aero-review": ["aero", "aero-body"], "cad-optimize": ["cad-optimizations", ""] } as Record<string, [string, string]>)[r.recordKind];
+    if (at?.[1]) c.navigate("validate", { kind: at[1], id: r.recordId });
+    // The run continues on the server; follow its durable record (bounded) so the result appears without a reload.
+    for (let i = 0; at && i < 600; i++) {
+      const rec = await api<{ state: string }>(`/${at[0]}/${r.recordId}`, undefined, "GET").catch(() => undefined);
+      if (rec && rec.state !== "running") break;
+      await new Promise(done => setTimeout(done, 3000));
+    }
   }, "已记录核对理由，并在授权内执行了 AI 的提案；结论由原生检查给出。");
 
   return <Card title="AI 自主迭代" aside={<small>维护者授权 · 求解器裁决</small>} label="AI 自主迭代">
