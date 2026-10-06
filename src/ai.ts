@@ -11,7 +11,7 @@ import type { LiveBus } from "./live.js";
 import { cadRequirementChanges, compare, plantPlan, relaxWarning, type AssistantPlan, type PlanChange, type PlanTool, type ToolPlan } from "./assistant.js";
 import { DEFAULT_PLANT_REQUIREMENTS, DEFAULT_ROBOT_REQUIREMENTS, isPlant, isRobotCell, PlantLayout, PlantRequirements, RobotCell, RobotRequirements, RobotTool, SceneRequest, SceneRequirements,
   type PlantScene, type SceneReview, type WorkcellScene } from "./scenes.js";
-import { DEFAULT_STRUCTURAL, CadRequest, CadRequirements, CadParameters, PillowParameters, CadSource, CAD_PRESETS, PILLOW_PRESETS, FAMILY_DEFAULTS, familyOf, CAD_FAMILIES, CAD_TEMPLATES, type CadFamily, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
+import { DEFAULT_STRUCTURAL, PILLOW_STRUCTURAL, CadRequest, CadRequirements, CadParameters, PillowParameters, CadSource, CAD_PRESETS, PILLOW_PRESETS, FAMILY_DEFAULTS, familyOf, CAD_FAMILIES, CAD_TEMPLATES, type CadFamily, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, type CadReview } from "./cad.js";
 import { sandboxStatus } from "./sandbox.js";
 import { MAX_SWEEP_POINTS, SweepGrid, SweepRequest } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeRequest, OptimizeSeed } from "./optimize.js";
@@ -63,7 +63,7 @@ const ModelPayload = {
   "cad-code": z.object({ code: CadSource.shape.code, family: z.enum(CAD_FAMILIES).default("nema17-bracket"), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-sweep": z.object({ grid: SweepGrid, family: z.enum(CAD_FAMILIES).optional(), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]),
-    strategy: z.enum(OPTIMIZE_STRATEGIES).optional() }).strict(),
+    strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), family: z.enum(CAD_FAMILIES).optional() }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
   "factory-review": z.object({ criteria: z.string().min(1).max(40) }).strict(),
 } as const;
@@ -89,7 +89,9 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "（forceN、leverMm、safetyFactor、maxDeflectionMm；缺省 60 N、50 mm、2、0.06 mm）。可以提供最多 4 个 seeds（thickness 2–8、width 46–80、plateHeight 40–60），"
     + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
     + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4。"
-    + "strategy 可选 gp-nsga2（默认）或 botorch-qlognehvi（BoTorch 约束批量超体积贝叶斯优化，先做几何多保真先验；需已安装）",
+    + "strategy 可选 gp-nsga2（默认）或 botorch-qlognehvi（BoTorch 约束批量超体积贝叶斯优化，先做几何多保真先验；需已安装）。"
+    + "轴承座加 family=pillow-block（只用 gp-nsga2，本机求解）：seeds 的 parameters 为 {width 80–120, depth 14–24, baseThickness 6–14, boltPitch 54–76}，"
+    + "载荷为轴承径向载荷（缺省 1 kN 上拔，轴心位移 ≤ 10 µm，轴承孔失圆 ≤ 6 µm）；经验：失圆主要随底座厚度和轴承座厚度 D 下降，孔距要满足 (width − boltPitch)/2 ≥ 1.5 × 9",
   "cad-code": "编写 CadQuery 代码生成新的零件候选（预设变体不够用时）。family 为 nema17-bracket（默认，用 template）或 pillow-block（6202 轴承座，用 templates.pillow-block：轴线平行于 Y、过 x=0、z=AXIS_Z，Ø35 H7 轴承孔从 +Y 面加工到止口，底面 z=0，竖直 M8 地脚孔）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
     + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 AXIS_Z（轴线高度 mm；支架也可写 MOTOR_AXIS_Z）赋值。支架的坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"
     + "电机轴平行于 Y 轴并经过 x=0、z=MOTOR_AXIS_Z；底板底面在 z=0，安装孔竖直。从 template 修改参数或几何，保持接口（Ø≥22.2 止口、4×Ø3.4 孔距 31）。代码在隔离沙箱中运行，结论只来自原生 B-Rep 检查",
@@ -430,14 +432,19 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       evidence: "每个点的原生 B-Rep 建模与该零件族的全部几何检查；最轻可行点与帕累托前沿" };
   }
   if (t === "cad-optimize") {
-    const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[]; strategy?: (typeof OPTIMIZE_STRATEGIES)[number] };
-    const prev = context.lastCad?.request.requirements;
-    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), structural: prev?.structural ?? DEFAULT_STRUCTURAL, ...p.requirements });
+    const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[]; strategy?: (typeof OPTIMIZE_STRATEGIES)[number]; family?: CadFamily };
+    const family = p.family ?? (p.seeds.some(s => "baseThickness" in s.parameters) ? "pillow-block" : "nema17-bracket");
+    const last = context.lastCad && familyOf(context.lastCad.request) === family ? context.lastCad.request.requirements : undefined;
+    const familyLoad = family === "pillow-block" ? PILLOW_STRUCTURAL : DEFAULT_STRUCTURAL;
+    const prev = last ?? (family === "pillow-block" ? FAMILY_DEFAULTS["pillow-block"] : undefined);
+    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), structural: prev?.structural ?? familyLoad, ...p.requirements });
     const budget = p.budget ?? DEFAULT_OPTIMIZE_BUDGET;
-    const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds, ...(p.strategy ? { strategy: p.strategy } : {}) };
+    const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds, ...(p.strategy ? { strategy: p.strategy } : {}),
+      ...(family === "pillow-block" ? { family, solver: "local" as const } : {}) };
     OptimizeRequest.parse({ ...payload, requestId: placeholder });
-    const s0 = prev?.structural, s1 = requirements.structural!;
-    const changes: PlanChange[] = [...cadRequirementChanges(prev ? { ...prev, structural: prev.structural ?? (s1 && DEFAULT_STRUCTURAL) } : { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL }, requirements),
+    const s1 = requirements.structural!;
+    const base0 = prev ?? DEFAULT_CAD_REQUIREMENTS;
+    const changes: PlanChange[] = [...cadRequirementChanges({ ...base0, structural: base0.structural ?? (s1 && familyLoad) }, requirements),
       { field: "seeds", from: null, to: `${p.seeds.length} 个 AI 种子`, direction: "new" },
       ...(p.strategy ? [{ field: "strategy", from: null, to: p.strategy, direction: "new" } as PlanChange] : [])];
     const evaluations = budget.initial + 1 + budget.rounds * budget.perRound;

@@ -9,7 +9,7 @@ import { canonical, DomainError, sha256 } from "./domain.js";
 import type { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { solverDataset } from "./dataset.js";
-import { CadParameters, CadRequirements, type CadRequirements as CadReq } from "./cad.js";
+import { CAD_FAMILIES, CadParameters, CadRequirements, PillowParameters, structuralFits, type CadRequirements as CadReq } from "./cad.js";
 
 /**
  * Physics-aware design optimisation (native/cad_optimize.py):
@@ -37,8 +37,12 @@ export const OptimizeBudget = z.object({
 }).strict().refine(b => b.initial + b.rounds * b.perRound <= MAX_OPTIMIZE_EVALUATIONS, { message: `at most ${MAX_OPTIMIZE_EVALUATIONS} solver evaluations` });
 export const DEFAULT_OPTIMIZE_BUDGET = { initial: 8, rounds: 3, perRound: 3 };
 /** A design an AI planner proposes as a starting point, with its own first-principles estimate (scored later). */
+/** Searched axes of the pillow block (native/cad_optimize.py FAMILIES); the rest of the recipe is fixed. */
+export const PILLOW_OPT_BOUNDS = { width: [80, 120], depth: [14, 24], baseThickness: [6, 14], boltPitch: [54, 76] } as const;
+const PillowAxes = z.object(Object.fromEntries(Object.entries(PILLOW_OPT_BOUNDS).map(([k, [lo, hi]]) => [k, z.number().min(lo).max(hi)])) as Record<keyof typeof PILLOW_OPT_BOUNDS, z.ZodNumber>).strict();
+const BracketAxes = z.object({ thickness: CadParameters.shape.thickness, width: CadParameters.shape.width, plateHeight: CadParameters.shape.plateHeight }).strict();
 export const OptimizeSeed = z.object({
-  parameters: z.object({ thickness: CadParameters.shape.thickness, width: CadParameters.shape.width, plateHeight: CadParameters.shape.plateHeight }).strict(),
+  parameters: z.union([BracketAxes, PillowAxes]),
   expectedDeflectionMm: z.number().positive().max(10).optional(), expectedMassG: z.number().positive().max(10000).optional(),
   // Prose is clipped, not rejected; the numbers above are what gets scored.
   rationale: z.string().trim().transform(v => v.length > 400 ? `${v.slice(0, 399)}…` : v).optional(),
@@ -53,22 +57,29 @@ export const OptimizeRequest = z.object({
   solver: z.enum(["local", "batch"]).optional(),
   /** Reuse earlier solver measurements of the same recipe and load to train the surrogate (ranking only). */
   warmStart: z.boolean().default(true),
-}).strict();
+  /** Part family; the pillow block uses its own axes and bearing load case (gp-nsga2, on this host). */
+  family: z.enum(CAD_FAMILIES).default("nema17-bracket"),
+}).strict().superRefine((r, ctx) => {
+  const pillow = r.family === "pillow-block";
+  if (r.requirements.structural && !structuralFits(r.family, r.requirements.structural)) ctx.addIssue({ code: "custom", path: ["requirements", "structural"], message: `structural load case does not fit the ${r.family}` });
+  if (pillow && (r.strategy !== "gp-nsga2" || r.solver === "batch")) ctx.addIssue({ code: "custom", path: ["strategy"], message: "the pillow block is optimised with gp-nsga2 on this host" });
+  r.seeds.forEach((s, i) => { if (!(pillow ? PillowAxes : BracketAxes).safeParse(s.parameters).success) ctx.addIssue({ code: "custom", path: ["seeds", i, "parameters"], message: `seed axes do not fit the ${r.family}` }); });
+});
 
 const Point = z.object({
   index: z.number().int(), origin: z.enum(["reference", "ai-seed", "initial", "screen", "exploit", "explore", "bo"]),
   remote: z.object({ jobId: z.string(), image: z.string().nullable().optional(), seconds: z.number().nullable().optional() }).strict().optional(),
-  fidelity: z.enum(["geometry", "fea", "failed"]), parameters: CadParameters,
+  fidelity: z.enum(["geometry", "fea", "failed"]), parameters: z.union([CadParameters, PillowParameters]), boreDistortionMm: z.number().optional(),
   /** null: geometry-only screen that passed the B-Rep checks but was not solved (multi-fidelity prior). */
   feasible: z.boolean().nullable(), failed: z.array(z.string()), seconds: z.number(),
   mass: z.number().optional(), deflectionMm: z.number().optional(), stressMPa: z.number().optional(), minWallMm: z.number().optional(), holeEdgeMm: z.number().optional(),
   elements: z.number().int().optional(), error: z.string().optional(),
   checks: z.array(z.object({ id: z.string(), passed: z.boolean(), observed: z.unknown(), required: z.unknown() })).optional(),
-  prediction: z.object({ deflectionMm: z.number(), deflectionSigmaLog: z.number(), stressMPa: z.number(), massG: z.number() }).strict().optional(),
+  prediction: z.object({ deflectionMm: z.number(), deflectionSigmaLog: z.number(), stressMPa: z.number(), massG: z.number(), boreDistortionMm: z.number().optional() }).strict().optional(),
   estimate: z.object({ expectedDeflectionMm: z.number().optional(), expectedMassG: z.number().optional(), rationale: z.string().optional() }).strict().optional(),
 }).strict();
 export const OptimizeResult = z.object({
-  schema: z.literal("pai-cad-optimize-1"), warmStart: z.object({ points: z.number().int(), extraRounds: z.number().int(), lightestPriorMassG: z.number().nullable() }).strict().nullable().optional(), optuna: z.string(), strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
+  schema: z.literal("pai-cad-optimize-1"), family: z.enum(CAD_FAMILIES).optional(), fixed: z.record(z.string(), z.number()).optional(), warmStart: z.object({ points: z.number().int(), extraRounds: z.number().int(), lightestPriorMassG: z.number().nullable() }).strict().nullable().optional(), optuna: z.string(), strategy: z.enum(OPTIMIZE_STRATEGIES).optional(), surrogate: z.string(), search: z.string(), requirements: CadRequirements,
   budget: z.object({ initial: z.number(), rounds: z.number(), perRound: z.number() }).strict(), axes: z.array(z.string()), bounds: z.record(z.string(), z.array(z.number())),
   points: z.array(Point).min(1).max(80), feasibleCount: z.number().int(), lightestFeasible: z.number().int().nullable(), pareto: z.array(z.number().int()),
   rounds: z.array(z.object({ round: z.number().int(), trainedOn: z.number().int(), looMeanAbsError: z.record(z.string(), z.number()),
@@ -107,12 +118,14 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     if (project.revision !== request.projectRevision) throw new DomainError("REVISION_CONFLICT", "Freeze the current requirement revision");
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const native = (f: string) => join(config.repository, "native", f);
-    const scripts = ["cad_optimize.py", "cad_point.py", "fea_core.py", "fea_bracket.py", "cad_recipe.py", "cad_checks.py"];
+    const pillow = request.family === "pillow-block";
+    const scripts = ["cad_optimize.py", "cad_point.py", "fea_core.py", pillow ? "fea_pillow.py" : "fea_bracket.py", pillow ? "cad_bearing.py" : "cad_recipe.py", "cad_checks.py"];
     const digests = async () => Object.fromEntries(await Promise.all(scripts.map(async f => [f.replace(/_/g, "-"), sha256(await readFile(native(f)))])));
     const before = await digests();
     // Warm start from the solver dataset: same recipe (pilot bore 22.5 mm), same load and lever, fine-mesh FEA.
     const s = request.requirements.structural!;
-    const rows = request.warmStart ? solverDataset(store).data.filter(r => r.domain === "structural-fea" && r.inputs.forceN === s.forceN && r.inputs.leverMm === s.leverMm
+    // The solver dataset holds bracket measurements only; the pillow block starts cold.
+    const rows = request.warmStart && !pillow ? solverDataset(store).data.filter(r => r.domain === "structural-fea" && r.inputs.forceN === s.forceN && r.inputs.leverMm === s.leverMm
       && r.inputs.pilotBore === 22.5 && Number.isFinite(r.outputs.stressMPa) && r.outputs.deflectionMm > 0) : [];
     const seen = new Set<string>();
     const prior = rows.filter(r => { const k = `${r.inputs.thickness}:${r.inputs.width}:${r.inputs.plateHeight}`; return !seen.has(k) && (seen.add(k), true); })
@@ -120,7 +133,7 @@ export async function optimizeCad(store: Store, config: Config, project: Project
         deflectionMm: r.outputs.deflectionMm, stressMPa: r.outputs.stressMPa, mass: r.outputs.massG,
         ...(Number.isFinite(r.outputs.minWallMm) && Number.isFinite(r.outputs.holeEdgeMm) ? { minWallMm: r.outputs.minWallMm, holeEdgeMm: r.outputs.holeEdgeMm } : {}), source: r.recordId }));
     record.warmStart = { points: prior.length, sources: [...new Set(prior.map(p => p.source))] };
-    const solver = request.solver ?? (config.solverBatch ? "batch" : "local");
+    const solver = pillow ? "local" : request.solver ?? (config.solverBatch ? "batch" : "local");
     if (solver === "batch" && !config.solverBatch) throw new DomainError("SOLVER_NOT_CONFIGURED", "AWS Batch solver is not configured (PAI_SOLVER_QUEUE, PAI_SOLVER_JOB_DEFINITION, PAI_SOLVER_BUCKET)", 503);
     record.solver = solver;
     if (request.strategy === "botorch-qlognehvi" && !(await botorchVersion(config))) {
@@ -131,18 +144,18 @@ export async function optimizeCad(store: Store, config: Config, project: Project
       "physics-lock": sha256(await readFile(native("physics-requirements.txt"))), "cadquery-lock": sha256(await readFile(native("cadquery-requirements.txt"))),
       ccx: sha256(await readFile(config.ccx)) };
     const inputFile = join(directory, "input.json");
-    await writePrivate(inputFile, JSON.stringify({ cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2, prior,
+    await writePrivate(inputFile, JSON.stringify({ family: request.family, cadquery: config.cadquery, ccx: config.ccx, requirements: request.requirements, budget: request.budget, seeds: request.seeds, strategy: request.strategy, parallel: 2, prior,
       ...(solver === "batch" ? { backend: "batch", batch: { ...config.solverBatch!, run: record.id, timeoutSeconds: 1800 } } : {}) }));
     const total = request.budget.initial + 1 + request.budget.rounds * request.budget.perRound;
     publish({ kind: "step", id: "optimize", label: `物理寻优：约 ${total} 次 CalculiX 求解 + 代理模型排序`, status: "running" });
     const observe = (line: string) => {
       if (!line.startsWith("PAI_EVENT ")) return;
       try {
-        const e = JSON.parse(line.slice(10)) as { type?: string; phase?: string; index?: number; origin?: string; mass?: number; deflectionMm?: number; failed?: string[]; fidelity?: string; parameters?: CadParameters; trainedOn?: number };
+        const e = JSON.parse(line.slice(10)) as { type?: string; phase?: string; index?: number; origin?: string; mass?: number; deflectionMm?: number; failed?: string[]; fidelity?: string; parameters?: Record<string, number>; trainedOn?: number };
         if (e.type === "phase") publish({ kind: "step", id: `phase-${e.phase}`, label: e.phase === "initial" ? "初始设计：参考件 + AI 种子 + Sobol 点" : `第 ${e.phase?.split("-")[1]} 轮：代理模型（${e.trainedOn} 个实测点训练）→ ${request.strategy === "botorch-qlognehvi" ? "BoTorch qLogNEHVI 批量采集" : "NSGA-II 排序"}`, status: "done" });
         if (e.type !== "point") return;
         const p = e.parameters!;
-        publish({ kind: "step", id: `opt-point-${e.index}`, label: `${e.origin} · t=${p.thickness} · W=${p.width} · H=${p.plateHeight}${e.fidelity === "geometry" ? "（几何筛除）" : ""}`,
+        publish({ kind: "step", id: `opt-point-${e.index}`, label: `${e.origin} · ${pillow ? `W=${p.width} · D=${p.depth} · 底座 ${p.baseThickness} · 孔距 ${p.boltPitch}` : `t=${p.thickness} · W=${p.width} · H=${p.plateHeight}`}${e.fidelity === "geometry" ? "（几何筛除）" : ""}`,
           status: e.failed?.length ? "failed" : "done", detail: `${e.mass ?? "—"} g${e.deflectionMm !== undefined ? ` · ${e.deflectionMm} mm` : ""}${e.failed?.length ? ` · ${e.failed.join(", ")}` : " · 全部通过"}` });
       } catch { /* Presentation only. */ }
     };
@@ -154,7 +167,7 @@ export async function optimizeCad(store: Store, config: Config, project: Project
     if (r.exitCode !== 0) throw new DomainError("CAD_OPTIMIZE_FAILED", "Native optimisation failed; retain receipts and inspect local artifacts", 422);
     const text = await readFile(join(directory, "optimize.json"), "utf8");
     const result = OptimizeResult.parse(JSON.parse(text));
-    if (canonical(result.requirements) !== canonical(request.requirements)) throw new DomainError("CAD_OPTIMIZE_CONTEXT", "Optimisation output does not match the request");
+    if (canonical(result.requirements) !== canonical(request.requirements) || (result.family ?? "nema17-bracket") !== request.family) throw new DomainError("CAD_OPTIMIZE_CONTEXT", "Optimisation output does not match the request");
     // Recompute the summary from the measured points: the native summary is not trusted on its own.
     const solved = result.points.filter(p => p.fidelity === "fea");
     const recomputed = solved.filter(p => p.feasible).sort((a, b) => a.mass! - b.mass! || a.index - b.index)[0]?.index ?? null;
@@ -185,5 +198,5 @@ export function optimizePointRequest(run: CadOptimization, index: number, reques
   const point = run.result?.points.find(p => p.index === index);
   if (!point || point.fidelity !== "fea") throw new DomainError("NOT_FOUND", "Solved optimisation point not found", 404);
   return { requestId, projectRevision: revision, variant: "parametric" as const, requirements: run.request.requirements as CadReq,
-    parameters: point.parameters, fromOptimize: { optimizeId: run.id, point: index } };
+    parameters: point.parameters, ...(run.request.family === "pillow-block" ? { family: "pillow-block" as const } : {}), fromOptimize: { optimizeId: run.id, point: index } };
 }

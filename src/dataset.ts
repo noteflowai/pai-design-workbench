@@ -20,9 +20,11 @@ export function solverDataset(store: Store) {
     for (const p of o.result?.points ?? []) {
       if (p.fidelity !== "fea" || p.deflectionMm === undefined || p.mass === undefined) continue;
       rows.push({ domain: "structural-fea", source: "cad-optimize", recordId: o.id, projectId: o.projectId, createdAt: o.createdAt,
-        inputs: { thickness: p.parameters.thickness, width: p.parameters.width, plateHeight: p.parameters.plateHeight, pilotBore: p.parameters.pilotBore,
-          forceN: o.request.requirements.structural!.forceN, leverMm: o.request.requirements.structural!.leverMm },
-        outputs: { deflectionMm: p.deflectionMm, stressMPa: p.stressMPa ?? NaN, massG: p.mass, minWallMm: p.minWallMm ?? NaN, holeEdgeMm: p.holeEdgeMm ?? NaN }, solver: "Gmsh 4.15.2 C3D10 fine + CalculiX 2.21",
+        // Inputs are the point's own recipe parameters (bracket: thickness/width/plateHeight/pilotBore; pillow block:
+        // width/depth/baseThickness/boltPitch and the fixed rest), so rows of the two families never mix by accident.
+        inputs: { ...(p.parameters as Record<string, number>), forceN: o.request.requirements.structural!.forceN, leverMm: o.request.requirements.structural!.leverMm },
+        outputs: { deflectionMm: p.deflectionMm, stressMPa: p.stressMPa ?? NaN, massG: p.mass, minWallMm: p.minWallMm ?? NaN, holeEdgeMm: p.holeEdgeMm ?? NaN,
+          ...(p.boreDistortionMm !== undefined ? { boreDistortionMm: p.boreDistortionMm } : {}) }, solver: "Gmsh 4.15.2 C3D10 fine + CalculiX 2.21",
         fidelity: p.remote ? "fea-fine (AWS Batch)" : "fea-fine" });
     }
   }

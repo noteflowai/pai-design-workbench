@@ -224,7 +224,7 @@ function CadLane() {
         void runCad(c, variant, requirements, generated ? code : undefined, feedback, params, pillow && generated ? "pillow-block" : undefined);
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
-  {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
+  {!feedback && structural && <OptimizePanel key={family} family={family} requirements={formRequirements} />}
   {!feedback && <SweepPanel key={family} family={family} requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
   </>;
 }

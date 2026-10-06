@@ -131,8 +131,7 @@ export const CadRequest = z.object({
     { message: "parameters must match the part family", path: ["parameters"] })
   .refine(r => !r.requirements.structural || structuralFits(familyOf(r), r.requirements.structural),
     { message: "structural load case must match the part family (pillow block: leverMm 0, direction, maxBoreDistortionMm; bracket: forceN ≤ 2000 without them)", path: ["requirements", "structural"] })
-  .refine(r => familyOf(r) === "nema17-bracket" || !r.fromOptimize,
-    { message: "optimisation exists for the NEMA 17 bracket only", path: ["family"] });
+  ;
 export const CadChecks = z.object({
   schema: z.literal("pai-cad-checks-1"), variant: z.enum(CAD_VARIANTS), cadquery: z.string(), ocp: z.string(), units: z.literal("mm"),
   mass: z.number(), volume: z.number(), boundingBox: z.array(z.number()).length(3),

@@ -1,7 +1,10 @@
-"""Physics-aware design optimisation of the NEMA 17 bracket. A surrogate ranks candidates; native solvers decide.
+"""Physics-aware design optimisation of a part family. A surrogate ranks candidates; native solvers decide.
 
 Run with the pinned physics interpreter. Each *measured* point is the trusted recipe built by CadQuery
-(native/cad_point.py, B-Rep checks) and solved by Gmsh + CalculiX (native/fea_bracket.py, fine mesh).
+(native/cad_point.py, B-Rep checks) and solved by Gmsh + CalculiX (fine mesh) with the family's own load case:
+- nema17-bracket: thickness, width, plateHeight; belt load on the motor bores (native/fea_bracket.py).
+- pillow-block: width, depth, baseThickness, boltPitch, the rest fixed; radial bearing load on the seat
+  (native/fea_pillow.py), which adds seat out-of-roundness as a surrogate target and a constraint. GP + NSGA-II only.
 
 1. Initial design: scrambled Sobol points (Optuna QMC) plus up to four seeds proposed by an AI planner. A seed's
    own physics estimate is kept, so the planner's physical intuition can be scored against the solver.
@@ -36,9 +39,14 @@ from sklearn.gaussian_process.kernels import ConstantKernel, Matern, WhiteKernel
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 HERE = Path(__file__).resolve().parent
-BOUNDS = {"thickness": (2.0, 8.0), "width": (46.0, 80.0), "plateHeight": (40.0, 60.0)}
-AXES = list(BOUNDS)
-PILOT_BORE = 22.5
+FAMILIES = {
+    "nema17-bracket": {"bounds": {"thickness": (2.0, 8.0), "width": (46.0, 80.0), "plateHeight": (40.0, 60.0)}, "fixed": {"pilotBore": 22.5},
+                       "reference": {"thickness": 4.0, "width": 60.0, "plateHeight": 46.0}, "fea": "fea_bracket.py", "boltDiameter": 5.5},
+    # Bounds inside native/cad_bearing.py BOUNDS; the bolts stay inside the base (pitch < width) for the whole box.
+    "pillow-block": {"bounds": {"width": (80.0, 120.0), "depth": (14.0, 24.0), "baseThickness": (6.0, 14.0), "boltPitch": (54.0, 76.0)},
+                     "fixed": {"baseDepth": 36.0, "axisHeight": 30.0, "seatDiameter": 35.012, "shoulderDiameter": 28.0, "crown": 8.0},
+                     "reference": {"width": 108.0, "depth": 20.0, "baseThickness": 10.0, "boltPitch": 76.0}, "fea": "fea_pillow.py", "boltDiameter": 9.0},
+}
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", required=True)
@@ -48,6 +56,10 @@ spec = json.loads(Path(args.input).read_text())
 out = Path(args.output)
 (out / "points").mkdir(parents=True, exist_ok=True)
 req, budget = spec["requirements"], spec["budget"]
+FAMILY = spec.get("family", "nema17-bracket")
+F = FAMILIES[FAMILY]
+BOUNDS, FIXED, PILLOW = F["bounds"], F["fixed"], FAMILY == "pillow-block"
+AXES = list(BOUNDS)
 structural = req["structural"]
 allowable = 276.0 / structural["safetyFactor"]
 limit = {"deflection": structural["maxDeflectionMm"], "stress": allowable, "mass": req["maxMassG"], "wall": req["minWallMm"]}
@@ -55,6 +67,10 @@ rng_seed = int(spec.get("seed", 7))
 STRATEGY = spec.get("strategy", "gp-nsga2")
 if STRATEGY not in ("gp-nsga2", "botorch-qlognehvi"):
     raise SystemExit(f"unknown strategy {STRATEGY}")
+if PILLOW and (STRATEGY != "gp-nsga2" or spec.get("backend", "local") != "local"):
+    raise SystemExit("the pillow block is optimised with gp-nsga2 on this host only")
+if PILLOW:
+    limit["bore"] = structural["maxBoreDistortionMm"]
 
 
 def event(payload):
@@ -69,7 +85,7 @@ points = []
 
 
 def geometry(folder, params):
-    (folder / "geometry-input.json").write_text(json.dumps({"parameters": params, "requirements": {k: v for k, v in req.items() if k != "structural"}}))
+    (folder / "geometry-input.json").write_text(json.dumps({"family": FAMILY, "parameters": params, "requirements": {k: v for k, v in req.items() if k != "structural"}}))
     g = subprocess.run([spec["cadquery"], "-I", "-W", "ignore", str(HERE / "cad_point.py"), "--input", str(folder / "geometry-input.json"), "--output", str(folder)],
                        capture_output=True, text=True, timeout=300)
     if g.returncode != 0:
@@ -126,7 +142,7 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
     folder = folder or out / "points" / f"{index:02d}"
     folder.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    params = {**snap(params), "pilotBore": PILOT_BORE}
+    params = {**snap(params), **FIXED}
     point = {"index": index, "origin": origin, "parameters": params, **({"prediction": prediction} if prediction else {}),
              **({"estimate": estimate} if estimate else {})}
     try:
@@ -151,9 +167,10 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
             point["seconds"] = round(time.monotonic() - started, 1)
             event({"type": "point", "index": index, "origin": origin, "parameters": params, "mass": point["mass"], "failed": geo_failed, "fidelity": "geometry"})
             return point
+        load = {"forceN": structural["forceN"], "leverMm": structural["leverMm"], **({"direction": structural["direction"]} if PILLOW else {})}
         (folder / "fea-input.json").write_text(json.dumps({"step": str(folder / "part.step"), "parameters": geo["parameters"], "ccx": spec["ccx"],
-            "meshes": "fine-only", "requirements": structural, "load": {"forceN": structural["forceN"], "leverMm": structural["leverMm"]}}))
-        f = subprocess.run([sys.executable, "-I", str(HERE / "fea_bracket.py"), "--input", str(folder / "fea-input.json"), "--output", str(folder)],
+            "meshes": "fine-only", "requirements": structural, "load": load}))
+        f = subprocess.run([sys.executable, "-I", str(HERE / F["fea"]), "--input", str(folder / "fea-input.json"), "--output", str(folder)],
                            capture_output=True, text=True, timeout=1200)
         if f.returncode != 0:
             raise RuntimeError(f"fea: {f.stderr.strip().splitlines()[-1][:200] if f.stderr.strip() else f.returncode}")
@@ -162,7 +179,8 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
         get = lambda cid: next(c["observed"] for c in checks if c["id"] == cid)
         point.update({"mass": geo["mass"], "checks": checks, "failed": [c["id"] for c in checks if not c["passed"]], "fidelity": "fea",
                       "deflectionMm": get("max-deflection"), "stressMPa": get("max-stress"), "minWallMm": get("min-wall"),
-                      "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"]})
+                      "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"],
+                      **({"boreDistortionMm": get("bore-distortion")} if PILLOW else {})})
     except _Done:
         pass
     except Exception as e:  # noqa: BLE001 — a degenerate point is a measured outcome, not an optimiser failure
@@ -192,12 +210,13 @@ def run_batch(batch):
 # Warm start: solver measurements from earlier records under the same load (the workbench's solver dataset). They train
 # the deflection / stress / mass surrogates only; they are never recommended from this run and never re-measured.
 PRIOR = [q for q in spec.get("prior", []) if all(k in q for k in ("parameters", "deflectionMm", "stressMPa", "mass"))
-         and all(BOUNDS[k][0] <= q["parameters"][k] <= BOUNDS[k][1] for k in AXES) and q["deflectionMm"] > 0 and q["stressMPa"] > 0]
+         and all(k in q["parameters"] and BOUNDS[k][0] <= q["parameters"][k] <= BOUNDS[k][1] for k in AXES) and q["deflectionMm"] > 0 and q["stressMPa"] > 0
+         and (not PILLOW or q.get("boreDistortionMm", 0) > 0)]
 PRIOR = [{**q, "parameters": {k: float(q["parameters"][k]) for k in AXES}} for q in PRIOR]
 initial = []
 # The frozen reference design is always measured first: every search starts from the known baseline.
 if spec.get("includeReference", True):
-    initial.append(({"thickness": 4.0, "width": 60.0, "plateHeight": 46.0}, "reference", None, None))
+    initial.append((dict(F["reference"]), "reference", None, None))
 for seed in spec.get("seeds", [])[:4]:
     initial.append(({k: seed["parameters"][k] for k in AXES}, "ai-seed", None, {k: seed[k] for k in ("expectedDeflectionMm", "expectedMassG", "rationale") if k in seed}))
 qmc = optuna.samplers.QMCSampler(qmc_type="sobol", scramble=True, seed=rng_seed)
@@ -231,6 +250,8 @@ lo, hi = np.array([BOUNDS[k][0] for k in AXES]), np.array([BOUNDS[k][1] for k in
 norm = lambda p: (np.array([p[k] for k in AXES]) - lo) / (hi - lo)
 TARGETS = {"logDeflection": lambda p: math.log(p["deflectionMm"]), "logStress": lambda p: math.log(p["stressMPa"]),
            "mass": lambda p: p["mass"], "minWall": lambda p: p["minWallMm"], "holeEdge": lambda p: p["holeEdgeMm"]}
+if PILLOW:
+    TARGETS["logBore"] = lambda p: math.log(p["boreDistortionMm"])
 
 
 GEOMETRY_TARGETS = {"mass", "minWall", "holeEdge"}
@@ -266,8 +287,10 @@ def predict(models, params):
 
 
 def envelope_ok(p):
-    w, h = p["width"], p["thickness"] + p["plateHeight"]
     e = req["maxEnvelopeMm"]
+    if PILLOW:  # x: base width; y: the fixed base depth or the housing depth; z: fixed by axis height + seat + crown
+        return p["width"] <= e[0] and max(FIXED["baseDepth"], p["depth"]) <= e[1] and p["boltPitch"] + 2 * req["edgeDistanceFactor"] * F["boltDiameter"] <= p["width"] + 1e-9
+    w, h = p["width"], p["thickness"] + p["plateHeight"]
     return w <= e[0] and 30.0 <= e[1] and h <= e[2]
 
 
@@ -369,7 +392,7 @@ for r in range(1, budget["rounds"] + extra_rounds + 1):
         rounds.append({"round": r, "trainedOn": n, "looMeanAbsError": loo, "surrogateTrials": len(cands),
                        "screenedGeometry": screened, "proposed": [p["index"] for p in new]})
         continue
-    edge_min = req["edgeDistanceFactor"] * 5.5
+    edge_min = req["edgeDistanceFactor"] * F["boltDiameter"]
 
     def objective(trial):
         p = {k: trial.suggest_float(k, *BOUNDS[k]) for k in AXES}
@@ -379,6 +402,8 @@ for r in range(1, budget["rounds"] + extra_rounds + 1):
              pr["logStress"][0] + pr["logStress"][1] - math.log(limit["stress"]),
              limit["wall"] - (pr["minWall"][0] - pr["minWall"][1]), edge_min - (pr["holeEdge"][0] - pr["holeEdge"][1]),
              pr["mass"][0] - limit["mass"], 0.0 if envelope_ok(p) else 1.0]
+        if PILLOW:
+            c.append(pr["logBore"][0] + pr["logBore"][1] - math.log(limit["bore"]))
         trial.set_user_attr("constraints", c)
         trial.set_user_attr("prediction", pr)
         return pr["mass"][0], pr["logDeflection"][0]
@@ -417,7 +442,8 @@ for r in range(1, budget["rounds"] + extra_rounds + 1):
     for params, origin, t in chosen:
         pr = t.user_attrs["prediction"]
         batch.append((next_index, params, origin, {"deflectionMm": round(math.exp(pr["logDeflection"][0]), 4), "deflectionSigmaLog": round(pr["logDeflection"][1], 4),
-                                                   "stressMPa": round(math.exp(pr["logStress"][0]), 1), "massG": round(pr["mass"][0], 2)}, None))
+                                                   "stressMPa": round(math.exp(pr["logStress"][0]), 1), "massG": round(pr["mass"][0], 2),
+                                                   **({"boreDistortionMm": round(math.exp(pr["logBore"][0]), 5)} if PILLOW else {})}, None))
         next_index += 1
     event({"type": "phase", "phase": f"round-{r}", "points": len(batch), "trainedOn": n})
     new = run_batch(batch)
@@ -442,7 +468,7 @@ if STRATEGY == "botorch-qlognehvi":
 else:
     surrogate_text, search_text = "GaussianProcessRegressor (Matérn 5/2 + white noise), scikit-learn", "NSGA-II on the surrogate, constraints at mean ± 1σ"
 prior_feasible = sorted((q for q in PRIOR if q["deflectionMm"] <= limit["deflection"] and q["stressMPa"] <= limit["stress"] and q["mass"] <= limit["mass"]), key=lambda q: q["mass"])
-result = {"schema": "pai-cad-optimize-1", "warmStart": {"points": len(PRIOR), "extraRounds": extra_rounds, "lightestPriorMassG": prior_feasible[0]["mass"] if prior_feasible else None} if PRIOR else None, "optuna": optuna.__version__, "strategy": STRATEGY, "surrogate": surrogate_text,
+result = {"schema": "pai-cad-optimize-1", "family": FAMILY, "fixed": FIXED, "warmStart": {"points": len(PRIOR), "extraRounds": extra_rounds, "lightestPriorMassG": prior_feasible[0]["mass"] if prior_feasible else None} if PRIOR else None, "optuna": optuna.__version__, "strategy": STRATEGY, "surrogate": surrogate_text,
           "search": search_text, "requirements": req, "budget": budget, "axes": AXES, "bounds": BOUNDS,
           "points": points, "rounds": rounds, "feasibleCount": len(feasible), "lightestFeasible": feasible[0]["index"] if feasible else None,
           "pareto": front, "calibration": calibration, "aiSeeds": ai,
