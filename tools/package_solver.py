@@ -1,7 +1,8 @@
 """Stage the build context of the FEA solver image (Dockerfile.solver) under .state/deploy/solver-context.
 
-Only the image's inputs are copied, so the CodeBuild source asset hash (and therefore the immutable image tag)
-changes only when they change.
+Only the images' inputs are copied. Each image is tagged by the digest of its own Dockerfile and the files that
+Dockerfile COPYs (read from the Dockerfile, the one source), written to image-tags.json; so an FEA script change
+rebuilds only the FEA image and never re-pulls the OpenFOAM or FreeCAD bases.
 """
 import hashlib
 import json
@@ -21,4 +22,17 @@ for f in files:
     shutil.copy2(root / f, out / f)
     (out / f).chmod(0o644)
     digest.update(f.encode()); digest.update(hashlib.sha256((root / f).read_bytes()).digest())
-print(json.dumps({"context": str(out.relative_to(root)), "files": len(files), "contentSha256": digest.hexdigest()}))
+import re
+tags = {}
+for kind, dockerfile in (("fea", "Dockerfile.solver"), ("cfd", "Dockerfile.cfd"), ("cam", "Dockerfile.cam")):
+    text = (root / dockerfile).read_text()
+    inputs = sorted({f for line in text.splitlines() if line.startswith("COPY ") for f in line.split()[1:-1] if not f.startswith("--")})
+    missing = [f for f in inputs if f not in files]
+    if missing:
+        raise SystemExit(f"{dockerfile} copies files that are not staged: {missing}")
+    h = hashlib.sha256(text.encode())
+    for f in inputs:
+        h.update(f.encode()); h.update(hashlib.sha256((root / f).read_bytes()).digest())
+    tags[kind] = f"{kind}-{h.hexdigest()[:16]}"
+(out / "image-tags.json").write_text(json.dumps(tags, indent=1) + "\n")
+print(json.dumps({"context": str(out.relative_to(root)), "files": len(files), "contentSha256": digest.hexdigest(), "tags": tags}))

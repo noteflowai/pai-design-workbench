@@ -9,7 +9,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import { Construct } from "constructs";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /** Names the workbench stack grants against without a cross-stack reference. */
@@ -51,13 +51,19 @@ export class SolverStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN, lifecycleRules: [{ maxImageCount: 10 }],
     });
     const source = new assets.Asset(this, "BuildContext", { path: contextDir });
-    const imageTag = `fea-${source.assetHash.slice(0, 16)}`, cfdTag = `cfd-${source.assetHash.slice(0, 16)}`, camTag = `cam-${source.assetHash.slice(0, 16)}`;
+    // Per-image tags from each image's own inputs (tools/package_solver.py): an FEA change never rebuilds CFD or CAM.
+    const { fea: imageTag, cfd: cfdTag, cam: camTag } = JSON.parse(readFileSync(resolve(contextDir, "image-tags.json"), "utf8")) as Record<"fea" | "cfd" | "cam", string>;
+    // Optional, explicit: an existing image in this repository whose inputs are known to equal the new tag's
+    // (-c solverReuse=cfd:cfd-<old>,cam:cam-<old>). It is copied registry-side, so no base image is pulled again.
+    const reuse: Record<string, string> = Object.fromEntries(String(this.node.tryGetContext("solverReuse") ?? "").split(",").filter(Boolean).map((kv: string) => kv.split(":")));
+    for (const [k, v] of Object.entries(reuse)) if (!["fea", "cfd", "cam"].includes(k) || !new RegExp(`^${k}-[0-9a-f]{16}$`).test(v)) throw new Error(`bad solverReuse entry ${k}:${v}`);
     const buildLogs = new logs.LogGroup(this, "BuildLogs", { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: cdk.RemovalPolicy.DESTROY });
     const project = new codebuild.Project(this, "ImageBuild", {
       projectName: "pai-solver-image", description: "linux/amd64 build of the PAI FEA solver job image",
       source: codebuild.Source.s3({ bucket: source.bucket, path: source.s3ObjectKey }),
       environment: { buildImage: codebuild.LinuxBuildImage.STANDARD_7_0, computeType: codebuild.ComputeType.LARGE, privileged: true },
-      environmentVariables: { REPO: { value: repo.repositoryUri }, TAG: { value: imageTag }, CFD_TAG: { value: cfdTag }, CAM_TAG: { value: camTag } },
+      environmentVariables: { REPO: { value: repo.repositoryUri }, TAG: { value: imageTag }, CFD_TAG: { value: cfdTag }, CAM_TAG: { value: camTag },
+        CFD_REUSE: { value: reuse.cfd ?? "" }, CAM_REUSE: { value: reuse.cam ?? "" } },
       timeout: cdk.Duration.minutes(60), logging: { cloudWatch: { logGroup: buildLogs } },
       buildSpec: codebuild.BuildSpec.fromObject({
         version: "0.2",
@@ -69,10 +75,12 @@ export class SolverStack extends cdk.Stack {
               + "docker build --platform linux/amd64 -f Dockerfile.solver --build-arg PAI_IMAGE_VERSION=$TAG -t $REPO:$TAG . && docker push $REPO:$TAG; fi",
             "docker run --rm --network none --entrypoint /opt/physics/bin/python $REPO:$TAG -c \"import gmsh; print('gmsh', gmsh.__version__)\" || true",
             // CFD image: FROM the digest-pinned OpenCFD OpenFOAM v2512 image (Dockerfile.cfd).
-            `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CFD_TAG >/dev/null 2>&1; then echo "exists $CFD_TAG"; else `
+            `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CFD_TAG >/dev/null 2>&1; then echo "exists $CFD_TAG"; `
+              + `elif [ -n "$CFD_REUSE" ] && aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CFD_REUSE >/dev/null 2>&1; then docker buildx imagetools create -t $REPO:$CFD_TAG $REPO:$CFD_REUSE && echo "reused $CFD_REUSE as $CFD_TAG"; else `
               + "docker build --platform linux/amd64 -f Dockerfile.cfd --build-arg PAI_IMAGE_VERSION=$CFD_TAG -t $REPO:$CFD_TAG . && docker push $REPO:$CFD_TAG; fi",
             // CAM image: FreeCAD 1.1 installed by tools/setup_cam.py (AppImage sha256 from runtime-pins.json) (Dockerfile.cam).
-            `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CAM_TAG >/dev/null 2>&1; then echo "exists $CAM_TAG"; else `
+            `if aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CAM_TAG >/dev/null 2>&1; then echo "exists $CAM_TAG"; `
+              + `elif [ -n "$CAM_REUSE" ] && aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$CAM_REUSE >/dev/null 2>&1; then docker buildx imagetools create -t $REPO:$CAM_TAG $REPO:$CAM_REUSE && echo "reused $CAM_REUSE as $CAM_TAG"; else `
               + "docker build --platform linux/amd64 -f Dockerfile.cam --build-arg PAI_IMAGE_VERSION=$CAM_TAG -t $REPO:$CAM_TAG . && docker push $REPO:$CAM_TAG; fi",
           ] },
           post_build: { commands: [`aws ecr describe-images --repository-name ${SOLVER.repository} --image-ids imageTag=$TAG imageTag=$CFD_TAG imageTag=$CAM_TAG --query 'imageDetails[].[imageTags[0],imageSizeInBytes,imageDigest]' --output text`] },

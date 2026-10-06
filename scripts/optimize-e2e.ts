@@ -22,6 +22,8 @@ const post = async <T>(url: string, payload: unknown) => { const r = await call(
 const requirements = { ...DEFAULT_CAD_REQUIREMENTS, structural: DEFAULT_STRUCTURAL };
 // PAI_OPTIMIZE_STRATEGY=botorch-qlognehvi exercises the BoTorch strategy (npm run setup:physics -- --with-botorch).
 const strategy = (process.env.PAI_OPTIMIZE_STRATEGY ?? "gp-nsga2") as "gp-nsga2" | "botorch-qlognehvi";
+// PAI_OPTIMIZE_SOLVER=batch solves every point as an AWS Batch job (needs PAI_SOLVER_QUEUE / _JOB_DEFINITION / _BUCKET).
+const solver = process.env.PAI_OPTIMIZE_SOLVER === "batch" ? "batch" as const : undefined;
 try {
   const project = await post<Project>("/api/projects", { title: "Optimise a stiff NEMA 17 bracket", intendedDecision: "Lightest bracket meeting stiffness and DFM rules",
     requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
@@ -29,7 +31,7 @@ try {
     "optimisation without frozen structural requirements is rejected");
   const t0 = Date.now();
   const run = await post<CadOptimization>(`/api/projects/${project.id}/cad-optimizations`, { requestId: randomUUID(), projectRevision: 1, requirements,
-    budget: { initial: 4, rounds: 1, perRound: 3 }, strategy,
+    budget: { initial: 4, rounds: 1, perRound: 3 }, strategy, ...(solver ? { solver } : {}),
     seeds: [{ parameters: { thickness: 3.8, width: 57, plateHeight: 45 }, expectedDeflectionMm: 0.055, expectedMassG: 44,
       rationale: "Ribs closer to the bores; W/2 − 20 ≥ 8.25 and H − 39.5 ≥ 5.1 keep the edge rules" }] });
   assert.equal(run.state, "completed", run.error ?? "optimisation failed");

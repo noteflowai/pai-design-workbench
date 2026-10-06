@@ -192,8 +192,12 @@ Geometry-only screens stay on the host because they take seconds.
 
 - **Image.** `Dockerfile.solver` runs the same `cad_point.py` and `fea_bracket.py` with the same pins: CadQuery from
   its hash lock, Gmsh / NumPy / boto3 from `native/solver-requirements.txt` (constrained to the physics lock), and
-  CalculiX 2.21 from the signed Ubuntu archive. CodeBuild builds it from a content-hashed source asset into an
-  immutable ECR tag.
+  CalculiX 2.21 from the signed Ubuntu archive. CodeBuild builds it into an immutable ECR tag.
+- **Tags per image.** `tools/package_solver.py` tags each of the three images (FEA, CFD, CAM) by the digest of its own
+  Dockerfile and the files that Dockerfile COPYs, read from the Dockerfile itself (`image-tags.json`). An FEA change
+  rebuilds only the FEA image. Before this, one shared tag rebuilt the OpenFOAM image too, and the build failed on
+  Docker Hub's anonymous pull limit (HTTP 429). When an image's inputs are known to be unchanged under a new tag,
+  `cdk deploy PAISolver -c solverReuse=cfd:<old>,cam:<old>` copies it inside ECR instead of pulling the base again.
 - **Job contract.** The job reads `jobs/<run>/<index>/input.json` (parameters and requirements only) and writes
   `point.json`, `fea.json`, `part.step` and `result.json` (file digests, tool versions, image tag). The optimiser
   re-hashes every file and requires gmsh 4.15.2, ccx 2.21 and CadQuery 2.8.0. Anything else is a failed measurement.
@@ -202,7 +206,9 @@ Geometry-only screens stay on the host because they take seconds.
   set `solver: "local"`; batch is the default whenever it is configured.
 
 On the hosted site the reference bracket gave 0.0478 mm in a Batch job, the same value as the local run. A full
-optimisation completed with 5 Batch jobs ([solver-batch.json](evidence/solver-batch.json)).
+optimisation completed with 5 Batch jobs ([solver-batch.json](evidence/solver-batch.json)). After the move to the
+shared `native/fea_core.py`, `PAI_OPTIMIZE_SOLVER=batch npm run test:optimize` solved all 7 points as Batch jobs on
+image `fea-34c84c6c6c7573ba`; the reference again gave 0.0478 mm.
 
 ## Strategy comparison
 
