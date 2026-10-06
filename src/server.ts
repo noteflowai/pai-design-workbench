@@ -34,7 +34,7 @@ import type { FactoryCriteria } from "./factory.js";
 import { toolCatalog } from "./tool-catalog.js";
 import { CAM_FILE, CAD_TEMPLATES, FAMILY_DEFAULTS, FAMILY_STRUCTURAL, camConfigured, camRunner, DEFAULT_STRUCTURAL, FEA_FILES, CAD_FILES, CAD_TEMPLATE_FILE, checkCadCode, DEFAULT_CAD_REQUIREMENTS, precheckCad, reviewCad, type CadReview } from "./cad.js";
 import { ISOLATION, sandboxStatus } from "./sandbox.js";
-import { DEFAULT_SWEEP_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
+import { DEFAULT_SWEEP_GRID, DEFAULT_PILLOW_GRID, MAX_SWEEP_POINTS, sweepCad, type CadSweep } from "./sweep.js";
 import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, optimizeCad, type CadOptimization } from "./optimize.js";
 import { KIND_STORE, admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
@@ -245,7 +245,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         defaultRequirements: DEFAULT_AERO_REQUIREMENTS } : false,
       cad: config.cadquery ? { engine: "CadQuery 2.8.0 / OCCT 7.9", defaultRequirements: DEFAULT_CAD_REQUIREMENTS, families: FAMILY_DEFAULTS,
         cam: camConfigured(config) ? { engine: `FreeCAD 1.1.4 CAM (ocp-freecad-cam) + OpenCAMLib${camRunner(config) === "batch" ? " on AWS Batch" : ""} · independent dexel simulation` } : false,
-        generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate, templates: cadTemplates }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, maxPoints: MAX_SWEEP_POINTS } } : false,
+        generatedCode: { ...sandbox, isolation: ISOLATION, template: cadTemplate, templates: cadTemplates }, sweep: { defaultGrid: DEFAULT_SWEEP_GRID, grids: { "nema17-bracket": DEFAULT_SWEEP_GRID, "pillow-block": DEFAULT_PILLOW_GRID }, maxPoints: MAX_SWEEP_POINTS } } : false,
       factoryTwin: { mode: "read-only illustrative-simulation review", reviewedSample: REVIEWED_SAMPLE.id, defaultCriteria: DEFAULT_FACTORY_CRITERIA, productionToolUpgraded: false },
       assistant: { mode: "typed plans; confirmation required", modelInvocation: controllerConfigured(config), engines: controllerConfigured(config) ? enabledProfiles(config) : [],
         transport: controllerTransport(config) ?? null,

@@ -61,7 +61,7 @@ const ModelPayload = {
   "cad-review": z.object({ variant: z.enum([...CAD_PRESETS, ...PILLOW_PRESETS, "parametric"]), family: z.enum(CAD_FAMILIES).optional(),
     parameters: z.union([CadParameters, PillowParameters]).optional(), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-code": z.object({ code: CadSource.shape.code, family: z.enum(CAD_FAMILIES).default("nema17-bracket"), requirements: CadRequirements.partial().default({}) }).strict(),
-  "cad-sweep": z.object({ grid: SweepGrid, requirements: CadRequirements.partial().default({}) }).strict(),
+  "cad-sweep": z.object({ grid: SweepGrid, family: z.enum(CAD_FAMILIES).optional(), requirements: CadRequirements.partial().default({}) }).strict(),
   "cad-optimize": z.object({ requirements: CadRequirements.partial().default({}), budget: OptimizeBudget.optional(), seeds: z.array(OptimizeSeed).max(4).default([]),
     strategy: z.enum(OPTIMIZE_STRATEGIES).optional() }).strict(),
   "factory-criteria": z.object({ criteria: FactoryCriteriaValues.partial().default({}), rationale: z.string().trim().min(5).max(1000) }).strict(),
@@ -84,7 +84,7 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "节拍大致与 1/speedFraction 成正比（加上约 0.3 s 稳定时间）；guardClearance < 0.2 m 时肘部会碰到围栏；工位距离 > 0.9 m 时 IK 不可达。"
     + "可选 tool：{ cad: \"cad-N\" }，把本项目一个已通过的 CAD 零件（及默认 0.28 kg 的 NEMA 17 电机负载）装到末端，质量和惯量取自精确网格并与 B-Rep 质量交叉核对；省略时沿用上一次的末端工装",
   "cad-review": "CadQuery 零件：NEMA 17 支架 variant reference/lightweight/undersize-bore/compact；6202 轴承座 variant pillow-block/pillow-block-light/pillow-block-compact/pillow-block-tight（检查 bearing-seat H7、shoulder、min-wall、hole-edge-distance、mass、envelope；requirements.structural 冻结时还用 CalculiX 实测轴心位移、峰值应力和受载轴承孔失圆 bore-distortion，载荷为 {forceN, leverMm: 0, direction: away-from-base|toward-base, safetyFactor, maxDeflectionMm, maxBoreDistortionMm}）；也可以 variant=parametric 加 parameters 直接给受控配方的有界参数（比写代码短、更快）：支架 {thickness, width, plateHeight, pilotBore}；轴承座加 family=pillow-block，parameters {width 60–140, depth 14–40, baseDepth 20–60, axisHeight 22–60, baseThickness 6–20, boltPitch 40–120, seatDiameter 34.9–35.2, shoulderDiameter 17–34, crown 2–20}；requirements 可只写要改的字段",
-  "cad-sweep": `NEMA 17 支架设计空间扫描：在 thickness 2–8、width 46–80、plateHeight 40–60、pilotBore 21–24（mm）的网格上逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点；用于寻找满足全部检查的最轻参数。扫描只排序实测点，不作结论；选中的点由维护者生成正式候选`,
+  "cad-sweep": `设计空间扫描（只测几何，不做 FEA）：支架 grid {thickness 2–8, width 46–80, plateHeight 40–60, pilotBore 21–24}；轴承座加 family=pillow-block，grid {width 60–140, depth 14–40, baseThickness 6–20, boltPitch 40–120}（其余固定为 baseDepth 36、axisHeight 30、seat 35.012、shoulder 28）。逐点原生建模并实测，最多 ${MAX_SWEEP_POINTS} 个点，用于寻找满足全部几何检查的最轻参数；只排序实测点，不作结论，选中的点再作为正式候选（可冻结 FEA）复核`,
   "cad-optimize": "NEMA 17 支架的物理寻优：Gmsh + CalculiX 实测挠度与应力，GP 代理模型和 NSGA-II 只负责排序，最终只认实测点。需要 requirements.structural"
     + "（forceN、leverMm、safetyFactor、maxDeflectionMm；缺省 60 N、50 mm、2、0.06 mm）。可以提供最多 4 个 seeds（thickness 2–8、width 46–80、plateHeight 40–60），"
     + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
@@ -414,17 +414,20 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
       warnings: [...relaxWarning(changes), ...note], evidence: "可编辑 STEP、B-Rep 实测接口、壁厚、孔边距、质量与装配干涉；EvalArc 对照" };
   }
   if (t === "cad-sweep") {
-    const p = parsed as { grid: SweepGrid; requirements: Partial<CadRequirements> };
-    const prev = context.lastCad?.request.requirements;
-    const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), ...p.requirements });
-    const payload = { projectRevision: opts.revision, requirements, grid: p.grid };
+    const p = parsed as { grid: SweepGrid; family?: CadFamily; requirements: Partial<CadRequirements> };
+    const family = p.family ?? ("baseThickness" in p.grid ? "pillow-block" : "nema17-bracket");
+    const last = context.lastCad && familyOf(context.lastCad.request) === family ? context.lastCad.request.requirements : undefined;
+    // A sweep measures geometry only: the structural block of the last part is not carried into it.
+    const { structural: _s, ...prev } = last ?? FAMILY_DEFAULTS[family];
+    const requirements = CadRequirements.parse({ ...prev, ...p.requirements });
+    const payload = { projectRevision: opts.revision, requirements, family, grid: p.grid };
     SweepRequest.parse({ ...payload, requestId: placeholder });
     const points = Object.values(p.grid).reduce((n, v) => n * new Set(v).size, 1);
-    const changes: PlanChange[] = [...cadRequirementChanges(prev ?? DEFAULT_CAD_REQUIREMENTS, requirements),
+    const changes: PlanChange[] = [...cadRequirementChanges(prev, requirements),
       { field: "grid", from: null, to: `${points} 个点`, direction: "new" }];
     return { ...base, title: opts.title ?? `设计空间扫描：${points} 个点`, route: route("cad-sweeps"), method: "POST", payload, changes,
       warnings: [...relaxWarning(changes), `约 ${Math.ceil(points * 6 / 60)} 分钟；只比较网格上实测过的点，不作验收结论。`, ...note],
-      evidence: "每个点的原生 B-Rep 建模与 7 项检查；最轻可行点与帕累托前沿" };
+      evidence: "每个点的原生 B-Rep 建模与该零件族的全部几何检查；最轻可行点与帕累托前沿" };
   }
   if (t === "cad-optimize") {
     const p = parsed as { requirements: Partial<CadRequirements>; budget?: z.infer<typeof OptimizeBudget>; seeds: z.infer<typeof OptimizeSeed>[]; strategy?: (typeof OPTIMIZE_STRATEGIES)[number] };

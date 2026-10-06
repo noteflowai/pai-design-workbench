@@ -225,7 +225,7 @@ function CadLane() {
       }}>{feedback ? "提交修订代码并复测" : generated ? "在沙箱中运行并检查" : "生成并检查 CAD 零件"}</button></div>
   </Card>
   {!feedback && structural && <OptimizePanel requirements={formRequirements} />}
-  {!feedback && !pillow && <SweepPanel requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
+  {!feedback && <SweepPanel key={family} family={family} requirements={{ maxMassG: mass, minWallMm: wall, edgeDistanceFactor: edge, requireNoInterference: fit, maxEnvelopeMm: defaults.maxEnvelopeMm }} />}
   </>;
 }
 

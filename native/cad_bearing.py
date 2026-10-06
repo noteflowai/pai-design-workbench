@@ -106,13 +106,21 @@ def dist(a, b):
     d = BRepExtrema_DistShapeShape(a, b); d.Perform(); return d.Value()
 
 
+def exact_box(shape):
+    """Bounds of the exact B-Rep. cq's BoundingBox() uses AddOptimal with triangulation when a mesh exists, so after a
+    GLB export it measured the tessellation (seat length 11.011 instead of 11.000); never use the mesh here."""
+    from cadquery.occ_impl.geom import BoundBox
+    bb = Bnd_Box(); BRepBndLib.AddOptimal_s(shape.wrapped, bb, False, False)
+    return BoundBox(bb)
+
+
 def measure(part, h, req):
     cyl = []
     for f in part.Faces():
         if f.geomType() == "CYLINDER":
             c = f._geomAdaptor().Cylinder(); ax = c.Axis(); dr, lo = ax.Direction(), ax.Location()
             axis = "y" if abs(dr.Y()) > 0.99 else "z" if abs(dr.Z()) > 0.99 else "other"
-            cyl.append({"face": f, "axis": axis, "d": round(2 * c.Radius(), 4), "x": lo.X(), "y": lo.Y(), "z": lo.Z(), "bb": f.BoundingBox()})
+            cyl.append({"face": f, "axis": axis, "d": round(2 * c.Radius(), 4), "x": lo.X(), "y": lo.Y(), "z": lo.Z(), "bb": exact_box(f)})
     along = [c for c in cyl if c["axis"] == "y"]
     seat = max(along, key=lambda c: c["d"]) if along else None
     shoulder = min(along, key=lambda c: c["d"]) if len(along) > 1 else None

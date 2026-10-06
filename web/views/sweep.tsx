@@ -4,31 +4,42 @@ import { CAD_CHECK_LABELS, useApp, type Ctx } from "../context";
 import { Card, Chip, time } from "../ui";
 import { LiveSteps } from "../studio";
 import type { CadRequirements } from "../../src/cad";
-import type { CadSweep, SweepGrid, SweepPoint } from "../../src/sweep";
+import type { CadSweep, SweepPoint } from "../../src/sweep";
 
-const AXES: [keyof SweepGrid, string, string][] = [["thickness", "板厚 t", "mm"], ["width", "宽度 W", "mm"], ["plateHeight", "安装板高度 H", "mm"], ["pilotBore", "止口孔径", "mm"]];
+type Family = "nema17-bracket" | "pillow-block";
+const FAMILY_AXES: Record<Family, [string, string, string, string][]> = {
+  "nema17-bracket": [["thickness", "板厚 t", "mm", "t"], ["width", "宽度 W", "mm", "W"], ["plateHeight", "安装板高度 H", "mm", "H"], ["pilotBore", "止口孔径", "mm", "Ø"]],
+  "pillow-block": [["width", "底座长度 W", "mm", "W"], ["depth", "轴承座厚度 D", "mm", "D"], ["baseThickness", "底座厚度", "mm", "底座"], ["boltPitch", "地脚孔距", "mm", "孔距"]],
+};
+const FAMILY_GRID: Record<Family, Record<string, number[]>> = {
+  "nema17-bracket": { thickness: [2.5, 3, 3.5, 4], width: [50, 55, 60], plateHeight: [43.5, 46], pilotBore: [22.5] },
+  "pillow-block": { width: [92, 100, 108], depth: [16, 20], baseThickness: [6, 8, 10, 12], boltPitch: [70] },
+};
 const parse = (text: string) => [...new Set(text.split(/[,，\s]+/).filter(Boolean).map(Number))];
 const count = (g: Record<string, number[]>) => Object.values(g).reduce((n, v) => n * v.length, 1);
 const minWall = (p: SweepPoint) => Number(p.checks?.find(c => c.id === "min-wall")?.observed ?? NaN);
-const label = (p: SweepPoint) => `t=${p.parameters.thickness} · W=${p.parameters.width} · H=${p.parameters.plateHeight} · Ø${p.parameters.pilotBore}`;
+const familyOfSweep = (s: CadSweep): Family => (s.request as { family?: Family }).family ?? "nema17-bracket";
+const labelFor = (family: Family) => (p: SweepPoint) => FAMILY_AXES[family].map(([k, , , short]) => `${short}${short === "Ø" ? "" : "="}${p.parameters[k]}`).join(" · ");
 
-function runSweep(c: Ctx, requirements: CadRequirements, grid: SweepGrid) {
+function runSweep(c: Ctx, requirements: CadRequirements, grid: Record<string, number[]>, family: Family) {
   const p = c.project!;
-  const requestId = requestIdFor(`pai-sweep-${p.id}-${p.revision}-${JSON.stringify(requirements)}-${JSON.stringify(grid)}`);
+  const requestId = requestIdFor(`pai-sweep-${p.id}-${p.revision}-${family}-${JSON.stringify(requirements)}-${JSON.stringify(grid)}`);
   return c.perform(async () => {
     const r = await c.track(requestId, `设计空间扫描 · ${count(grid)} 个点`, "cad-sweep",
-      () => api<CadSweep>(`/projects/${p.id}/cad-sweeps`, { requestId, projectRevision: p.revision, requirements, grid }));
+      () => api<CadSweep>(`/projects/${p.id}/cad-sweeps`, { requestId, projectRevision: p.revision, requirements, grid, family }));
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
   }, "设计空间扫描完成：每个点都已原生建模并实测。");
 }
 
 function choosePoint(c: Ctx, sweep: CadSweep, point: SweepPoint) {
+  const family = familyOfSweep(sweep), label = labelFor(family);
   const p = c.project!;
   const requestId = requestIdFor(`pai-cad-sweep-${sweep.id}-${point.index}-${p.revision}`);
   return c.perform(async () => {
     c.navigate("validate", { kind: "cad-part" });
     const r = await c.track(requestId, `参数化候选 · ${label(point)}`, "cad-part", () => api<{ id: string; state: string; error?: string }>(`/projects/${p.id}/cad`,
-      { requestId, projectRevision: p.revision, variant: "parametric", requirements: sweep.request.requirements, parameters: point.parameters, fromSweep: { sweepId: sweep.id, point: point.index } }));
+      { requestId, projectRevision: p.revision, variant: "parametric", requirements: sweep.request.requirements, parameters: point.parameters,
+        ...(family === "pillow-block" ? { family } : {}), fromSweep: { sweepId: sweep.id, point: point.index } }));
     c.navigate("validate", { kind: "cad-part", id: r.id });
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
   }, "已把扫描点作为正式候选：基准对照、EvalArc 与可编辑 STEP 均已生成。");
@@ -36,6 +47,7 @@ function choosePoint(c: Ctx, sweep: CadSweep, point: SweepPoint) {
 
 /** Accessible scatter: mass (x) against measured minimum wall (y); feasible points filled, Pareto points ringed. */
 function Scatter({ sweep, selected, onSelect }: { sweep: CadSweep; selected?: number; onSelect: (i: number) => void }) {
+  const label = labelFor(familyOfSweep(sweep));
   const points = sweep.result!.points.filter(p => typeof p.mass === "number");
   const req = sweep.request.requirements;
   const W = 520, H = 240, pad = { l: 46, r: 12, t: 12, b: 34 };
@@ -61,16 +73,17 @@ function Scatter({ sweep, selected, onSelect }: { sweep: CadSweep; selected?: nu
   </svg>;
 }
 
-export function SweepPanel({ requirements }: { requirements: CadRequirements }) {
+export function SweepPanel({ requirements, family = "nema17-bracket" }: { requirements: CadRequirements; family?: Family }) {
   const c = useApp();
   const cap = c.data.capabilities.cad;
-  const defaults = cap && cap.sweep ? cap.sweep.defaultGrid : { thickness: [2.5, 3, 3.5, 4], width: [50, 55, 60], plateHeight: [43.5, 46], pilotBore: [22.5] };
+  const AXES = FAMILY_AXES[family], label = labelFor(family);
+  const defaults = (cap && cap.sweep && (cap.sweep as { grids?: Record<string, Record<string, number[]>> }).grids?.[family]) || FAMILY_GRID[family];
   const max = cap && cap.sweep ? cap.sweep.maxPoints : 36;
-  const sweeps = (c.data.cadSweeps ?? []).filter(s => s.projectId === c.project?.id);
+  const sweeps = (c.data.cadSweeps ?? []).filter(s => s.projectId === c.project?.id && familyOfSweep(s) === family);
   const latest = sweeps.at(-1);
   // Start from the grid of the sweep on screen, so the inputs always describe what is shown.
-  const [text, setText] = useState<Record<string, string>>(() => Object.fromEntries(AXES.map(([k]) => [k, (latest?.request.grid ?? defaults)[k].join(", ")])));
-  const grid = Object.fromEntries(AXES.map(([k]) => [k, parse(text[k])])) as SweepGrid;
+  const [text, setText] = useState<Record<string, string>>(() => Object.fromEntries(AXES.map(([k]) => [k, ((latest?.request.grid as Record<string, number[]> | undefined) ?? defaults)[k].join(", ")])));
+  const grid = Object.fromEntries(AXES.map(([k]) => [k, parse(text[k])])) as Record<string, number[]>;
   const valid = AXES.every(([k]) => grid[k].length > 0 && grid[k].every(Number.isFinite)) && count(grid) <= max;
   const [chosen, setChosen] = useState<number>();
   const rows = useMemo(() => latest?.result ? [...latest.result.points].sort((a, b) => Number(b.feasible) - Number(a.feasible) || (a.mass ?? 1e9) - (b.mass ?? 1e9)) : [], [latest]);
@@ -81,11 +94,11 @@ export function SweepPanel({ requirements }: { requirements: CadRequirements }) 
     <div className="field-grid sweep-axes">{AXES.map(([k, name, unit]) => <label key={k}>{name}<span className="unit-input">
       <input value={text[k]} onChange={e => setText({ ...text, [k]: e.target.value })} aria-describedby="sweep-count" inputMode="decimal" /><em>{unit}</em></span></label>)}</div>
     <div className="form-foot"><small id="sweep-count">{count(grid)} 个点（上限 {max}）· 约 {Math.ceil(count(grid) * 6 / 60)} 分钟 · 使用上方零件要求</small>
-      <button type="button" disabled={c.busy || !valid} onClick={() => void runSweep(c, requirements, grid)}>运行扫描</button></div>
+      <button type="button" disabled={c.busy || !valid} onClick={() => void runSweep(c, requirements, grid, family)}>运行扫描</button></div>
     {live && <LiveSteps session={{ ...live, steps: live.steps.filter(s => s.id === "sweep").concat(live.steps.filter(s => s.id !== "sweep").slice(-4)) }} />}
     {latest?.state === "failed" && <p className="warning">⚠ {latest.error}</p>}
     {latest?.result && <>
-      <p className="muted">{time(latest.createdAt)} · 需求 v{latest.projectRevision} · {latest.result.points.length} 个点中 {latest.result.feasibleCount} 个满足全部 7 项检查
+      <p className="muted">{time(latest.createdAt)} · 需求 v{latest.projectRevision} · {latest.result.points.length} 个点中 {latest.result.feasibleCount} 个满足全部 {latest.result.points.find(p => p.checks)?.checks?.length ?? 7} 项检查
         {selected?.feasible && latest.result.lightestFeasible === selected.index ? ` · 最轻可行点 ${selected.mass} g` : ""}。只比较网格上实测过的点，不保证全局最优。</p>
       <Scatter sweep={latest} selected={selected?.index} onSelect={setChosen} />
       <p className="legend"><span className="dot ok" />通过全部检查 <span className="dot bad" />有未通过的检查 <span className="dot ring" />可行点中的帕累托前沿（更轻 / 壁厚余量更大）</p>
@@ -96,10 +109,10 @@ export function SweepPanel({ requirements }: { requirements: CadRequirements }) 
           : <button type="button" disabled={c.busy} onClick={() => void choosePoint(c, latest, selected)}>以此参数生成正式候选</button>}
       </div>}
       <div className="table-wrap"><table className="sweep-table"><caption className="visually-hidden">扫描点（可行点在前，按质量升序）</caption>
-        <thead><tr><th scope="col">#</th><th scope="col">t</th><th scope="col">W</th><th scope="col">H</th><th scope="col">Ø</th><th scope="col">质量 g</th><th scope="col">最小壁厚</th><th scope="col">结果</th></tr></thead>
+        <thead><tr><th scope="col">#</th>{AXES.map(([k, , , short]) => <th key={k} scope="col">{short}</th>)}<th scope="col">质量 g</th><th scope="col">最小壁厚</th><th scope="col">结果</th></tr></thead>
         <tbody>{rows.map(p => <tr key={p.index} className={`${p.index === selected?.index ? "sel" : ""} ${p.feasible ? "" : "fail"}`} onClick={() => setChosen(p.index)}>
           <td><button type="button" className="link" onClick={() => setChosen(p.index)} aria-label={`选择点 ${p.index}`}>{p.index}</button></td>
-          <td>{p.parameters.thickness}</td><td>{p.parameters.width}</td><td>{p.parameters.plateHeight}</td><td>{p.parameters.pilotBore}</td>
+          {AXES.map(([k]) => <td key={k}>{p.parameters[k]}</td>)}
           <td>{p.mass ?? "—"}</td><td>{Number.isFinite(minWall(p)) ? minWall(p) : "—"}</td>
           <td>{p.feasible ? "✓" : p.error ? "建模失败" : p.failed.map(f => CAD_CHECK_LABELS[f] ?? f).join("、")}{(latest.pareto ?? []).includes(p.index) ? " · 前沿" : ""}</td></tr>)}</tbody></table></div>
     </>}

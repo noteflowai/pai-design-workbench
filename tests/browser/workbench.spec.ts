@@ -157,6 +157,9 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
   await page.getByRole("group", { name: "零件族" }).getByRole("button", { name: "6202 轴承座" }).click();
   await expect(page.getByRole("heading", { name: /6202 轴承座/ })).toBeVisible();
   await expect(page.getByRole("spinbutton", { name: "轴承孔失圆上限" })).toHaveCount(state.capabilities.physics ? 1 : 0);
+  // The design-space sweep follows the family: housing axes, its own default grid.
+  await expect(page.getByLabel("底座厚度")).toHaveValue("6, 8, 10, 12");
+  await expect(page.getByText("24 个点（上限 36）")).toBeVisible();
   await page.getByRole("radio", { name: /轴承孔偏小/ }).check();
   await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
   await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 180_000 });
