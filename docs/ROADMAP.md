@@ -40,8 +40,8 @@
 
 | 项 | 需求 | 退出条件 |
 |---|---|---|
-| DFM / CAM | F21 | ✓ 三轴铣削 DFM 已纳入 CAD 检查和准入。待做：用 FreeCAD Path 或 CAM CLI 做刀路仿真，校准加工时间 |
-| 第二个零件族 | F22 | 夹爪指或相机支架，同样有 B-Rep、FEA 和 MuJoCo 装配 |
+| DFM / CAM | F21 | ✓ 三轴铣削 DFM 已纳入 CAD 检查和准入。✓ FreeCAD 1.1 CAM + OpenCAMLib 按装夹出 G-code，独立 0.1 mm 高度图仿真（过切、残料、过载、快移碰撞、节拍），托管站点经 AWS Batch 运行（演示 D）。待做：用实际机床节拍校准加工时间 |
+| 第二个零件族 | F22 | ✓ 6202 轴承座：自有配方与 B-Rep 检查、AI 生成代码、DFM/CAM、结构 FEA（轴承余弦载荷，加测受载失圆）、设计空间扫描和物理寻优（本机或 AWS Batch），全部在托管站点复跑一致。待做：MuJoCo 装配（轴承座作为工作单元的固定件） |
 
 ## 层级状态（对齐外部分析）
 
@@ -49,19 +49,19 @@
 |---|---|---|
 | 0 意图 → 类型化需求 | 完成：Zod 计划、MCP、AgentForge 网关与集成包、客户端凭据 Agent API | — |
 | 1 概念 | 未做 | 等出现明确的造型需求（Hunyuan3D / TRELLIS） |
-| 2 工程几何 | 一个零件族 + 生成代码；Ahmed 车身配方 | 第二个零件族（F22） |
-| 3 高保真求解 | CalculiX（两级网格）；OpenFOAM v2512（两级网格）；两者都能在 AWS Batch 上跑 | 加 CFD 边界层网格和更细的网格 |
+| 2 工程几何 | 两个零件族（NEMA 17 支架、6202 轴承座）+ 生成代码；Ahmed 车身配方 | 第三个零件族按真实需求再加 |
+| 3 高保真求解 | CalculiX（两级网格，两个零件族各有载荷工况，共用 `fea_core.py`）；OpenFOAM v2512（两级网格）；都能在 AWS Batch 上跑 | 加 CFD 边界层网格和更细的网格 |
 | 4 物理 AI 代理模型 | GP 只负责排序，带校准；用求解数据集预热（46.3 → 44.1 g） | 有场级数据后再做 PhysicsNeMo |
-| 5 优化 | NSGA-II、BoTorch qLogNEHVI，做过配对比较 | — |
+| 5 优化 | NSGA-II、BoTorch qLogNEHVI（支架，做过配对比较）；轴承座以失圆为约束的 GP + NSGA-II | 轴承座的 BoTorch 线性约束 |
 | 6 系统 / 机器人 | MuJoCo 工作单元、CAD 装到机械臂、MJCF/OpenUSD（28 个校验器） | Isaac Lab 策略 |
-| 7 可制造性 | 三轴铣削 DFM（装夹、孔、成本估算） | 用 CAM 刀路校准加工时间 |
+| 7 可制造性 | 三轴铣削 DFM/DFA；CAM 出 G-code 并独立仿真 | 用实际机床节拍校准 |
 | 8 证据 | KMS 签名、RFC 3161 时间戳、只封存一次；Object Lock 桶已就绪 | 需确认保留期后开启归档 |
 
 ## M5–M8 · 从仿真走向物理世界（依据：[INDUSTRY_BENCHMARK.md](INDUSTRY_BENCHMARK.md)）
 
 | 里程碑 | 复用 | 完成标准 |
 |---|---|---|
-| M5 自主闭环（✓ 第一版） | 授权 + autopilot + `pai_run_plan`；循环由工作台和 AgentForge 承担，不引入新的编排框架 | 本机 autopilot 达成目标；外部 Agent 能在授权内完成提议 → 执行 → 读取结论；托管站点开通 `run` scope 后实测 |
+| M5 自主闭环（✓） | 授权 + autopilot + `pai_run_plan`；循环由工作台和 AgentForge 承担，不引入新的编排框架 | ✓ 界面里签发授权、给目标、逐轮看原生结论、核对后继续、撤销；✓ 真实模型实跑：Codex 为轴承座给出参数化修正，核对后在授权内执行，原生检查通过（150.654 g，边距 14 mm，见 VERIFICATION）；✓ AI 战绩按引擎记录求解器判定并回传给模型。待做：执行器账本对已核对的 Codex 尝试的处理（noteflow-agent-control#128） |
 | M6 代理模型预筛（已评估，移出评审） | PhysicsNeMo-CFD 固定提交 + DoMINO 检查点（上游 `DoMINOInference` 原样复用） | 校准门禁 ≥ 6 个车身、Spearman ≥ 0.8；12 个车身 Spearman −0.35，未通过，从未影响结论，已从评审中移除。适配器与校准工具保留；先让 OpenFOAM 保留表面场，用自有数据按上游 `domino_nim_finetuning` 微调后再评估 |
 | M7 USD → 机器人策略（第一步 ✓） | Newton / Isaac Lab（L40S）、NVIDIA/skills 挂到 AgentForge、LeRobot + GR00T N1.7 | ✓ 导出的 USD 能被 Newton 1.6 导入为一个关节树，33 个构型的正运动学与 MJCF 一致（0.45 µm），过程中修掉了两个 UsdValidation 没查出的导出错误。待做：在 Newton / Isaac Lab 上跑出策略成功率，作为新的检查项 |
 | M8 设计到制造与实测回流（G-code ✓，首件检验 ✓） | ocp-freecad-cam / OpenCAMLib 出 G-code；ros-mcp-server、asyncua、BaSyx 第一阶段只读；硬件三道闸 | ✓ G-code 经独立切削仿真校验（[CAM.md](CAM.md)，演示 D）；✓ 首件检验：按冻结公差生成检验计划，实测值逐项判定，结果随发布签名（`physicalMeasurement: true`，见 [VERIFICATION.md](VERIFICATION.md)）；✓ CMM 报告导入（QIF 3.0 Results 与 CSV）；待做：应变实测回写、ROS / OPC UA 只读 |
