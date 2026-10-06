@@ -589,6 +589,12 @@ test("MCP: an external agent reads the workspace and proposes; only the maintain
     await expect(page.getByRole("heading", { name: "零件检查拒绝" })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator(".viewport-hud.top-left")).toContainText("最终 GLB（摘要已核验）", { timeout: 60_000 });
   } finally { await client.close(); }
+  // The overview keeps a measured track record of the agent: its executed proposal was rejected by the native checks.
+  await rail(page, /项目总览/).click();
+  const track = page.getByRole("region", { name: "AI Kiro CLI (MCP)" });
+  await expect(track.getByText("通过 · 否决").locator("..")).toContainText("0 · 1");
+  await expect(track.getByText("已执行 / 提案").locator("..")).toContainText("1 / 1");
+  await expect(page.getByRole("list", { name: "最近执行的 AI 提案" })).toContainText("被否决");
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
   expect(errors).toEqual([]);

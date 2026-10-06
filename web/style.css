@@ -725,3 +725,12 @@ h1 { font-size: 22px; }
 @media (max-width: 760px) { .fai-table td, .fai-table th { padding: 6px; } .fai-input { width: 80px; min-width: 80px; } }
 .fai-import { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
 .fai-import label.button { cursor: pointer; }
+.track-agents { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.track-agents h3 { font-size: 0.95rem; margin: 0 0 6px; }
+.track-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px 12px; margin: 0; }
+.track-stats div { display: flex; flex-direction: column; }
+.track-stats dt { font-size: 0.75rem; color: var(--muted); }
+.track-stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.track-recent { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+.track-recent li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.track-recent time { margin-left: auto; color: var(--muted); font-size: 0.8rem; }

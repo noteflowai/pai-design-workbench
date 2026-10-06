@@ -14,6 +14,7 @@ import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPa
 import { archive, timestamp, type Archive } from "./seal.js";
 import { solverDataset } from "./dataset.js";
 import { inspectionPlan, recordInspection } from "./inspection.js";
+import { trackRecord } from "./track-record.js";
 import { createGrant, revokeGrant, runUnderGrant } from "./autonomy.js";
 import { runAutopilot, type Autopilot } from "./autopilot.js";
 import { AERO_FILES, AERO_REFERENCE, DEFAULT_AERO_REQUIREMENTS, aeroConfigured, aeroRunner, reviewAero, type AeroReview } from "./aero.js";
@@ -142,6 +143,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   // The auth hook has already verified the ALB-signed token and that its subject equals this header.
   const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
     ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
+  app.get("/api/projects/:id/ai-track-record", async request => trackRecord(store, workbench.project(paramId(request.params)).id));
   app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));
   app.get("/api/projects/:id/admission", async request => {
     const q = z.object({ kind: z.enum(["robot-review", "blender-scene", "cad-part", "factory-twin"]), runId: Id }).strict().parse(request.query);
@@ -226,6 +228,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.get("/api/state", async () => ({
     releases: store.list("release"), autonomyGrants: store.list("autonomy-grant"), autopilots: store.list("autopilot"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
+    aiTrackRecords: Object.fromEntries(store.list<Project>("project").map(p => [p.id, trackRecord(store, p.id)])),
     projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
     campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), aeros: store.list("aero-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
     factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"), inspections: store.list("cad-inspection"),

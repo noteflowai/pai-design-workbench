@@ -80,6 +80,18 @@ export async function readAttempts(stateDir: string, runId: string): Promise<Con
   return out.sort((a, b) => PROFILES.indexOf(a.profile as Profile) - PROFILES.indexOf(b.profile as Profile));
 }
 
+/**
+ * The per-attempt bound of the pinned executor, read from its own request contract (one source; never hardcoded
+ * here). Falls back to the historical 60 s if the contract cannot be read.
+ */
+export async function attemptBound(config: Config): Promise<number> {
+  try {
+    const schema = JSON.parse(await readFile(join(await realpath(config.controlRoot), "contracts/text-proposal.schema.json"), "utf8"));
+    const max = schema?.properties?.timeout_seconds?.maximum;
+    return Number.isInteger(max) && max >= 1 && max <= 600 ? max : 60;
+  } catch { return 60; }
+}
+
 export async function runController(config: Config, directory: string, runId: string, prompt: string, options: {
   profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
   /** Optional images for visual review (PNG/JPEG bytes); copied privately and pinned by SHA-256 in the request. */
@@ -88,7 +100,8 @@ export async function runController(config: Config, directory: string, runId: st
   if (!controllerConfigured(config)) throw new DomainError("CONTROLLER_NOT_CONFIGURED", "Configure the native flow entrypoint and the reviewed admission ledger", 503);
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) throw new DomainError("INVALID_RUN_ID", "Run identity does not match the executor contract", 422);
   if (Buffer.byteLength(prompt) > 120_000) throw new DomainError("PROMPT_TOO_LARGE", "Context exceeds the executor prompt bound", 422);
-  if (!(options.timeoutSeconds >= 1 && options.timeoutSeconds <= 60)) throw new DomainError("INVALID_TIMEOUT", "Executor attempts are limited to 60 s", 422);
+  const bound = controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config);
+  if (!(options.timeoutSeconds >= 1 && options.timeoutSeconds <= bound)) throw new DomainError("INVALID_TIMEOUT", `Executor attempts are limited to ${bound} s`, 422);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (controllerTransport(config) === "agentcore") return runRemote(config, directory, runId, prompt, options);
   const state = join(directory, "native-state");
@@ -116,7 +129,7 @@ export async function runController(config: Config, directory: string, runId: st
     // The executor only runs when argv[1] equals its own module path, so symlinked install paths must be resolved.
     const [entry, root] = await Promise.all([realpath(config.controllerEntrypoint!), realpath(config.controlRoot)]);
     r = await command("node", [entry, "--state", state, "--database", config.controllerDatabase!,
-      "--request", join(directory, "request.json")], root, undefined, 470_000);
+      "--request", join(directory, "request.json")], root, undefined, Math.max(470_000, options.profiles.length * (options.timeoutSeconds + 15) * 1000 + 240_000));
     // An empty report with exit 0 means the flow never ran; never treat that as an answer.
     if (r.exitCode === 0 && !r.stdout.trim()) throw new DomainError("CONTROLLER_NO_REPORT", "Executor produced no report", 502);
   } finally { clearInterval(poll); }

@@ -18,8 +18,13 @@ import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeR
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
-import { controllerConfigured, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
+import { attemptBound, controllerConfigured, controllerTransport, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
 import type { Lifecycle } from "./lifecycle.js";
+import type { CadOptimization } from "./optimize.js";
+import type { CadSweep } from "./sweep.js";
+import type { Inspection } from "./inspection.js";
+import type { Autopilot } from "./autopilot.js";
+import { trackRecord } from "./track-record.js";
 
 /**
  * Model-backed assistant through the existing bounded executor (Kiro primary → backup → backup2 →
@@ -165,6 +170,8 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     const h = add("cad", i + 1, "cad-review", c.id, `CAD 零件 · ${c.request.variant}`); handleOf.set(c.id, h);
     return { handle: h, at: c.createdAt, state: c.state, verdict: c.verdict, variant: c.request.variant, requirements: c.request.requirements, revision: c.projectRevision,
       massG: { baseline: c.baseline?.mass, candidate: c.candidate?.mass }, recheck: Boolean(c.feedbackId),
+      ...(c.fea?.candidate ? { fea: { solver: c.fea.candidate.solver, element: c.fea.candidate.element, convergence: c.fea.candidate.convergence,
+        meshes: Object.fromEntries(Object.entries(c.fea.candidate.meshes).map(([k, m]) => [k, { elements: m.elements, axisDisplacementMm: m.axisDisplacementMm, peakVonMisesMPa: m.peakVonMisesMPa }])) } } : {}),
       checks: c.candidate?.checks.map(k => ({ id: k.id, passed: k.passed, observed: (k as { observed?: unknown }).observed, required: (k as { required?: unknown }).required })) };
   });
   const aeros = mine<AeroReview>("aero-review").map((r, i) => {
@@ -182,6 +189,24 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     return { handle: h, at: f.createdAt, verdict: f.verdict, criteria: handleOf.get(f.criteriaId) ?? null, revision: f.projectRevision,
       netGoodUnitsGain: f.aggregate.netGoodUnitsGain, failingSeeds: f.aggregate.failingSeeds, recheck: Boolean(f.feedbackId) };
   });
+  // Design-space studies: what the solvers measured, so the planner starts from data rather than from scratch.
+  const studies = [...mine<CadOptimization>("cad-optimize").map(o => ({ kind: "cad-optimize" as const, o })), ...mine<CadSweep>("cad-sweep").map(o => ({ kind: "cad-sweep" as const, o }))]
+    .map(({ kind, o }, i) => {
+      const h = add("study", i + 1, kind, o.id, kind === "cad-optimize" ? `优化 · ${(o as CadOptimization).request.strategy ?? "gp"}` : "扫描"); handleOf.set(o.id, h);
+      const r = o.result as { points: { index: number; origin?: string; feasible: boolean | null; parameters: unknown; mass?: number; deflectionMm?: number; failed: string[] }[]; feasibleCount: number; lightestFeasible: number | null;
+        aiSeeds?: { index: number; expected?: number | null; measured?: number | null }[] } | undefined;
+      const best = r?.points.find(p => p.index === r.lightestFeasible);
+      return { handle: h, kind, state: o.state, revision: o.projectRevision, points: r?.points.length ?? 0, feasible: r?.feasibleCount ?? 0,
+        lightestFeasible: best ? { parameters: best.parameters, massG: best.mass, deflectionMm: best.deflectionMm, origin: best.origin } : null,
+        nearMisses: r?.points.filter(p => p.feasible === false).sort((a, b) => (a.mass ?? 1e9) - (b.mass ?? 1e9)).slice(0, 3).map(p => ({ parameters: p.parameters, massG: p.mass, failed: p.failed })),
+        aiSeeds: r?.aiSeeds?.map(s => ({ expectedDeflectionMm: s.expected, measuredDeflectionMm: s.measured })) };
+    });
+  // First-article inspections: the only physical measurements in the workspace.
+  const inspections = store.list<Inspection>("cad-inspection").filter(i => i.projectId === project.id).slice(-6).map((i, n) => ({
+    handle: add("inspection", n + 1, "cad-inspection", i.id, `首件检验 · ${i.partSerial}`), part: cadHandle(i.cadReviewId), verdict: i.verdict, serial: i.partSerial,
+    instrument: i.instrument, nonconforming: i.results.filter(r => !r.passed).map(r => ({ id: r.id, measured: r.measured, lower: r.lower, upper: r.upper })), physicalMeasurement: true }));
+  const autopilots = mine<Autopilot>("autopilot").slice(-3).map(a => ({ goal: a.goal.slice(0, 160), outcome: a.outcome ?? a.state,
+    rounds: a.rounds.map(r => ({ round: r.round, tool: r.tool, verdict: r.verdict, failing: r.failing?.map(f => f.id), note: r.note })) }));
   const feedback = mine<Feedback & { createdAt?: string }>("feedback").map((f, i) => ({
     handle: add("feedback", i + 1, "feedback", f.id, `反馈 · ${f.observed.slice(0, 30)}`), status: f.status, evidence: handleOf.get(f.runId) ?? null,
     checkId: f.checkId ?? null, seed: f.seed, expected: f.expected, observed: f.observed }));
@@ -193,8 +218,13 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
     versions,
     lifecycle: lifecycle ? { stages: lifecycle.stages.map(s => ({ label: s.label, status: s.status, metric: s.metric })), next: lifecycle.next.label,
       maturity: lifecycle.maturity, failingCases: lifecycle.failingCases.map(c => ({ label: c.label, evidence: handleOf.get(c.runId) ?? null, feedbackStatus: c.feedbackStatus ?? null })) } : undefined,
-    robotReviews: robots, blenderScenes: scenes, cadParts: cads, aeroBodies: aeros, factoryCriteria: criteria, factoryReviews: factories, feedback, releases,
-    scope: "记录仿真、合成静态几何、名义参数化几何与演示工厂仿真；没有物理验证、FEA 或现场测量",
+    robotReviews: robots, blenderScenes: scenes, cadParts: cads, aeroBodies: aeros, designStudies: studies, inspections, factoryCriteria: criteria, factoryReviews: factories, feedback, releases,
+    autopilots,
+    // How earlier AI proposals in this project fared with the native solvers (measured, never self-reported).
+    aiTrackRecord: (() => { const t = trackRecord(store, project.id); return t.agents.length ? { agents: t.agents.map(a => ({ agent: a.agent, executed: a.executed,
+      accepted: a.outcomes.accepted, rejected: a.outcomes.rejected, editedBeforeRun: a.editedBeforeRun, relaxationsProposed: a.relaxationsProposed, estimates: a.estimates })),
+      recentRejections: t.recent.filter(r => r.outcome === "rejected").slice(0, 3).map(r => ({ tool: r.tool, failed: r.failed })) } : undefined; })(),
+    scope: inspections.length ? "记录仿真与名义几何；inspections 是唯一的物理实测（首件检验），其余都不是物理验证" : "记录仿真、名义参数化几何、线性静力 FEA 与演示工厂仿真；没有物理验证或现场测量",
   };
   return { project, handles, workspace, cadCode: options.cadCode,
     lastScene: store.list<SceneReview>("scene-review").filter((s): s is WorkcellScene => s.projectId === project.id && !isPlant(s)).at(-1),
@@ -234,6 +264,7 @@ export function buildPrompt(message: string, context: AiContext): string {
     "3. 放宽已冻结的约束时，必须在 rationale 中写明理由。",
     "4. 信息不足时用 kind=clarify，并在 interpretation 中提出需要澄清的问题。",
     "5. 最多 4 个计划；使用中文；简洁。",
+    "6. 先用已有的实测：designStudies 里的可行点和险些可行的点、cadParts 的 FEA 与 DFM/CAM 数值、inspections 的实测偏差。aiTrackRecord 是你和其他 AI 之前的提案被求解器判定的结果；被拒绝的检查不要再犯，estimates.bias 为负说明你以前低估了，提出新估算时要修正。",
     "",
     `<tools>${embed(tools)}</tools>`,
     `<workspace>${embed(context.workspace)}</workspace>`,
@@ -574,7 +605,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
       a.status === "succeeded" ? "done" : "failed", a.status === "succeeded" ? `${a.model ?? "模型未知"} · 已返回` : ERROR_LABEL[a.errorKind ?? ""] ?? a.errorKind ?? a.status);
     const images = await attachedImages(store, config, request.attachments ?? []);
     if (images.length) step("context", `附加 ${images.length} 张原生图像做视觉评审`, "done", (request.attachments ?? []).map(a => `${a.which}/${a.file}`).join("、"));
-    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, timeoutSeconds: 60, onAttempt, images });
+    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, timeoutSeconds: controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config), onAttempt, images });
     record.ai = { action: r.action, reason: r.reason, effects: r.effects, reportSha256: r.reportSha256, engine: r.engine,
       attempts: r.attempts.map(a => ({ profile: a.profile, provider: a.provider, status: a.status, errorKind: a.errorKind, model: a.model })) };
     record.state = STATE[r.action] ?? "reconcile";
