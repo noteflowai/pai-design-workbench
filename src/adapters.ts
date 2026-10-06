@@ -18,11 +18,11 @@ export interface Adapters {
  * arrive (used for presentation-only live progress); it never changes the retained result.
  */
 export async function command(command: string, args: string[], cwd: string, pythonPath?: string, timeout = 45_000,
-  onLine?: (line: string) => void) {
+  onLine?: (line: string) => void, extraEnv: Record<string, string> = {}) {
   const startedAt = new Date().toISOString();
   const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((accept, reject) => {
     const child = spawn(command, args, { cwd, shell: false, detached: process.platform !== "win32",
-      env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", PYTHONUNBUFFERED: "1", ...(pythonPath ? { PYTHONPATH: pythonPath } : {}) } });
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1", PYTHONUNBUFFERED: "1", ...(pythonPath ? { PYTHONPATH: pythonPath } : {}), ...extraEnv } });
     let stdout = "", stderr = "", stopped = false, pending = "";
     const emit = (text: string) => {
       if (!onLine) return;

@@ -28,6 +28,8 @@ export interface Config {
   agentcoreAgentArn?: string; agentcoreSandboxArn?: string;
   /** Engines this deployment may use, in fallback order; a subset of the executor's reviewed profiles. */
   aiProfiles?: string[];
+  /** Region for the Claude engine on Amazon Bedrock (executor process only). */
+  claudeBedrockRegion?: string;
   listenHost?: string; publicOrigin?: string;
   albAuth?: { albArn: string; issuer: string; clientId: string };
   /** Machine agents (OAuth client credentials) for `/api/agent/*`; see src/agent-api.ts. */
@@ -90,6 +92,7 @@ export function configuration(): Config {
     agentcoreAgentArn: validRuntimeArn(process.env.PAI_AGENTCORE_AGENT_ARN),
     agentcoreSandboxArn: validRuntimeArn(process.env.PAI_AGENTCORE_SANDBOX_ARN),
     aiProfiles: aiProfiles(process.env.PAI_AI_PROFILES),
+    claudeBedrockRegion: /^[a-z]{2}(-[a-z]+)+-\d$/.test(process.env.PAI_CLAUDE_BEDROCK_REGION ?? "") ? process.env.PAI_CLAUDE_BEDROCK_REGION : undefined,
     listenHost, publicOrigin, albAuth, agentAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,
   };

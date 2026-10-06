@@ -92,6 +92,15 @@ export async function attemptBound(config: Config): Promise<number> {
   } catch { return 60; }
 }
 
+/**
+ * Provider routing for engines that run on Amazon Bedrock (the Claude adapter reads only its process environment, never
+ * ~/.claude/settings.json). Scoped to the executor process, so the workbench's own AWS clients keep their region.
+ * PAI_CLAUDE_BEDROCK_REGION=us-east-1 → CLAUDE_CODE_USE_BEDROCK=1, AWS_REGION=us-east-1 for the executor only.
+ */
+export function engineEnv(config: Config): Record<string, string> {
+  return config.claudeBedrockRegion ? { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: config.claudeBedrockRegion } : {};
+}
+
 export async function runController(config: Config, directory: string, runId: string, prompt: string, options: {
   profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
   /** Optional images for visual review (PNG/JPEG bytes); copied privately and pinned by SHA-256 in the request. */
@@ -129,7 +138,8 @@ export async function runController(config: Config, directory: string, runId: st
     // The executor only runs when argv[1] equals its own module path, so symlinked install paths must be resolved.
     const [entry, root] = await Promise.all([realpath(config.controllerEntrypoint!), realpath(config.controlRoot)]);
     r = await command("node", [entry, "--state", state, "--database", config.controllerDatabase!,
-      "--request", join(directory, "request.json")], root, undefined, Math.max(470_000, options.profiles.length * (options.timeoutSeconds + 15) * 1000 + 240_000));
+      "--request", join(directory, "request.json")], root, undefined, Math.max(470_000, options.profiles.length * (options.timeoutSeconds + 15) * 1000 + 240_000),
+      undefined, engineEnv(config));
     // An empty report with exit 0 means the flow never ran; never treat that as an answer.
     if (r.exitCode === 0 && !r.stdout.trim()) throw new DomainError("CONTROLLER_NO_REPORT", "Executor produced no report", 502);
   } finally { clearInterval(poll); }

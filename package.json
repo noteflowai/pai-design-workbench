@@ -23,6 +23,7 @@
     "test:cam": "node --env-file-if-exists=.state/demo.env --import tsx scripts/cam-e2e.ts",
     "test:pillow": "node --env-file-if-exists=.state/demo.env --import tsx scripts/pillow-e2e.ts",
     "test:fea": "node --env-file-if-exists=.state/demo.env --import tsx scripts/fea-e2e.ts",
+    "probe:engine": "node --env-file-if-exists=.state/demo.env --import tsx scripts/engine-probe.ts",
     "test:optimize-pillow": "node --env-file-if-exists=.state/demo.env --import tsx scripts/optimize-pillow-e2e.ts",
     "test:optimize": "node --env-file-if-exists=.state/demo.env --import tsx scripts/optimize-e2e.ts",
     "test:robot": "node --env-file-if-exists=.state/demo.env --import tsx scripts/robot-e2e.ts",

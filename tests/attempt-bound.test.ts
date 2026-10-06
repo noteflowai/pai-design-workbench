@@ -19,3 +19,9 @@ test("the per-attempt bound comes from the pinned executor's own request contrac
     await schema(100_000); assert.equal(await attemptBound(config), 60, "an implausible bound is not trusted");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("Bedrock routing for the Claude engine is scoped to the executor process", async () => {
+  const { engineEnv } = await import("../src/controller.js");
+  assert.deepEqual(engineEnv({ claudeBedrockRegion: "us-east-1" } as never), { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: "us-east-1" });
+  assert.deepEqual(engineEnv({} as never), {});
+});

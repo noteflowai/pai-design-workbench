@@ -78,7 +78,7 @@ python3 tools/aws_operator.py result --command-id <ID>
 - **沙箱。** 服务单元使用 `ProtectSystem=strict`，Kiro 和 acpx 的状态目录 `~/.kiro`、`~/.acpx`、`~/.cache`、`~/.local` 单独设为可写，存放凭据的 `~/.config` 对服务保持只读。
 - **出错时。** 引擎回执显示 `work_started=false`、`effects=unknown` 时，界面要求人工核对，不会自动重放。
 
-Claude 引擎（`claude` profile）：`claude-agent-acp` 只继承服务进程的环境，不读 `~/.claude/settings.json`。如果 Claude Code 走 Amazon Bedrock，把 `CLAUDE_CODE_USE_BEDROCK=1` 和 `AWS_REGION` 放进服务环境（或 `.state/demo.env`）；凭据仍由 AWS 默认凭据链提供，不写入文件。
+Claude 引擎（`claude` profile）走 Amazon Bedrock：`claude-agent-acp` 只继承进程环境，不读 `~/.claude/settings.json`。设置 `PAI_CLAUDE_BEDROCK_REGION`（如 `us-east-1`），工作台只把 `CLAUDE_CODE_USE_BEDROCK=1` 和 `AWS_REGION` 传给执行器进程，工作台自己的 KMS / S3 客户端不受影响；凭据来自 AWS 默认凭据链（托管站点是实例角色，只允许调用 Anthropic 模型和推理配置），不写入文件。用 `npm run probe:engine`（`PROBE_PROFILE=claude`）花 1 次账本确认可用。
 
 ## 生成代码沙箱
 

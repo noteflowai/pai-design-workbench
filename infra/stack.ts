@@ -134,7 +134,12 @@ export class WorkbenchStack extends cdk.Stack {
       `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.cfdJobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.cfdJobDefinition}:*`,
       `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}:*`,
       `arn:aws:batch:${this.region}:${this.account}:job/*`] }));
-    role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:DescribeJobs"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:DescribeJobs"], resources: ["*"] }));
+    // The Claude engine (claude-agent-acp, bundled Claude Code) on Amazon Bedrock with the instance role: invoke
+    // Anthropic models only, directly or through cross-region inference profiles (which route to other regions).
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"], resources: [
+      "arn:aws:bedrock:*::foundation-model/anthropic.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*anthropic.*`] }));
+    role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:GetInferenceProfile", "bedrock:ListInferenceProfiles", "bedrock:GetFoundationModel", "bedrock:ListFoundationModels"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
     role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject"], resources: [`arn:aws:s3:::${SOLVER.bucket(this.account, this.region)}/jobs/*`] }));
     // Write-once archive of sealed release packages. Object Lock (COMPLIANCE default retention) means no principal,
     // including this stack and the account root, can delete or shorten a retained version before its date.
