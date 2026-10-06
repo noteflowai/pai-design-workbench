@@ -21,9 +21,9 @@
   },
   "executor": {
     "repository": "noteflowai/noteflow-agent-control (private)",
-    "commit": "2aec620f2cea2bc53857356595b5950a403ea2ac",
-    "archiveSha256": "f24cd2e7c16d4a2a96549d55e044af38cda4ded70a2afe54de61b49c88da56d0",
-    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. 2aec620 adds noteflow-agent-control#96: an acpx TIMEOUT (-32070, id null) is recorded as timeout with the partial answer, not invalid_output.",
+    "commit": "e77ee43e5e0639c8f1cdd85a5a93426ed7a79ea8",
+    "archiveSha256": "5c3bb98eb89a67a0a9df54933327c532882d2938291ca9172f7f42e2aed448d4",
+    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. e77ee43: #96 (an acpx TIMEOUT is recorded as timeout with the partial answer) and #120 (Codex sessions use the pinned model via CODEX_CONFIG). The workbench uses the text-proposal class (60 s per attempt); the 180 s development-proposal class (#118) is reserved by its owner for the development writer.",
     "accepts": [
       "images"
     ]
