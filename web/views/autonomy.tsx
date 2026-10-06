@@ -53,6 +53,19 @@ export function AutonomyCard() {
     setCurrent(record); c.toast("AI 已开始自主迭代；每一轮的原生结论会在这里出现。"); void c.refresh();
   };
 
+  // A round that stopped for a human (the executor could not verify an engine's effects): the maintainer checks the
+  // receipt, records why it is safe, then runs the proposed step under the same grant. The ledger is never touched.
+  const paused = latest?.outcome === "needs-human" ? latest.rounds.find(r => r.planId && !r.recordId) : undefined;
+  const pausedPlan = paused ? (c.data.assistantPlans ?? []).find(p => p.id === paused.planId) : undefined;
+  const pausedStep = pausedPlan?.plans.find(p => (live.at(-1)?.tools as string[] | undefined)?.includes(p.tool));
+  const ranPaused = pausedPlan?.confirmations.some(x => x.planId === pausedStep?.id);
+  const [why, setWhy] = useState("");
+  const resume = () => c.perform(async () => {
+    if (!pausedPlan!.ai?.reconciliation) await api(`/assistant/plans/${pausedPlan!.id}/reconciliation`, { reason: why.trim() });
+    const r = await api<{ recordKind: string; recordId: string }>(`/assistant/plans/${pausedPlan!.id}/autonomous-runs`, { grantId: live.at(-1)!.id, step: pausedStep!.id });
+    if (r.recordKind === "cad-review") c.navigate("validate", { kind: "cad-part", id: r.recordId });
+  }, "已记录核对理由，并在授权内执行了 AI 的提案；结论由原生检查给出。");
+
   return <Card title="AI 自主迭代" aside={<small>维护者授权 · 求解器裁决</small>} label="AI 自主迭代">
     <p className="muted">签发授权后，AI 在限定的工具、次数和时间内自己“提议 → 原生检查 → 修改”，外部 Agent 也可以经 MCP 在同一授权内执行。它不能放宽需求、验收、发布或关闭反馈；放宽需求的步骤一律要人确认。</p>
     {live.length > 0 ? <ul className="grant-list" aria-label="有效授权">{live.map(g => <li key={g.id}>
@@ -88,6 +101,13 @@ export function AutonomyCard() {
         {r.note && <small>{r.note}</small>}
         {r.recordKind === "cad-review" && r.recordId && <button type="button" className="link" onClick={() => c.navigate("validate", { kind: "cad-part", id: r.recordId! })}>查看结果</button>}
       </li>)}{latest.state === "running" && <li><Chip tone="live">运行中</Chip><small>AI 正在提议或原生求解器正在运行…</small></li>}</ol>
+      {pausedPlan && pausedStep && !ranPaused && live.length > 0 && <div className="reconcile" role="group" aria-label="核对后继续">
+        <p>执行器无法自动确认这次模型调用没有副作用，所以停下来等人核对。提案：<strong>{pausedStep.title}</strong>
+          {pausedPlan.answer?.text ? <small>{pausedPlan.answer.text.slice(0, 220)}</small> : null}</p>
+        {pausedPlan.ai?.reconciliation ? <small>已核对 · {pausedPlan.ai.reconciliation.reason}</small>
+          : <label>核对理由<input value={why} onChange={e => setWhy(e.target.value)} placeholder="例如：回执显示没有工具活动，只读模式" /></label>}
+        <button type="button" disabled={c.busy || (!pausedPlan.ai?.reconciliation && why.trim().length < 5)} onClick={() => void resume()}>记录核对并在授权内执行</button>
+      </div>}
     </section>}
   </Card>;
 }

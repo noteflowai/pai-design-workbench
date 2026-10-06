@@ -650,10 +650,29 @@ test("AI autonomy from the overview: grant, autopilot round judged by native CAD
   // The executed proposal now counts in the agent's measured track record.
   await expect(page.getByText("通过 · 否决").first().locator("..")).toContainText("1 · 0");
   await expect(page.getByText("授权内自主").first().locator("..")).toContainText("1");
+  // An engine whose effects the executor cannot verify stops the loop for a human; the maintainer records why it is
+  // safe and runs the same proposal under the grant from this card.
+  await writeFile(".state/browser/fake-executor.json", JSON.stringify({ action: "reconcile", reason: "native effects remain unverified", attempts: [{ profile: "codex", status: "succeeded",
+    effects: "unknown", model: "global.openai.gpt-6-astra", answer: "```json\n" + JSON.stringify({ kind: "plan", interpretation: ["紧凑化支架复核"],
+      plans: [{ ref: "p1", tool: "cad-review", title: "紧凑化支架评审", rationale: "不放宽任何要求", payload: { variant: "compact" } }] }) + "\n```" }] }));
+  await card.getByRole("textbox", { name: "目标" }).fill("复核紧凑化支架是否满足全部冻结要求，不放宽任何要求");
+  await card.getByRole("button", { name: "让 AI 自主迭代" }).click();
+  await expect(run).toContainText("需要人工处理", { timeout: 60_000 });
+  const resume = card.getByRole("group", { name: "核对后继续" });
+  await expect(resume).toContainText("紧凑化支架评审");
+  await resume.getByRole("textbox", { name: "核对理由" }).fill("回执显示没有工具活动，只读模式");
+  await resume.getByRole("button", { name: "记录核对并在授权内执行" }).click();
+  await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 180_000 });
+  await rail(page, /项目总览/).click();
+  // Both granted runs are used, so the grant is no longer active and the card offers a new one.
+  await expect(card.getByRole("button", { name: "签发授权" })).toBeVisible();
+  // The track record keeps each engine apart: the resumed Codex proposal ran under the grant too.
+  const codex = page.getByRole("region", { name: "AI global.openai.gpt-6-astra · codex" });
+  await expect(codex.getByText("授权内自主").locator("..")).toContainText("1");
+  await expect(codex.getByText("已执行 / 提案").locator("..")).toContainText("1 / 1");
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
-  await card.getByRole("button", { name: "撤销" }).click();
-  await expect(card.getByRole("button", { name: "签发授权" })).toBeVisible();
+  await writeFile(".state/browser/fake-executor.json", "{}");
   expect(errors).toEqual([]);
 });
 
