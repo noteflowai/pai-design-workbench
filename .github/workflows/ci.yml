@@ -110,4 +110,6 @@ jobs:
             .state/evidence/cad-sweep-e2e.json
             .state/evidence/industrial-suite.json
             test-results/
+            .state/browser/cad/*/*/cam-verify.json
+            .state/browser/cad/*/*/cam.json
           retention-days: 14
