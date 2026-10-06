@@ -66,7 +66,9 @@ elif args.action in ("send", "apply-release"):
                               "PAI_SOLVER_CFD_JOB_DEFINITION": "pai-solver-cfd", "PAI_SOLVER_CAM_JOB_DEFINITION": "pai-solver-cam"})
         script = "#!/bin/bash\n" + "\n".join(f"export {key}={shlex.quote(value)}" for key, value in variables.items()) + "\n" + source.read_text()
     else:
-        script = args.script.read_text()
+        # PAI_SEND_* variables are passed to the script (PAI_SEND_E2E=fea-e2e -> E2E=fea-e2e), quoted.
+        passed = {k[len("PAI_SEND_"):]: v for k, v in os.environ.items() if k.startswith("PAI_SEND_")}
+        script = "#!/bin/sh\n" + "".join(f"export {k}={shlex.quote(v)}\n" for k, v in passed.items() if k.isidentifier()) + args.script.read_text()
     response = operator.client("ssm").send_command(
         InstanceIds=[outputs["InstanceId"]], DocumentName="AWS-RunShellScript",
         Parameters={"commands": [script], "executionTimeout": ["1800"]},

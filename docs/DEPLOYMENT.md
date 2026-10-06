@@ -53,6 +53,15 @@ python3 tools/aws_operator.py login-file
 
 第二条只将凭据写入被 Git 忽略的 `.state/deploy/admin-login.json`，权限为 0600；终端不打印密码。`send --script /path/to/reviewed-script.sh` 与 `result --command-id ID` 可用于明确授权的实例检查。不要在检查脚本中打印凭据。
 
+在托管实例上复跑某个端到端脚本（服务用户、服务环境与原生工具、临时状态目录，不碰线上数据）：
+
+```bash
+PAI_SEND_E2E=pillow-e2e python3 tools/aws_operator.py send --script tools/hosted_e2e.sh   # 也可以是 fea-e2e、cad-e2e 等
+python3 tools/aws_operator.py result --command-id <ID>
+```
+
+`PAI_SEND_*` 环境变量会加引号后传给脚本。脚本直接用 Node 的类型擦除运行发布包里的 `dist/src`，最后输出报告行。
+
 ## AI 引擎
 
 托管站点只启用 Kiro 主账号、备用账号和二备账号。Codex 依赖个人登录，Claude 需要额外的 Bedrock 授权，所以都不在托管端启用。
