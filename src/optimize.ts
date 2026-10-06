@@ -62,7 +62,7 @@ export const OptimizeRequest = z.object({
 }).strict().superRefine((r, ctx) => {
   const pillow = r.family === "pillow-block";
   if (r.requirements.structural && !structuralFits(r.family, r.requirements.structural)) ctx.addIssue({ code: "custom", path: ["requirements", "structural"], message: `structural load case does not fit the ${r.family}` });
-  if (pillow && (r.strategy !== "gp-nsga2" || r.solver === "batch")) ctx.addIssue({ code: "custom", path: ["strategy"], message: "the pillow block is optimised with gp-nsga2 on this host" });
+  if (pillow && r.strategy !== "gp-nsga2") ctx.addIssue({ code: "custom", path: ["strategy"], message: "the pillow block is optimised with gp-nsga2" });
   r.seeds.forEach((s, i) => { if (!(pillow ? PillowAxes : BracketAxes).safeParse(s.parameters).success) ctx.addIssue({ code: "custom", path: ["seeds", i, "parameters"], message: `seed axes do not fit the ${r.family}` }); });
 });
 
@@ -133,7 +133,7 @@ export async function optimizeCad(store: Store, config: Config, project: Project
         deflectionMm: r.outputs.deflectionMm, stressMPa: r.outputs.stressMPa, mass: r.outputs.massG,
         ...(Number.isFinite(r.outputs.minWallMm) && Number.isFinite(r.outputs.holeEdgeMm) ? { minWallMm: r.outputs.minWallMm, holeEdgeMm: r.outputs.holeEdgeMm } : {}), source: r.recordId }));
     record.warmStart = { points: prior.length, sources: [...new Set(prior.map(p => p.source))] };
-    const solver = pillow ? "local" : request.solver ?? (config.solverBatch ? "batch" : "local");
+    const solver = request.solver ?? (config.solverBatch ? "batch" : "local");
     if (solver === "batch" && !config.solverBatch) throw new DomainError("SOLVER_NOT_CONFIGURED", "AWS Batch solver is not configured (PAI_SOLVER_QUEUE, PAI_SOLVER_JOB_DEFINITION, PAI_SOLVER_BUCKET)", 503);
     record.solver = solver;
     if (request.strategy === "botorch-qlognehvi" && !(await botorchVersion(config))) {

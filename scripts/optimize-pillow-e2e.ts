@@ -25,13 +25,15 @@ try {
   const project = await post<Project>("/api/projects", { title: "Lightest 6202 housing", intendedDecision: "Lightest pillow block that keeps the seat round under 1 kN",
     requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } });
   const url = `/api/projects/${project.id}/cad-optimizations`;
-  // Refused before any work: a bracket load case, BoTorch, the Batch backend, bracket seed axes.
+  // Refused before any work: a bracket load case, BoTorch, bracket seed axes.
   for (const bad of [{ requirements: { ...requirements, structural: { forceN: 60, leverMm: 50, safetyFactor: 2, maxDeflectionMm: 0.06 } } },
-    { strategy: "botorch-qlognehvi" }, { solver: "batch" }, { seeds: [{ parameters: { thickness: 3, width: 60, plateHeight: 46 } }] }]) {
+    { strategy: "botorch-qlognehvi" }, { seeds: [{ parameters: { thickness: 3, width: 60, plateHeight: 46 } }] }]) {
     assert.equal((await call(url, { requestId: randomUUID(), projectRevision: 1, family: "pillow-block", requirements, ...bad })).status, 400, JSON.stringify(bad));
   }
   const t0 = Date.now();
-  const run = await post<CadOptimization>(url, { requestId: randomUUID(), projectRevision: 1, family: "pillow-block", requirements,
+  // PAI_OPTIMIZE_SOLVER=batch solves every housing as an AWS Batch job (PAI_SOLVER_* configured).
+  const solver = process.env.PAI_OPTIMIZE_SOLVER === "batch" ? "batch" : "local";
+  const run = await post<CadOptimization>(url, { requestId: randomUUID(), projectRevision: 1, family: "pillow-block", requirements, solver,
     budget: { initial: 4, rounds: 1, perRound: 3 },
     seeds: [{ parameters: { width: 96, depth: 18, baseThickness: 8, boltPitch: 62 }, expectedDeflectionMm: 0.0055, expectedMassG: 150,
       rationale: "Thinner base, shorter footprint; (96 - 62) / 2 = 17 >= 13.5 keeps the bolt edge rule" }] });
@@ -47,7 +49,8 @@ try {
   const v = (id: string) => (formal.candidate!.checks.find(c => c.id === id) as unknown as { observed: number; passed: boolean });
   // The formal review solves two meshes; the optimiser screened on the fine mesh only, so the values agree closely.
   assert.ok(Math.abs(v("bore-distortion").observed - best.boreDistortionMm!) / best.boreDistortionMm! < 0.05, `${v("bore-distortion").observed} vs ${best.boreDistortionMm}`);
-  const report = { schema: "pai-optimize-pillow-e2e-1", checkedAt: new Date().toISOString(), result: "passed", seconds: Math.round((Date.now() - t0) / 1000),
+  if (solver === "batch") assert.ok(r.points.filter(p => p.fidelity === "fea").every(p => p.remote?.jobId), "every solved housing ran as a Batch job");
+  const report = { schema: "pai-optimize-pillow-e2e-1", checkedAt: new Date().toISOString(), result: "passed", solver, images: [...new Set(r.points.map(p => p.remote?.image).filter(Boolean))], seconds: Math.round((Date.now() - t0) / 1000),
     points: r.points.length, solved: r.points.filter(p => p.fidelity === "fea").length, feasible: r.feasibleCount,
     reference: { mass: r.points[0].mass, deflectionMm: r.points[0].deflectionMm, boreDistortionMm: r.points[0].boreDistortionMm },
     recommended: { index: best.index, origin: best.origin, parameters: best.parameters, mass: best.mass, deflectionMm: best.deflectionMm, boreDistortionMm: best.boreDistortionMm },

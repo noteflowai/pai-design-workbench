@@ -440,7 +440,7 @@ export function typedPlan(tool: string, raw: Record<string, unknown>, context: A
     const requirements = CadRequirements.parse({ ...(prev ?? DEFAULT_CAD_REQUIREMENTS), structural: prev?.structural ?? familyLoad, ...p.requirements });
     const budget = p.budget ?? DEFAULT_OPTIMIZE_BUDGET;
     const payload = { projectRevision: opts.revision, requirements, budget, seeds: p.seeds, ...(p.strategy ? { strategy: p.strategy } : {}),
-      ...(family === "pillow-block" ? { family, solver: "local" as const } : {}) };
+      ...(family === "pillow-block" ? { family } : {}) };
     OptimizeRequest.parse({ ...payload, requestId: placeholder });
     const s1 = requirements.structural!;
     const base0 = prev ?? DEFAULT_CAD_REQUIREMENTS;

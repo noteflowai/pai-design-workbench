@@ -3,9 +3,9 @@
     python3 solver_job.py --bucket B --prefix jobs/<run>/<index>/     # S3 mode (Batch)
     python3 solver_job.py --local DIR                                 # same work on a local directory (tests)
 
-Input  <prefix>input.json: { parameters, requirements, structural }; nothing else is accepted (no paths, no code).
-Work:  native/cad_point.py (CadQuery B-Rep, checks) then native/fea_bracket.py (Gmsh C3D10 fine mesh + CalculiX),
-       exactly the scripts and versions the local optimiser uses.
+Input  <prefix>input.json: { family?, parameters, requirements, structural }; nothing else is accepted (no paths, no code).
+Work:  native/cad_point.py (CadQuery B-Rep, checks) then the family's FEA (native/fea_bracket.py or native/fea_pillow.py,
+       Gmsh C3D10 fine mesh + CalculiX), exactly the scripts and versions the local optimiser uses.
 Output <prefix>point.json, fea.json, part.step and result.json (sha256 of each file, tool versions, image tag).
 The caller re-hashes every downloaded file against result.json and checks the tool versions against its own pins.
 Exit 0 also for a measured failure (a degenerate geometry is a result); non-zero only if the job itself broke.
@@ -23,7 +23,10 @@ HERE = Path(__file__).resolve().parent
 CADQUERY = os.environ.get("PAI_CADQUERY_PYTHON", "/opt/cadquery/bin/python")
 CCX = os.environ.get("PAI_CCX", "/usr/bin/ccx")
 OUTPUTS = ("point.json", "fea.json", "part.step")
-ALLOWED_INPUT = {"parameters", "requirements", "structural"}
+ALLOWED_INPUT = {"family", "parameters", "requirements", "structural"}
+FAMILY_KEYS = {"nema17-bracket": ("thickness", "width", "plateHeight", "pilotBore"),
+               "pillow-block": ("width", "depth", "baseDepth", "axisHeight", "baseThickness", "boltPitch", "seatDiameter", "shoulderDiameter", "crown")}
+FEA_SCRIPT = {"nema17-bracket": "fea_bracket.py", "pillow-block": "fea_pillow.py"}
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--bucket")
@@ -42,12 +45,15 @@ if not args.local:
 spec = json.loads((work / "input.json").read_text())
 if set(spec) - ALLOWED_INPUT:
     raise SystemExit(f"unexpected input fields: {sorted(set(spec) - ALLOWED_INPUT)}")
-params = {k: float(v) for k, v in spec["parameters"].items() if k in ("thickness", "width", "plateHeight", "pilotBore")}
+family = spec.get("family", "nema17-bracket")
+if family not in FAMILY_KEYS:
+    raise SystemExit(f"unknown family {family}")
+params = {k: float(v) for k, v in spec["parameters"].items() if k in FAMILY_KEYS[family]}
 
 started = time.monotonic()
-result = {"schema": "pai-solver-job-1", "image": os.environ.get("PAI_IMAGE_VERSION", "dev"), "parameters": params}
+result = {"schema": "pai-solver-job-1", "image": os.environ.get("PAI_IMAGE_VERSION", "dev"), "family": family, "parameters": params}
 try:
-    (work / "geometry-input.json").write_text(json.dumps({"parameters": params, "requirements": spec["requirements"]}))
+    (work / "geometry-input.json").write_text(json.dumps({"family": family, "parameters": params, "requirements": spec["requirements"]}))
     g = subprocess.run([CADQUERY, "-I", "-W", "ignore", str(HERE / "cad_point.py"), "--input", str(work / "geometry-input.json"), "--output", str(work)],
                        capture_output=True, text=True, timeout=600)
     if g.returncode != 0:
@@ -55,8 +61,9 @@ try:
     geo = json.loads((work / "point.json").read_text())
     s = spec["structural"]
     (work / "fea-input.json").write_text(json.dumps({"step": str(work / "part.step"), "parameters": geo["parameters"], "ccx": CCX, "meshes": "fine-only",
-                                                     "requirements": s, "load": {"forceN": s["forceN"], "leverMm": s["leverMm"]}}))
-    f = subprocess.run([sys.executable, "-I", str(HERE / "fea_bracket.py"), "--input", str(work / "fea-input.json"), "--output", str(work)],
+                                                     "requirements": s, "load": {"forceN": s["forceN"], "leverMm": s["leverMm"],
+                                                                                 **({"direction": s["direction"]} if family == "pillow-block" else {})}}))
+    f = subprocess.run([sys.executable, "-I", str(HERE / FEA_SCRIPT[family]), "--input", str(work / "fea-input.json"), "--output", str(work)],
                        capture_output=True, text=True, timeout=1500)
     if f.returncode != 0:
         raise RuntimeError("fea: " + (f.stderr.strip().splitlines() or [str(f.returncode)])[-1][:200])

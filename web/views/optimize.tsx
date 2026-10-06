@@ -19,7 +19,7 @@ function runOptimize(c: Ctx, requirements: CadRequirements, strategy: Strategy =
   const requestId = requestIdFor(`pai-optimize-${p.id}-${p.revision}-${family}-${JSON.stringify(requirements)}-${strategy}`);
   return c.perform(async () => {
     const r = await c.track(requestId, "物理寻优 · CalculiX + 代理模型", "cad-optimize",
-      () => api<CadOptimization>(`/projects/${p.id}/cad-optimizations`, { requestId, projectRevision: p.revision, requirements, strategy, ...(family === "pillow-block" ? { family, solver: "local" } : {}) }));
+      () => api<CadOptimization>(`/projects/${p.id}/cad-optimizations`, { requestId, projectRevision: p.revision, requirements, strategy, ...(family === "pillow-block" ? { family } : {}) }));
     if (r.state !== "completed") throw new Error(r.error ?? r.state);
   }, "物理寻优完成：报告的每个点都由 CadQuery 与 CalculiX 实测。");
 }

@@ -67,8 +67,8 @@ rng_seed = int(spec.get("seed", 7))
 STRATEGY = spec.get("strategy", "gp-nsga2")
 if STRATEGY not in ("gp-nsga2", "botorch-qlognehvi"):
     raise SystemExit(f"unknown strategy {STRATEGY}")
-if PILLOW and (STRATEGY != "gp-nsga2" or spec.get("backend", "local") != "local"):
-    raise SystemExit("the pillow block is optimised with gp-nsga2 on this host only")
+if PILLOW and STRATEGY != "gp-nsga2":
+    raise SystemExit("the pillow block is optimised with gp-nsga2")
 if PILLOW:
     limit["bore"] = structural["maxBoreDistortionMm"]
 
@@ -110,7 +110,7 @@ def remote_point(folder, params, index):
     s3, batch = boto3.client("s3", region_name=b["region"]), boto3.client("batch", region_name=b["region"])
     prefix = f"jobs/{b['run']}/{index:02d}/"
     s = req["structural"]
-    s3.put_object(Bucket=b["bucket"], Key=prefix + "input.json", Body=json.dumps({"parameters": params, "requirements": {k: v for k, v in req.items() if k != "structural"},
+    s3.put_object(Bucket=b["bucket"], Key=prefix + "input.json", Body=json.dumps({"family": FAMILY, "parameters": params, "requirements": {k: v for k, v in req.items() if k != "structural"},
                                                                                "structural": s}).encode())
     job = batch.submit_job(jobName=f"pai-fea-{b['run'][:8]}-{index:02d}", jobQueue=b["queue"], jobDefinition=b["jobDefinition"],
                            containerOverrides={"command": ["--bucket", b["bucket"], "--prefix", prefix]}, tags={"pai-run": b["run"]})
@@ -154,7 +154,8 @@ def measure(index, params, origin, prediction=None, estimate=None, geometry_only
             get = lambda cid: next(c["observed"] for c in checks if c["id"] == cid)
             point.update({"mass": geo["mass"], "checks": checks, "failed": [c["id"] for c in checks if not c["passed"]], "fidelity": "fea",
                           "deflectionMm": get("max-deflection"), "stressMPa": get("max-stress"), "minWallMm": get("min-wall"),
-                          "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"]})
+                          "holeEdgeMm": get("hole-edge-distance"), "elements": fea["meshes"]["fine"]["elements"],
+                          **({"boreDistortionMm": get("bore-distortion")} if PILLOW else {})})
             raise _Done()
         geo = geometry(folder, params)
         geo_failed = [c["id"] for c in geo["checks"] if not c["passed"]]
