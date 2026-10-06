@@ -64,8 +64,8 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 产线与场景 | Blender 5.2：工作单元与 6 工位产线，BVH 射线实测通道、围栏、相机覆盖 | [PLANT.md](docs/PLANT.md) |
 | 可制造性 | 三轴铣削 DFM：最少装夹方向、钻孔通道、孔深径比、紧固件可装配性（DFA）、单件成本估算；CAM：FreeCAD 1.1 + OpenCAMLib 按装夹出 G-code，另一个独立进程在 0.1 mm 高度图上仿真，检查过切、残料、过载和快移碰撞，给出节拍和仿真图；托管站点上两者各自是一个 AWS Batch 作业（一次评审 11 分钟） | [CAM.md](docs/CAM.md) |
 | 证据 | EvalArc 基准对照、发布准入 5 项；AWS KMS 签名，加 RFC 3161 时间戳，只封存一次；界面内和离线核验；首件检验：按冻结公差生成检验计划，可导入 CMM 的 QIF 3.0 / CSV 报告，实测值逐项判定，随发布签名（唯一带 `physicalMeasurement: true` 的记录） | [VERIFICATION.md](docs/VERIFICATION.md) |
-| AI | 受控执行器调用 Kiro 2.27（主账号 → 备用 → 二备），共享账本、不自动重试；计划带收紧/放宽标记，确认后才执行；模型的物理估算由求解器打分；"带图问 AI"把已记录的渲染图、相机视图和应力云图按摘要发给模型（本机、托管站点和 AgentCore 均可用；盲测 6/6 与射线检查一致）；"AI 战绩"按 AI 记录被执行提案的求解器判定、人工修改、放宽尝试和估算偏差，并回传给模型用于下一次提案；模型同时能看到寻优点、FEA、DFM/CAM 和首件实测 | [AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
-| 自主 | 维护者在总览的"AI 自主迭代"卡片里签发授权（工具、次数、有效期）、给出目标，autopilot 多轮执行"提议 → 原生检查 → 修改"；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解；所有冻结要求（外形、载荷、DFM、CAM 节拍）都参与放宽判断，不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
+| AI | 受控执行器调用 Kiro 2.27（主账号 → 备用 → 二备）、Codex、Claude，共享账本、不自动重试，模型版本按固定 pin 核对；计划带收紧/放宽标记，确认后才执行；模型的物理估算由求解器打分；"带图问 AI"把已记录的渲染图、相机视图和应力云图按摘要发给模型（本机、托管站点和 AgentCore 均可用；盲测 6/6 与射线检查一致）；"AI 战绩"按 AI 记录被执行提案的求解器判定、人工修改、放宽尝试和估算偏差，并回传给模型用于下一次提案；模型同时能看到寻优点、FEA、DFM/CAM 和首件实测 | [AGENT_RUNTIME.md](docs/AGENT_RUNTIME.md) |
+| 自主 | 维护者在总览的"AI 自主迭代"卡片里签发授权（工具、次数、有效期）、给出目标，autopilot 多轮执行"提议 → 原生检查 → 修改"；执行器无法确认副作用时停下等人核对，核对后在同一授权内继续；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解。实跑：Codex 为轴承座提出参数化修正，原生检查通过（150.654 g，见 [VERIFICATION.md](docs/VERIFICATION.md)）；所有冻结要求（外形、载荷、DFM、CAM 节拍）都参与放宽判断，不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
 | 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
 界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[31 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
