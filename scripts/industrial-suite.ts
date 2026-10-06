@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { configuration } from "../src/config.js";
 import { command } from "../src/adapters.js";
 import { createApp } from "../src/server.js";
-import { camConfigured, FAMILY_DEFAULTS, DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, type CadReview } from "../src/cad.js";
+import { camConfigured, FAMILY_DEFAULTS, DEFAULT_CAD_REQUIREMENTS, DEFAULT_STRUCTURAL, PILLOW_STRUCTURAL, type CadReview } from "../src/cad.js";
 import { DEFAULT_FACTORY_CRITERIA, REVIEWED_SAMPLE, type FactoryCriteria, type FactoryReview } from "../src/factory.js";
 import { sha256 } from "../src/domain.js";
 import type { Project, Review } from "../src/contracts.js";
@@ -114,6 +114,16 @@ const cases: Case[] = [
       const d = c.candidate?.checks.find(x => x.id === "max-deflection") as { observed?: number } | undefined;
       return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["max-deflection"]' && (c.fea?.candidate?.convergence.axisDisplacement ?? 1) < 0.05,
         actual: `${c.verdict}；失败 ${failed(c.candidate).join(",")}；挠度 ${d?.observed} mm；收敛 ${c.fea?.candidate?.convergence.axisDisplacement}`, evidence: { cadId: c.id } };
+    } },
+  { id: "Y2", domain: "结构物理（FEA · 第二零件族）", title: "6202 轴承座底座从 10 mm 减到 6 mm，1 kN 上拔载荷", tool: "Gmsh C3D10 + CalculiX 2.21 + EvalArc",
+    rationale: "底座减薄省 29 g，壁厚、边距、H7 孔都不受影响；但轴承孔会随底座弯曲而失圆，挤压外圈，只有求解器能看出来。",
+    expected: "rejected；几何 7 项全过，max-deflection 与 bore-distortion 失败，峰值应力远低于许用值", run: async () => {
+      const c = await ok<CadReview>("POST", `${P}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "parametric", family: "pillow-block",
+        requirements: { ...FAMILY_DEFAULTS["pillow-block"], structural: PILLOW_STRUCTURAL },
+        parameters: { width: 108, depth: 20, baseDepth: 36, axisHeight: 30, baseThickness: 6, boltPitch: 78, seatDiameter: 35.012, shoulderDiameter: 28 } });
+      const v = (id: string) => (c.candidate?.checks.find(x => x.id === id) as { observed?: number } | undefined)?.observed;
+      return { matched: c.verdict === "rejected" && JSON.stringify(failed(c.candidate)) === '["max-deflection","bore-distortion"]',
+        actual: `${c.verdict}；失败 ${failed(c.candidate).join(",")}；轴心 ${(Number(v("max-deflection")) * 1000).toFixed(1)} µm；失圆 ${(Number(v("bore-distortion")) * 1000).toFixed(2)} µm；应力 ${v("max-stress")} MPa`, evidence: { cadId: c.id } };
     } }] as Case[] : []),
   ...(config.physicsPython ? [{ id: "K1", domain: "机器人工作单元（MuJoCo）", title: "提速到 75 % 并把围栏内收到 0.12 m", tool: "MuJoCo 3.14 IK + 动力学 + 接触",
     rationale: "为节拍提速同时压缩占地，机械臂肘部会扫到围栏；只有动力学仿真中的接触检测能发现。",
@@ -413,7 +423,7 @@ try {
   const report = { schema: "pai-industrial-suite-1", checkedAt: new Date().toISOString(), result: results.every(r => r.passed) ? "passed" : "failed",
     environment: { node: process.version, blender: "5.2.2 LTS", cadquery: lock.cadquery, ocp: lock.ocp, robotReel: "6124cee3cba5", factoryTwin: REVIEWED_SAMPLE.sourceCommit.slice(0, 12) },
     cases: results, totals: { cases: results.length, passed: results.filter(r => r.passed).length },
-    scope: "Recorded simulation, synthetic static geometry, nominal parametric CAD and illustrative factory simulation. No physical validation, FEA, tolerance stack-up or site measurement." };
+    scope: "Recorded simulation, synthetic static geometry, nominal parametric CAD, linear static FEA, RANS CFD, CAM simulation and illustrative factory simulation. No physical validation, certification-grade FEA, tolerance stack-up or site measurement." };
   await mkdir(join(config.state, "evidence"), { recursive: true });
   await writeFile(join(config.state, "evidence/industrial-suite.json"), JSON.stringify(report, null, 2) + "\n", { mode: 0o600 });
   console.log(JSON.stringify({ result: report.result, totals: report.totals, cases: results.map(r => `${r.id} ${r.passed ? "PASS" : "FAIL"} ${r.actual}`) }, null, 2));
