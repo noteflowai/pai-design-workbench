@@ -9,6 +9,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { PROFILES } from "./controller.js";
 import type { Config } from "./config.js";
 import { Id, type Project } from "./contracts.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
@@ -20,6 +21,8 @@ import { grantActive, runUnderGrant, type AutonomyGrant } from "./autonomy.js";
 
 export const AutopilotRequest = z.object({
   requestId: Id, grantId: Id, goal: z.string().trim().min(10).max(1500), maxRounds: z.number().int().min(1).max(6).default(3),
+  /** Engines for the planner, in the executor's order (same contract as /api/assistant/ai); deployment default when absent. */
+  profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
 export interface AutopilotRound { round: number; planId?: string; tool?: string; recordKind?: string; recordId?: string; verdict?: string; failing?: { id: string; observed: unknown; required: unknown }[]; note?: string }
 export interface Autopilot {
@@ -59,7 +62,7 @@ export async function runAutopilot(deps: { store: Store; config: Config; live?: 
       const g = store.get<AutonomyGrant>("autonomy-grant", grant.id)!;
       if (!grantActive(g)) { record.outcome = "grant-exhausted"; break; }
       const plan = await createAiPlan(store, deps.config, { requestId: randomUUID(), projectId: project.id, message: prompt(req.goal, g.tools, record.rounds),
-        tools: g.tools.map(t => t as never) }, deps.lifecycle);
+        tools: g.tools.map(t => t as never), ...(req.profiles ? { profiles: req.profiles } : {}) }, deps.lifecycle);
       if (plan.state && plan.state !== "done") { record.rounds.push({ round, planId: plan.id, note: `AI run ${plan.state}` }); record.outcome = "needs-human"; save(); break; }
       const step = plan.plans.find(p => (g.tools as string[]).includes(p.tool));
       if (!step) { record.rounds.push({ round, planId: plan.id, note: "no plan on a granted tool" }); record.outcome = "no-runnable-plan"; save(); break; }
