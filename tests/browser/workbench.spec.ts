@@ -665,7 +665,9 @@ test("AI autonomy from the overview: grant, autopilot round judged by native CAD
   await expect(resume).toContainText("紧凑化支架评审");
   await resume.getByRole("textbox", { name: "核对理由" }).fill("回执显示没有工具活动，只读模式");
   await resume.getByRole("button", { name: "记录核对并在授权内执行" }).click();
-  await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible({ timeout: 180_000 });
+  // The card follows the native record until it settles, then confirms.
+  await expect(page.getByText("已记录核对理由，并在授权内执行了 AI 的提案；结论由原生检查给出。")).toBeVisible({ timeout: 240_000 });
+  await expect(page.getByRole("heading", { name: /零件检查(通过|拒绝)/ })).toBeVisible();
   await rail(page, /项目总览/).click();
   // Both granted runs are used, so the grant is no longer active and the card offers a new one.
   await expect(card.getByRole("button", { name: "签发授权" })).toBeVisible();
