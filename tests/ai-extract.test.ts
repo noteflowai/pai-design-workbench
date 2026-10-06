@@ -69,3 +69,14 @@ test("a parametric pillow-block plan (short answer) carries its family and bound
     payload: { variant: "parametric", family: "pillow-block", parameters: { ...parameters, seatDiameter: 36 } } }] }), ctx);
   assert.equal(bad.plans.length, 0, "a seat outside the recipe bounds is refused at plan time");
 });
+
+test("a focused planner (autopilot grant) sees only its tools and the template of its part family", async () => {
+  const { buildPrompt, planTools } = await import("../src/ai.js");
+  const lastCad = { id: "c1", request: { variant: "pillow-block", requirements: {} } };
+  const base = { handles: new Map(), workspace: {}, project: { id: "p", revision: 1 }, lastCad,
+    cadCode: { template: "# bracket template ".repeat(50), templates: { "pillow-block": "# pillow template ".repeat(50) } } } as unknown as Parameters<typeof buildPrompt>[1];
+  const full = buildPrompt("goal", base), focused = buildPrompt("goal", { ...base, offered: ["cad-review", "cad-code"] });
+  assert.deepEqual(Object.keys(planTools({ ...base, offered: ["cad-review", "cad-code"] })), ["cad-review", "cad-code"]);
+  assert.ok(Buffer.byteLength(focused) < Buffer.byteLength(full) / 2, `${Buffer.byteLength(focused)} vs ${Buffer.byteLength(full)}`);
+  assert.ok(focused.includes("pillow template") && !focused.includes("bracket template"));
+});

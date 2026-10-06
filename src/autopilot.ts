@@ -58,7 +58,8 @@ export async function runAutopilot(deps: { store: Store; config: Config; live?: 
     for (let round = 1; round <= req.maxRounds; round++) {
       const g = store.get<AutonomyGrant>("autonomy-grant", grant.id)!;
       if (!grantActive(g)) { record.outcome = "grant-exhausted"; break; }
-      const plan = await createAiPlan(store, deps.config, { requestId: randomUUID(), projectId: project.id, message: prompt(req.goal, g.tools, record.rounds) }, deps.lifecycle);
+      const plan = await createAiPlan(store, deps.config, { requestId: randomUUID(), projectId: project.id, message: prompt(req.goal, g.tools, record.rounds),
+        tools: g.tools.map(t => t as never) }, deps.lifecycle);
       if (plan.state && plan.state !== "done") { record.rounds.push({ round, planId: plan.id, note: `AI run ${plan.state}` }); record.outcome = "needs-human"; save(); break; }
       const step = plan.plans.find(p => (g.tools as string[]).includes(p.tool));
       if (!step) { record.rounds.push({ round, planId: plan.id, note: "no plan on a granted tool" }); record.outcome = "no-runnable-plan"; save(); break; }

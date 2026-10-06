@@ -28,15 +28,17 @@ import type { Lifecycle } from "./lifecycle.js";
  * Answers must cite workspace record handles that resolve to real records of this project.
  * The model has no acceptance, approval, release or feedback authority.
  */
+export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "aero-body", "factory-criteria", "factory-review"] as const;
 export const AiInput = z.object({
   requestId: Id, projectId: Id.optional(), message: z.string().trim().min(1).max(2000),
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
+  /** Offer only these tools (autopilot passes its grant): a smaller prompt, and the model sees what it may run. */
+  tools: z.array(z.enum(AI_TOOLS)).min(1).max(13).optional(),
   /** Visual review: recorded native images (renders, inspection views) sent to the model with the text context. */
   attachments: z.array(z.object({ recordKind: z.enum(["scene-review", "cad-review", "aero-review"]), recordId: Id,
     which: z.enum(["baseline", "candidate"]), file: z.string().regex(/^[a-z0-9-]{1,40}\.(png|jpg)$/) }).strict()).max(3).optional(),
 }).strict();
 export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
-export const AI_TOOLS = ["create-project", "update-requirements", "robot-review", "scene-review", "plant-layout", "robot-cell", "cad-review", "cad-code", "cad-sweep", "cad-optimize", "aero-body", "factory-criteria", "factory-review"] as const;
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -119,6 +121,8 @@ const ModelOutput = z.object({
 
 type Handle = { kind: string; id: string; label: string };
 export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
+  /** Tools offered to the planner (autopilot: its grant); all tools when absent. */
+  offered?: readonly string[];
   lastRobot?: SceneReview & { request: { cell: z.infer<typeof RobotCell>; requirements: z.infer<typeof RobotRequirements>; tool?: z.infer<typeof RobotTool> } }; lastCad?: CadReview; lastAero?: AeroReview; lastCriteria?: FactoryCriteria;
   /** Present only when the sandbox is available; the editable reference template offered to planners. */
   cadCode?: { template: string; templates?: Record<string, string> } }
@@ -205,9 +209,16 @@ export function buildContext(store: Store, project: Project | undefined, lifecyc
 const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 /** Tools a planner may propose for this context, with the JSON schema of the fields it may fill. */
 export const planTools = (context: AiContext) => Object.fromEntries(AI_TOOLS
-  .filter(t => (context.project ? t !== "create-project" : t === "create-project") && (t !== "cad-code" || context.cadCode))
+  .filter(t => (context.project ? t !== "create-project" : t === "create-project") && (t !== "cad-code" || context.cadCode)
+    && (!context.offered || context.offered.includes(t)))
   .map(t => [t, { description: TOOL_HELP[t], payload: z.toJSONSchema(ModelPayload[t], { io: "input", unrepresentable: "any" }),
-    ...(t === "cad-code" ? { template: context.cadCode!.template, templates: context.cadCode!.templates } : {}) }]));
+    ...(t === "cad-code" ? codeTemplates(context) : {}) }]));
+/** The code templates, narrowed to the family of the latest part when the planner is focused (offered tools). */
+function codeTemplates(context: AiContext) {
+  const c = context.cadCode!;
+  if (!context.offered || !context.lastCad) return { template: c.template, templates: c.templates };
+  return familyOf(context.lastCad.request) === "pillow-block" ? { templates: { "pillow-block": c.templates?.["pillow-block"] } } : { template: c.template };
+}
 export function buildPrompt(message: string, context: AiContext): string {
   const tools = planTools(context);
   return [
@@ -551,7 +562,7 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
   live?.publish(request.requestId, { kind: "record", recordKind: "assistant-plan", recordId: record.id });
   try {
     step("context", "整理工作区记录与可用工具", "running");
-    const context = buildContext(store, project, project ? lifecycleOf(project) : undefined, await contextOptions(config));
+    const context = { ...buildContext(store, project, project ? lifecycleOf(project) : undefined, await contextOptions(config)), offered: request.tools };
     // Attached images are named in the prompt by order and record handle, so the model can relate what it sees to the record.
     const handleOf = (id: string) => [...context.handles].find(([, h]) => h.id === id)?.[0] ?? "unreferenced";
     const prompt = buildPrompt(request.message, context) + (request.attachments?.length ? ["", "<attached-images>",
