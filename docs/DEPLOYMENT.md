@@ -94,7 +94,9 @@ Codex 引擎同样走 Bedrock：服务用户的 `~/.codex/config.toml` 只写 `m
 
 AgentCore agent 运行时用执行角色的短期凭证调用 Bedrock（microVM 提供 IMDS 兼容的凭证端点，两个适配器的 AWS 默认凭证链都能找到），不存 Bedrock API key。权限与托管实例同一来源（`infra/bedrock.ts`）：只允许 `anthropic.*`、`openai.*` 模型与推理配置，加上 Codex Responses 接口需要的 `project/default`。区域等设置只在 `tools/bedrock-engines.json` 一处，`tools/bedrock_engines.py` 生成镜像里的 `~/.codex/config.toml`（只有 provider 与区域）；Claude 的 Bedrock 路由只传给执行器进程。
 
-运行时提供的引擎 = `PAI_AI_PROFILES` ∩ 该运行时账本策略里配置的引擎。账本策略不可变，现有 AgentCore 账本创建时只配置了 Kiro 三个账号，所以 Codex 和 Claude 目前就绪但不提供；`probe` 返回 `enabledProfiles` 和 `bedrockEngines`（适配器在 arm64 镜像里启动并建立会话，不调用模型、不占账本）。
+运行时提供的引擎 = `PAI_AI_PROFILES` ∩ 该运行时账本策略里配置的引擎。账本策略只增不减（noteflow-agent-control #154）：`op extend-ledger` 把现有账本扩展到 `tools/agentcore-ledger-policy.json`（新增引擎或收紧限额；放宽、删除或改映射会被拒绝），变更写入账本的策略历史，不新建账本。`probe` 返回 `enabledProfiles` 和 `bedrockEngines`（适配器在 arm64 镜像里启动并建立会话，不调用模型、不占账本）。
+
+Codex / Claude 的回答按执行器规则总是"影响未知"。维护者在工作台记录核对结果时，工作台调用执行器 `reconcile`（本机）或运行时的 `op reconcile`（AgentCore）：执行器核对回执、写不可改的核对文件并结清自己的账本；回执不满足条件（对话被截断、有工具活动等）就保持待核对。
 
 ## 持久化与更新
 
