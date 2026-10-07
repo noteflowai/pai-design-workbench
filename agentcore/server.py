@@ -43,6 +43,14 @@ CLAUDE_BEDROCK_REGION = os.environ.get("PAI_CLAUDE_BEDROCK_REGION", "")
 ENGINE_ENV = {"CLAUDE_CODE_USE_BEDROCK": "1", "AWS_REGION": CLAUDE_BEDROCK_REGION} if re.fullmatch(r"[a-z]{2}(-[a-z]+)+-\d", CLAUDE_BEDROCK_REGION) else {}
 
 
+def executor_path():
+    """PATH for the executor with the real (versioned) Kiro directory first: its launch evidence hashes the native
+    binary and refuses a symlinked path such as /usr/local/bin/kiro-cli-chat."""
+    found = shutil.which("kiro-cli-chat")
+    real = os.path.dirname(os.path.realpath(found)) if found else ""
+    return os.pathsep.join([p for p in [real, os.environ.get("PATH", "")] if p])
+
+
 def ledger_profiles():
     """Profiles the runtime's ledger was created for (its policy is immutable). An engine is offered only if both this
     runtime's PAI_AI_PROFILES and the ledger configure it, so adding an engine never changes an existing ledger."""
@@ -432,7 +440,7 @@ def op_text_proposal(body):
         raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt or images")
     entry = EXECUTOR / ".runtime/compiled/flows/execute.js"
     r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470,
-            env={**os.environ, **ENGINE_ENV}, cwd=str(EXECUTOR))
+            env={**os.environ, **ENGINE_ENV, "PATH": executor_path()}, cwd=str(EXECUTOR))
     lines = [l for l in r["stdout"].strip().splitlines() if l.strip()]
     if r["exit"] == 0 and not lines:
         # Never a silent success: an empty report is surfaced as an executor fault for reconciliation.
