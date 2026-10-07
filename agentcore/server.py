@@ -640,7 +640,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send(500, {"error": "INTERNAL", "message": type(e).__name__})
 
 
+def warm_native():
+    """Load the native Kiro binary once at start. On a cold (snapshot-restored) microVM the executor's 5 s version
+    preflight could otherwise time out on the first call and spend an admission as `unavailable` (observed)."""
+    if ROLE == "agent":
+        run(["kiro-cli-chat", "--version"], 120, env={**os.environ, "PATH": executor_path()})
+
+
 if __name__ == "__main__":
     if ROLE not in OPS:
         raise SystemExit("PAI_ROLE must be sandbox or agent")
+    __import__("threading").Thread(target=warm_native, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8080"))), Handler).serve_forever()
