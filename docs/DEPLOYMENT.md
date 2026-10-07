@@ -80,6 +80,8 @@ python3 tools/aws_operator.py result --command-id <ID>
 
 Claude 引擎（`claude` profile）走 Amazon Bedrock：`claude-agent-acp` 只继承进程环境，不读 `~/.claude/settings.json`。设置 `PAI_CLAUDE_BEDROCK_REGION`（如 `us-east-1`），工作台只把 `CLAUDE_CODE_USE_BEDROCK=1` 和 `AWS_REGION` 传给执行器进程，工作台自己的 KMS / S3 客户端不受影响；凭据来自 AWS 默认凭据链（托管站点是实例角色，只允许调用 Anthropic 模型和推理配置），不写入文件。用 `npm run probe:engine`（`PROBE_PROFILE=claude`）花 1 次账本确认可用。
 
+Codex 引擎同样走 Bedrock：服务用户的 `~/.codex/config.toml` 只写 `model_provider = "amazon-bedrock-runtime"` 和区域，模型由执行器 pin 经 `CODEX_CONFIG` 指定。Bedrock 的 OpenAI 兼容 Responses 接口按账号的 `project/default` 鉴权，所以实例角色除了 `openai.*` 模型和推理配置，还需要该项目资源的 `bedrock:InvokeModel*`。
+
 ## 生成代码沙箱
 
 发布脚本会安装 bubblewrap，并加载 `infra/apparmor-bwrap`。这是 Ubuntu 24.04 推荐的按应用授权配置：只给 `/usr/bin/bwrap` 开放非特权用户命名空间，系统级限制保持开启。沙箱内部仍然丢弃全部特权、不能联网。服务启动时会做一次探测，不通过就禁用该通道，见 [CAD_CODE.md](CAD_CODE.md)。

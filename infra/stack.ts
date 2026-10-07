@@ -139,7 +139,10 @@ export class WorkbenchStack extends cdk.Stack {
     // Anthropic and OpenAI models only, directly or through cross-region / global inference profiles.
     role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"], resources: [
       "arn:aws:bedrock:*::foundation-model/anthropic.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*anthropic.*`,
-      "arn:aws:bedrock:*::foundation-model/openai.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*openai.*`] }));
+      "arn:aws:bedrock:*::foundation-model/openai.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*openai.*`,
+      // Codex calls Bedrock's OpenAI-compatible Responses API (/openai/v1/responses), authorised against the
+      // account's default Bedrock project rather than a model ARN (observed 401 naming project/default).
+      `arn:aws:bedrock:us-west-2:${this.account}:project/default`] }));
     role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:GetInferenceProfile", "bedrock:ListInferenceProfiles", "bedrock:GetFoundationModel", "bedrock:ListFoundationModels"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
     role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject"], resources: [`arn:aws:s3:::${SOLVER.bucket(this.account, this.region)}/jobs/*`] }));
     // Write-once archive of sealed release packages. Object Lock (COMPLIANCE default retention) means no principal,
