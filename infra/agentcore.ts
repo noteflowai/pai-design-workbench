@@ -164,6 +164,8 @@ export class AgentCoreRuntimeStack extends cdk.Stack {
       environmentVariables: { PAI_AGENTCORE: "1" },
       // One job per session: short idle timeout so each job's microVM is reclaimed promptly.
       lifecycleConfiguration: { idleRuntimeSessionTimeout: 120, maxLifetime: 1800 },
+      // Runtime V2: elastic memory (reclaimed during the session) and snapshot-restored cold starts.
+      platformVersion: "V2",
     });
     const agent = new agentcore.CfnRuntime(this, "Agent", {
       agentRuntimeName: "pai_kiro_agent", description: "PAI bounded NoteFlow executor (Kiro x3; Codex and Claude on Bedrock with the execution role); text proposals only; ledger on EFS",
@@ -175,6 +177,7 @@ export class AgentCoreRuntimeStack extends cdk.Stack {
       environmentVariables: { PAI_AGENTCORE: "1", PAI_AI_KEYS_ARN: keys.secretArn, PAI_AI_PROFILES: "kiro-primary,kiro-backup,kiro-backup2,codex,claude",
         PAI_CLAUDE_BEDROCK_REGION: BEDROCK_ENGINES.claude.region },
       lifecycleConfiguration: { idleRuntimeSessionTimeout: 300, maxLifetime: 3600 },
+      platformVersion: "V2",
     });
     // Roles (and their inline policies) must exist before AgentCore validates image pull and network access.
     sandbox.node.addDependency(sandboxRole); agent.node.addDependency(agentRole);
