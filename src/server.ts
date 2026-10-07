@@ -429,7 +429,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(a, reply, "autopilots");
   });
   app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle, principals.get(request.raw)));
-  app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, paramId(request.params), request.body, actor(request.headers)));
+  app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, config, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/preflight", async request =>
     preflightPlan(store, paramId(request.params), z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict().parse(request.body).planId));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));

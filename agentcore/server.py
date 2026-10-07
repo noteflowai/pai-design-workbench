@@ -513,9 +513,62 @@ def op_agent_probe(_body):
             "uid": os.getuid(), "arch": os.uname().machine}
 
 
+def op_reconcile(body):
+    """Settle the unknown-effect attempts of one run after the maintainer recorded why they are safe. The executor checks
+    each receipt (tool-free, text-only, terminal), writes its immutable overlay and settles this runtime's ledger."""
+    run_id, actor, reason = body.get("run_id"), body.get("actor"), body.get("reason")
+    if not isinstance(run_id, str) or not RUN_ID.match(run_id):
+        raise Refused(400, "INVALID_INPUT", "run_id must match the executor identity pattern")
+    if not isinstance(actor, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._@:-]{0,79}", actor):
+        raise Refused(400, "INVALID_INPUT", "actor must be an operator identity")
+    if not isinstance(reason, str) or not 10 <= len(reason.strip()) <= 1000:
+        raise Refused(400, "INVALID_INPUT", "reason must be 10-1000 characters")
+    run_dir = LEDGER_DIR / "runs" / hashlib.sha256(run_id.encode()).hexdigest()[:32]
+    receipts = run_dir / "state/runs" / run_id
+    if not receipts.is_dir():
+        raise Refused(404, "NOT_FOUND", "no executor run with this run_id on this runtime")
+    settled = []
+    for f in sorted(receipts.glob("*.json")):
+        if not re.fullmatch(r"[a-f0-9]{64}\.json", f.name):
+            continue
+        d = json.loads(f.read_text())
+        if d.get("effects") != "unknown" or not d.get("attempt_id"):
+            continue
+        r = run(["python3", "-B", "-m", "agent_control.executor", "reconcile", "--state", str(run_dir / "state"), "--database", str(ledger_path()),
+                 "--request", str(run_dir / "request.json"), "--attempt-id", d["attempt_id"], "--actor", actor, "--reason", reason], 60, cwd=str(EXECUTOR))
+        try:
+            out = json.loads(r["stdout"].strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            out = {}
+        state = out.get("state") if out.get("state") in {"reconciled", "already-reconciled", "refused"} else "failed"
+        settled.append({"attemptId": d["attempt_id"], "profile": (d.get("requested") or {}).get("profile", "unknown"), "state": state,
+                        **({"blockers": out["blockers"]} if out.get("blockers") else {})})
+    return {"settled": settled, "ledger": ledger_status()}
+
+
+def op_extend_ledger(body):
+    """Append-only policy change of this runtime's ledger (noteflow-agent-control#154) to the reviewed policy file:
+    adds engines or tightens limits, refuses anything looser; recorded in the ledger's policy history."""
+    actor, reason = body.get("actor"), body.get("reason")
+    if not isinstance(actor, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._@:-]{0,79}", actor) or not isinstance(reason, str):
+        raise Refused(400, "INVALID_INPUT", "actor and reason are required")
+    if not ledger_status()["exists"]:
+        raise Refused(503, "LEDGER_NOT_INITIALISED", "create the ledger first (op init-ledger)")
+    r = run(["python3", "-B", "-m", "agent_control", "budget-extend", "--database", str(ledger_path()), "--policy", str(POLICY),
+             "--actor", actor, "--reason", reason], 60, cwd=str(EXECUTOR))
+    try:
+        out = json.loads(r["stdout"])
+    except ValueError:
+        out = {"changed": False, "error": "unreadable"}
+    if r["exit"] != 0:
+        raise Refused(422, "POLICY_NOT_APPEND_ONLY", str(out.get("error"))[:300])
+    return {**out, "enabledProfiles": enabled_profiles(), "ledger": ledger_status()}
+
+
 OPS = {
     "sandbox": {"probe": lambda b: isolation_report(), "cad-code": op_cad_code, "cad-recipe": op_cad_recipe, "cad-sweep": op_cad_sweep},
-    "agent": {"probe": op_agent_probe, "init-ledger": op_init_ledger, "text-proposal": op_text_proposal},
+    "agent": {"probe": op_agent_probe, "init-ledger": op_init_ledger, "text-proposal": op_text_proposal, "reconcile": op_reconcile,
+              "extend-ledger": op_extend_ledger},
 }
 
 

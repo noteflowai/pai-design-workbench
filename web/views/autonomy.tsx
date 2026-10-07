@@ -113,7 +113,7 @@ export function AutonomyCard() {
           {pausedPlan.answer?.text ? <small>{pausedPlan.answer.text.slice(0, 220)}</small> : null}</p>
         {pausedPlan.ai?.reconciliation ? <small>已核对 · {pausedPlan.ai.reconciliation.reason}</small>
           : <label>核对理由<input value={why} onChange={e => setWhy(e.target.value)} placeholder="例如：回执显示没有工具活动，只读模式" /></label>}
-        <button type="button" disabled={c.busy || (!pausedPlan.ai?.reconciliation && why.trim().length < 5)} onClick={() => void resume()}>记录核对并在授权内执行</button>
+        <button type="button" disabled={c.busy || (!pausedPlan.ai?.reconciliation && why.trim().length < 10)} onClick={() => void resume()}>记录核对并在授权内执行</button>
       </div>}
     </section>}
   </Card>;

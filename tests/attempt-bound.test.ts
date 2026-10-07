@@ -25,3 +25,11 @@ test("Bedrock routing for the Claude engine is scoped to the executor process", 
   assert.deepEqual(engineEnv({ claudeBedrockRegion: "us-east-1" } as never), { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: "us-east-1" });
   assert.deepEqual(engineEnv({} as never), {});
 });
+
+test("workbench actors map onto the executor's operator identity", async () => {
+  const { operatorIdentity } = await import("../src/controller.js");
+  assert.equal(operatorIdentity("maintainer@example.com"), "maintainer@example.com");
+  assert.equal(operatorIdentity("local maintainer"), "local-maintainer");
+  assert.equal(operatorIdentity("  -x"), "x");
+  assert.match(operatorIdentity("a".repeat(200)), /^a{80}$/);
+});

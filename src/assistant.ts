@@ -40,7 +40,8 @@ export interface AssistantPlan {
     action?: string; reason?: string; effects?: string; reportSha256?: string; error?: string;
     engine?: { profile: string; provider: string; model: string | null; engineVersion: string | null; modelEvidence: string | null };
     attempts: { profile: string; provider: string; status: string; errorKind: string | null; model: string | null }[];
-    reconciliation?: { reason: string; at: string; actor: string };
+    /** The maintainer's judgment, and how the executor settled each unknown-effect attempt (its ledger, its checks). */
+    reconciliation?: { reason: string; at: string; actor: string; settlements?: { attemptId: string; profile: string; state: string; blockers?: string[] }[] };
   };
   answer?: { text: string; citations: { handle: string; kind: string; id: string; label: string }[] };
   finishedAt?: string;

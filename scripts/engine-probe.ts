@@ -7,7 +7,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { configuration } from "../src/config.js";
-import { enabledProfiles, runController, type Profile } from "../src/controller.js";
+import { enabledProfiles, runController, settleRun, type Profile } from "../src/controller.js";
 
 const config = configuration();
 const profile = (process.env.PROBE_PROFILE ?? enabledProfiles(config)[0]) as Profile;
@@ -17,9 +17,13 @@ const dir = resolve(config.state, "probe", id);
 await mkdir(dir, { recursive: true, mode: 0o700 });
 const r = await runController(config, dir, id, 'Reply with exactly this JSON and nothing else: {"probe":"ok"}', { profiles: [profile], timeoutSeconds: 60 });
 const parsed = /\{\s*"probe"\s*:\s*"ok"\s*\}/.test(r.answer ?? "");
+// The probe's prompt is a fixed constant and its answer is never executed, so the probe settles its own unknown-effect
+// attempt through the executor (which still checks the receipt); otherwise each probe would hold a ledger slot forever.
+const settlements = r.action === "reconcile" ? await settleRun(config, dir, id, "engine-probe",
+  "Fixed probe prompt asking for a constant JSON answer; the answer is only pattern-matched, never executed.") : [];
 const report = { schema: "pai-engine-probe-1", checkedAt: new Date().toISOString(), profile, action: r.action, reason: r.reason ?? null, answered: parsed,
   attempts: r.attempts.map(a => ({ profile: a.profile, status: a.status, errorKind: a.errorKind, model: a.model })), engine: r.engine ?? null,
-  result: parsed ? "passed" : "failed" };
+  settlements, result: parsed ? "passed" : "failed" };
 await mkdir(join(config.state, "evidence"), { recursive: true });
 await writeFile(join(config.state, "evidence", "engine-probe.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify(report));

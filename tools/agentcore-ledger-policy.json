@@ -1,4 +1,4 @@
 {"schema_version":1,"timezone":"Asia/Singapore","run_attempt_limit":3,"daily_attempt_limit":10,
- "providers":{"kiro":{"daily_attempt_limit":10}},
- "profiles":{"kiro-primary":"kiro","kiro-backup":"kiro","kiro-backup2":"kiro"},
+ "providers":{"kiro":{"daily_attempt_limit":10},"codex":{"daily_attempt_limit":4},"claude":{"daily_attempt_limit":4}},
+ "profiles":{"kiro-primary":"kiro","kiro-backup":"kiro","kiro-backup2":"kiro","codex":"codex","claude":"claude"},
  "money_limits":null}

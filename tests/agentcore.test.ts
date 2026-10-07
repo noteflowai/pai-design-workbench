@@ -86,21 +86,30 @@ test("AI through the AgentCore executor: same report checks, Kiro only, uncertai
     em.set(c => ({ status: 200, body: { exitCode: 0, timedOut: false, report: report(String(c.body.run_id), out({ kind: "clarify" })).replace('"effects":"none"', '"effects":"unknown"'), attempts: [] } }));
     plan = (await ask("影响未知")).body as AssistantPlan;
     assert.equal(plan.state, "reconcile");
-    await call(`/api/assistant/plans/${plan.id}/reconciliation`, { reason: "远端回执显示没有工具活动" });
+    // The maintainer's reconciliation is passed to the runtime, whose executor checks the receipts and settles its ledger.
+    em.set(c => c.body.op === "reconcile" ? { status: 200, body: { settled: [{ attemptId: "a".repeat(64), profile: "codex", state: "reconciled" }], ledger: {} } }
+      : { status: 400, body: { error: "UNEXPECTED" } });
+    const rec = (await call(`/api/assistant/plans/${plan.id}/reconciliation`, { reason: "远端回执显示没有工具活动，只读模式" })).body as AssistantPlan;
+    const asked = em.calls.at(-1)!;
+    assert.deepEqual([asked.body.op, asked.body.run_id, asked.body.reason], ["reconcile", `pai-ai-${plan.id}`, "远端回执显示没有工具活动，只读模式"]);
+    assert.match(String(asked.body.actor), /^[A-Za-z0-9][A-Za-z0-9._@:-]*$/);
+    assert.deepEqual(rec.ai!.reconciliation!.settlements, [{ attemptId: "a".repeat(64), profile: "codex", state: "reconciled" }]);
 
     const before = em.calls.length;
     em.set(() => ({ status: 200, body: { exitCode: null, timedOut: true, seconds: 470, report: "", attempts: [] } }));
     plan = (await ask("超时")).body as AssistantPlan;
     assert.equal(plan.state, "reconcile"); assert.equal(em.calls.length, before + 1, "exactly one remote call");
     await call(`/api/assistant/plans/${plan.id}/reconciliation`, { reason: "远端执行器超时；没有工具活动" });
+    assert.equal(em.calls.length, before + 2, "the reconciliation is one remote settle call, never a model call");
 
     em.set(() => ({ status: 502, body: { error: "BAD" } }));
     plan = (await ask("传输失败")).body as AssistantPlan;
-    assert.equal(plan.state, "reconcile"); assert.match(plan.ai!.error ?? "", /AGENTCORE_CALL_FAILED/); assert.equal(em.calls.length, before + 2);
-    await call(`/api/assistant/plans/${plan.id}/reconciliation`, { reason: "AgentCore 返回 502；未进入执行器" });
+    assert.equal(plan.state, "reconcile"); assert.match(plan.ai!.error ?? "", /AGENTCORE_CALL_FAILED/); assert.equal(em.calls.length, before + 3);
+    const failed = (await call(`/api/assistant/plans/${plan.id}/reconciliation`, { reason: "AgentCore 返回 502；未进入执行器" })).body as AssistantPlan;
+    assert.equal(failed.ai!.reconciliation!.settlements![0].state, "failed", "a settle that fails is reported, the human record stays");
 
     r = await ask("用 Codex", { profiles: ["codex"] });
-    assert.equal(r.status, 422); assert.equal(r.body.error, "AI_PROFILE_NOT_ENABLED"); assert.equal(em.calls.length, before + 2);
+    assert.equal(r.status, 422); assert.equal(r.body.error, "AI_PROFILE_NOT_ENABLED"); assert.equal(em.calls.length, before + 4);
   } finally { await app.close(); await em.close(); await rm(dir, { recursive: true, force: true }); }
 });
 

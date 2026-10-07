@@ -18,7 +18,7 @@ import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeR
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
-import { attemptBound, controllerConfigured, controllerTransport, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
+import { attemptBound, settleRun, type Settlement, controllerConfigured, controllerTransport, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
 import type { Lifecycle } from "./lifecycle.js";
 import type { CadOptimization } from "./optimize.js";
 import type { CadSweep } from "./sweep.js";
@@ -43,7 +43,7 @@ export const AiInput = z.object({
   attachments: z.array(z.object({ recordKind: z.enum(["scene-review", "cad-review", "aero-review"]), recordId: Id,
     which: z.enum(["baseline", "candidate"]), file: z.string().regex(/^[a-z0-9-]{1,40}\.(png|jpg)$/) }).strict()).max(3).optional(),
 }).strict();
-export const AiReconcile = z.object({ reason: z.string().trim().min(5).max(1000) }).strict();
+export const AiReconcile = z.object({ reason: z.string().trim().min(10).max(1000) }).strict();
 const placeholder = "00000000-0000-4000-8000-000000000000";
 const PROFILE_LABEL: Record<string, string> = { "kiro-primary": "Kiro 主账号", "kiro-backup": "Kiro 备用账号", "kiro-backup2": "Kiro 二备账号", codex: "Codex", claude: "Claude" };
 const ERROR_LABEL: Record<string, string> = { quota: "额度不足", auth: "认证失败", unavailable: "不可用", timeout: "超时" };
@@ -649,14 +649,21 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
   return record;
 }
 
-export function reconcileAi(store: Store, id: string, input: unknown, actor: string): AssistantPlan {
-  const { reason } = AiReconcile.parse(input);
+export async function reconcileAi(store: Store, config: Config, id: string, input: unknown, actor: string): Promise<AssistantPlan> {
   const plan = store.get<AssistantPlan>("assistant-plan", id);
   if (!plan || plan.source !== "model") throw new DomainError("NOT_FOUND", "AI run not found", 404);
   if (!(plan.state === "reconcile" || plan.state === "interrupted")) throw new DomainError("INVALID_TRANSITION", "只有待核对的 AI 运行需要记录核对结果");
-  if (plan.ai?.reconciliation) return plan;
-  // Records the human judgment only; the executor ledger, its limits and receipts are untouched.
-  const next: AssistantPlan = { ...plan, ai: { ...plan.ai!, reconciliation: { reason, at: new Date().toISOString(), actor } } };
+  // A recorded reconciliation that the executor has not settled yet (e.g. recorded before the executor offered it)
+  // is settled with its own reason; a new one needs a reason.
+  const recorded = plan.ai?.reconciliation;
+  if (recorded?.settlements) return plan;
+  const reason = recorded ? recorded.reason : AiReconcile.parse(input).reason;
+  // The human judgment is recorded first; the executor then checks the receipts and settles its own ledger.
+  const at = recorded?.at ?? new Date().toISOString(), who = recorded?.actor ?? actor;
+  let settlements: Settlement[] | undefined;
+  try { settlements = await settleRun(config, join(config.state, "ai", plan.id), `pai-ai-${plan.id}`, who, reason); }
+  catch (e) { settlements = [{ attemptId: "-", profile: "-", state: "failed", blockers: [e instanceof DomainError ? e.message : String(e)] }]; }
+  const next: AssistantPlan = { ...plan, ai: { ...plan.ai!, reconciliation: { reason, at, actor: who, ...(settlements.length ? { settlements } : {}) } } };
   store.put("assistant-plan", next);
   return next;
 }

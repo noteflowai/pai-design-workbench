@@ -223,9 +223,11 @@ export function Assistant({ onClose }: { onClose: () => void }) {
           {plan.source === "model" && (plan.state === "reconcile" || plan.state === "interrupted") && !plan.ai?.reconciliation && <div className="reconcile" role="group" aria-label="核对引擎影响">
             <p className="warning">⚠ 这次运行的引擎原生影响未经核实（{plan.ai?.engine ? PROFILE_NAME[plan.ai.engine.profile] ?? plan.ai.engine.profile : "未返回"}）。核对前不能执行其计划，也不能发起新的 AI 请求；不会自动重试。</p>
             <textarea rows={2} aria-label="核对说明" value={reconcileReason} onChange={e => setReconcileReason(e.target.value)} />
-            <button type="button" className="secondary" disabled={c.busy || reconcileReason.trim().length < 5} onClick={() => void c.perform(() =>
+            <button type="button" className="secondary" disabled={c.busy || reconcileReason.trim().length < 10} onClick={() => void c.perform(() =>
               api(`/assistant/plans/${plan.id}/reconciliation`, { reason: reconcileReason }), "已记录核对结果；账本与回执保持不变。")}>记录核对结果</button></div>}
-          {plan.ai?.reconciliation && <small className="reconciled">已核对 · {plan.ai.reconciliation.actor} · {plan.ai.reconciliation.reason}</small>}
+          {plan.ai?.reconciliation && <small className="reconciled">已核对 · {plan.ai.reconciliation.actor} · {plan.ai.reconciliation.reason}
+            {plan.ai.reconciliation.settlements?.length ? ` · 执行器账本：${plan.ai.reconciliation.settlements.map(x => x.state === "reconciled" || x.state === "already-reconciled"
+              ? `${x.profile} 已结清` : `${x.profile} 未结清（${(x.blockers ?? []).join("、") || x.state}）`).join("；")}` : ""}</small>}
           {plan.plans.map(step => {
             const done = plan.confirmations.find(x => x.planId === step.id), key = `${plan.id}:${step.id}`;
             const changed = step.changes.filter(x => x.direction !== "same");

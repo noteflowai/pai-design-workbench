@@ -53,13 +53,17 @@ const Receipt = z.object({
 /** Local executor (entrypoint + reviewed ledger) or the AgentCore agent runtime (executor and ledger run there). */
 export function controllerConfigured(config: Config) { return Boolean((config.controllerEntrypoint && config.controllerDatabase) || config.agentcoreAgentArn); }
 /** Profiles the AgentCore agent runtime enables (Kiro only; Codex/Claude need personal credentials). */
+/**
+ * AgentCore default: the Kiro accounts. Codex and Claude (Bedrock, execution role) are offered only when the
+ * deployment lists them in PAI_AI_PROFILES; the runtime itself also refuses engines its ledger policy lacks.
+ */
 export const REMOTE_PROFILES: readonly Profile[] = ["kiro-primary", "kiro-backup", "kiro-backup2"];
 export const controllerTransport = (config: Config): "local" | "agentcore" | undefined =>
   config.controllerEntrypoint && config.controllerDatabase ? "local" : config.agentcoreAgentArn ? "agentcore" : undefined;
 /** Engines this deployment may use, in reviewed fallback order. */
 export function enabledProfiles(config: Config): Profile[] {
-  const base = controllerTransport(config) === "agentcore" ? REMOTE_PROFILES : PROFILES;
-  return (config.aiProfiles ? base.filter(p => config.aiProfiles!.includes(p)) : [...base]) as Profile[];
+  if (config.aiProfiles) return PROFILES.filter(p => config.aiProfiles!.includes(p));
+  return [...(controllerTransport(config) === "agentcore" ? REMOTE_PROFILES : PROFILES)];
 }
 
 /** Read the executor's own per-attempt receipts (read-only) to show the actual fallback chain. */
@@ -99,6 +103,47 @@ export async function attemptBound(config: Config): Promise<number> {
  */
 export function engineEnv(config: Config): Record<string, string> {
   return config.claudeBedrockRegion ? { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: config.claudeBedrockRegion } : {};
+}
+
+/** Outcome of settling one executor attempt after a human reconciliation (executor `reconcile`). */
+export interface Settlement { attemptId: string; profile: string; state: "reconciled" | "already-reconciled" | "refused" | "failed"; blockers?: string[] }
+/** Whether the pinned executor offers operator reconciliation (noteflow-agent-control#153). */
+export async function executorReconciles(config: Config): Promise<boolean> {
+  try { return (await readFile(join(await realpath(config.controlRoot), "agent_control/executor.py"), "utf8")).includes("operator-effects-reconciliation-v1"); }
+  catch { return false; }
+}
+/** The executor's operator identity pattern; workbench actors (e-mail, "local-maintainer") map onto it. */
+export const operatorIdentity = (actor: string) => (actor.replace(/[^A-Za-z0-9._@:-]/g, "-").replace(/^[^A-Za-z0-9]+/, "") || "maintainer").slice(0, 80);
+
+/**
+ * Settle every unknown-effect attempt of a run after a maintainer recorded why it is safe. The executor checks the
+ * receipt (tool-free, text-only, terminal), writes its immutable overlay and settles its own ledger; the workbench
+ * never writes the ledger. Attempts the executor refuses stay uncertain and are reported with their blockers.
+ */
+export async function settleRun(config: Config, directory: string, runId: string, actor: string, reason: string): Promise<Settlement[]> {
+  const who = operatorIdentity(actor);
+  if (controllerTransport(config) === "agentcore") {
+    const r = await invokeRuntime<{ settled?: Settlement[]; error?: string; message?: string }>(config.agentcoreAgentArn!, { op: "reconcile", run_id: runId, actor: who, reason }, { timeoutMs: 120_000 });
+    if (!r.settled) throw new DomainError(r.error ?? "RECONCILE_FAILED", `AgentCore 执行器拒绝核对：${r.message ?? r.error ?? "unknown"}`, 502);
+    return r.settled;
+  }
+  if (!controllerConfigured(config) || !(await executorReconciles(config))) return [];
+  const state = join(directory, "native-state"), runs = join(state, "runs", runId);
+  let names: string[] = [];
+  try { names = await readdir(runs); } catch { return []; }
+  const out: Settlement[] = [];
+  for (const name of names.filter(n => /^[a-f0-9]{64}\.json$/.test(n))) {
+    const receipt = JSON.parse(await readFile(join(runs, name), "utf8")) as { attempt_id?: string; effects?: string; requested?: { profile?: string } };
+    if (receipt.effects !== "unknown" || !receipt.attempt_id) continue;
+    const r = await command("python3", ["-B", "-m", "agent_control.executor", "reconcile", "--state", state, "--database", config.controllerDatabase!,
+      "--request", join(directory, "request.json"), "--attempt-id", receipt.attempt_id, "--actor", who, "--reason", reason], await realpath(config.controlRoot), undefined, 60_000);
+    let parsed: { state?: string; blockers?: string[] } = {};
+    try { parsed = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "{}"); } catch { /* reported as failed */ }
+    out.push({ attemptId: receipt.attempt_id, profile: receipt.requested?.profile ?? "unknown",
+      state: parsed.state === "reconciled" || parsed.state === "already-reconciled" || parsed.state === "refused" ? parsed.state : "failed",
+      ...(parsed.blockers ? { blockers: parsed.blockers } : {}) });
+  }
+  return out;
 }
 
 export async function runController(config: Config, directory: string, runId: string, prompt: string, options: {
@@ -155,7 +200,7 @@ async function runRemote(config: Config, directory: string, runId: string, promp
   profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
   images?: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[];
 }): Promise<ControllerResult> {
-  if (options.profiles.some(p => !REMOTE_PROFILES.includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "AgentCore 执行器只启用 Kiro 三个账号", 422);
+  if (options.profiles.some(p => !enabledProfiles(config).includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "AgentCore 执行器未启用该引擎", 422);
   await writePrivate(join(directory, "prompt.txt"), prompt);
   const Remote = z.object({ exitCode: z.number().nullable(), timedOut: z.boolean(), report: z.string(),
     attempts: z.array(z.object({ profile: z.string(), status: z.string().nullable(), errorKind: z.string().nullable(), model: z.string().nullable(),
