@@ -92,9 +92,9 @@ export function OptimizePanel({ requirements, family = "nema17-bracket" }: { req
     <div className="form-foot"><small>约 {physics.optimize.defaultBudget.initial + 1 + physics.optimize.defaultBudget.rounds * physics.optimize.defaultBudget.perRound} 次 FEA · 约 8–15 分钟 · 也可以让 AI 助手给出带物理估算的种子</small>
       <label className="inline">搜索策略<select aria-label="搜索策略" value={strategy} onChange={e => setStrategy(e.target.value as Strategy)}>
         <option value="gp-nsga2">GP 代理 + NSGA-II（默认）</option>
-        <option value="botorch-qlognehvi" disabled={pillow || !physics.optimize.strategies?.includes("botorch-qlognehvi")}>BoTorch qLogNEHVI（约束批量贝叶斯优化）{physics.optimize.botorch ? ` ${physics.optimize.botorch}` : " · 未安装"}</option>
+        <option value="botorch-qlognehvi" disabled={!physics.optimize.strategies?.includes("botorch-qlognehvi")}>BoTorch qLogNEHVI（约束批量贝叶斯优化）{physics.optimize.botorch ? ` ${physics.optimize.botorch}` : " · 未安装"}</option>
       </select></label>
-      <button type="button" disabled={c.busy} onClick={() => void runOptimize(c, { ...requirements, structural }, pillow ? "gp-nsga2" : strategy, family)}>运行物理寻优</button></div>
+      <button type="button" disabled={c.busy} onClick={() => void runOptimize(c, { ...requirements, structural }, strategy, family)}>运行物理寻优</button></div>
     {live && <LiveSteps session={{ ...live, steps: live.steps.filter(s => s.id === "optimize").concat(live.steps.filter(s => s.id !== "optimize").slice(-5)) }} />}
     {latest?.state === "failed" && <p className="warning">⚠ {latest.error}</p>}
     {result && <>

@@ -67,8 +67,6 @@ rng_seed = int(spec.get("seed", 7))
 STRATEGY = spec.get("strategy", "gp-nsga2")
 if STRATEGY not in ("gp-nsga2", "botorch-qlognehvi"):
     raise SystemExit(f"unknown strategy {STRATEGY}")
-if PILLOW and STRATEGY != "gp-nsga2":
-    raise SystemExit("the pillow block is optimised with gp-nsga2")
 if PILLOW:
     limit["bore"] = structural["maxBoreDistortionMm"]
 
@@ -308,7 +306,8 @@ def bo_candidates(r, q, pending=()):
     from gpytorch.mlls import SumMarginalLogLikelihood
     torch.manual_seed(rng_seed + r)
     dt = torch.double
-    names = ["mass", "logDeflection", "logStress", "minWall", "holeEdge"]
+    # Second objective: log deflection (bracket) or log seat out-of-roundness (pillow block, its binding limit).
+    names = ["mass", "logDeflection", "logStress", "minWall", "holeEdge"] + (["logBore"] if PILLOW else [])
     models = []
     for name in names:
         ok = [p for p in points if ("minWallMm" in p if name in GEOMETRY_TARGETS else "deflectionMm" in p)]
@@ -328,20 +327,29 @@ def bo_candidates(r, q, pending=()):
     fit_gpytorch_mll(SumMarginalLogLikelihood(model.likelihood, model))
     solved = [p for p in points if "deflectionMm" in p]
     X_base = torch.tensor(np.array([norm(p["parameters"]) for p in solved]), dtype=dt)
-    edge_min = req["edgeDistanceFactor"] * 5.5
+    edge_min = req["edgeDistanceFactor"] * F["boltDiameter"]
     # Outcome constraints, feasible when ≤ 0 (sample tensors are ... × q × m in the order of `names`).
     constraints = [lambda Y: Y[..., 1] - math.log(limit["deflection"]), lambda Y: Y[..., 2] - math.log(limit["stress"]),
                    lambda Y: limit["wall"] - Y[..., 3], lambda Y: edge_min - Y[..., 4], lambda Y: Y[..., 0] - limit["mass"]]
+    if PILLOW:
+        constraints.append(lambda Y: Y[..., 5] - math.log(limit["bore"]))
+    second = 5 if PILLOW else 1
     acqf = qLogNoisyExpectedHypervolumeImprovement(
-        model=model, ref_point=[-limit["mass"], -math.log(limit["deflection"])], X_baseline=X_base, prune_baseline=True,
-        objective=WeightedMCMultiOutputObjective(weights=torch.tensor([-1.0, -1.0], dtype=dt), outcomes=[0, 1]),
+        model=model, ref_point=[-limit["mass"], -math.log(limit["bore"] if PILLOW else limit["deflection"])], X_baseline=X_base, prune_baseline=True,
+        objective=WeightedMCMultiOutputObjective(weights=torch.tensor([-1.0, -1.0], dtype=dt), outcomes=[0, second]),
         constraints=constraints, sampler=SobolQMCNormalSampler(sample_shape=torch.Size([128]), seed=rng_seed + r),
         X_pending=torch.tensor(np.array([norm(p) for p in pending]), dtype=dt) if pending else None)
-    # Envelope as linear constraints on normalised inputs: width ≤ e0 and thickness + plateHeight ≤ e2.
+    # Linear input constraints on normalised inputs (sum(coef * x[idx]) >= rhs), the same rules as envelope_ok().
     e = req["maxEnvelopeMm"]; span = hi - lo
-    ineq = [(torch.tensor([1]), torch.tensor([-span[1]], dtype=dt), float(lo[1] - e[0])),
-            (torch.tensor([0, 2]), torch.tensor([-span[0], -span[2]], dtype=dt), float(lo[0] + lo[2] - e[2]))]
-    bounds = torch.stack([torch.zeros(3, dtype=dt), torch.ones(3, dtype=dt)])
+    if PILLOW:  # AXES: width, depth, baseThickness, boltPitch
+        ineq = [(torch.tensor([0]), torch.tensor([-span[0]], dtype=dt), float(lo[0] - e[0])),            # width ≤ e0
+                (torch.tensor([1]), torch.tensor([-span[1]], dtype=dt), float(lo[1] - e[1])),            # depth ≤ e1
+                (torch.tensor([0, 3]), torch.tensor([span[0], -span[3]], dtype=dt),                      # bolt edge rule
+                 float(2 * edge_min - lo[0] + lo[3]))]
+    else:  # AXES: thickness, width, plateHeight; width ≤ e0 and thickness + plateHeight ≤ e2
+        ineq = [(torch.tensor([1]), torch.tensor([-span[1]], dtype=dt), float(lo[1] - e[0])),
+                (torch.tensor([0, 2]), torch.tensor([-span[0], -span[2]], dtype=dt), float(lo[0] + lo[2] - e[2]))]
+    bounds = torch.stack([torch.zeros(len(AXES), dtype=dt), torch.ones(len(AXES), dtype=dt)])
     cand, _ = optimize_acqf(acqf, bounds=bounds, q=q, num_restarts=8, raw_samples=256, sequential=True, inequality_constraints=ineq,
                             options={"batch_limit": 8, "maxiter": 200})
     with torch.no_grad():
@@ -351,7 +359,8 @@ def bo_candidates(r, q, pending=()):
     for x, m, v in zip(cand.numpy(), mu, sd):
         params = {k: float(lo[i] + x[i] * span[i]) for i, k in enumerate(AXES)}
         out.append((params, {"deflectionMm": round(math.exp(m[1]), 4), "deflectionSigmaLog": round(float(v[1]), 4),
-                             "stressMPa": round(math.exp(m[2]), 1), "massG": round(float(m[0]), 2)}))
+                             "stressMPa": round(math.exp(m[2]), 1), "massG": round(float(m[0]), 2),
+                             **({"boreDistortionMm": round(math.exp(m[5]), 5)} if PILLOW else {})}))
     return out, len(solved)
 
 

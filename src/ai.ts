@@ -90,7 +90,7 @@ const TOOL_HELP: Record<typeof AI_TOOLS[number], string> = {
     + "并写出你按第一性原理估算的 expectedDeflectionMm 和 expectedMassG；系统会用求解器结果给这些估算打分。物理依据：板弯曲刚度约与 t³ 成正比，应力约与 1/t² 成正比；"
     + "加强筋在板两侧边缘，板越宽，电机孔离筋越远、越软；M5 底孔在 x = ±20，孔边距要求 W/2 − 20 ≥ 1.5 × 5.5；M3 顶孔要求 plateHeight − 39.5 ≥ 1.5 × 3.4。"
     + "strategy 可选 gp-nsga2（默认）或 botorch-qlognehvi（BoTorch 约束批量超体积贝叶斯优化，先做几何多保真先验；需已安装）。"
-    + "轴承座加 family=pillow-block（只用 gp-nsga2，本机求解）：seeds 的 parameters 为 {width 80–120, depth 14–24, baseThickness 6–14, boltPitch 54–76}，"
+    + "轴承座加 family=pillow-block（两种 strategy 都可用；BoTorch 以质量和受载失圆为两个目标）：seeds 的 parameters 为 {width 80–120, depth 14–24, baseThickness 6–14, boltPitch 54–76}，"
     + "载荷为轴承径向载荷（缺省 1 kN 上拔，轴心位移 ≤ 10 µm，轴承孔失圆 ≤ 6 µm）；经验：失圆主要随底座厚度和轴承座厚度 D 下降，孔距要满足 (width − boltPitch)/2 ≥ 1.5 × 9",
   "cad-code": "编写 CadQuery 代码生成新的零件候选（预设变体不够用时）。family 为 nema17-bracket（默认，用 template）或 pillow-block（6202 轴承座，用 templates.pillow-block：轴线平行于 Y、过 x=0、z=AXIS_Z，Ø35 H7 轴承孔从 +Y 面加工到止口，底面 z=0，竖直 M8 地脚孔）。code 是完整 Python 程序：只能 import cadquery as cq 与 import math；"
     + "不能读写文件、导出、访问下划线名称或给属性赋值；必须给 result（恰好一个实体）和 AXIS_Z（轴线高度 mm；支架也可写 MOTOR_AXIS_Z）赋值。支架的坐标约定：毫米；电机安装面在 y=0，电机本体在 y<0，"

@@ -62,7 +62,6 @@ export const OptimizeRequest = z.object({
 }).strict().superRefine((r, ctx) => {
   const pillow = r.family === "pillow-block";
   if (r.requirements.structural && !structuralFits(r.family, r.requirements.structural)) ctx.addIssue({ code: "custom", path: ["requirements", "structural"], message: `structural load case does not fit the ${r.family}` });
-  if (pillow && r.strategy !== "gp-nsga2") ctx.addIssue({ code: "custom", path: ["strategy"], message: "the pillow block is optimised with gp-nsga2" });
   r.seeds.forEach((s, i) => { if (!(pillow ? PillowAxes : BracketAxes).safeParse(s.parameters).success) ctx.addIssue({ code: "custom", path: ["seeds", i, "parameters"], message: `seed axes do not fit the ${r.family}` }); });
 });
 

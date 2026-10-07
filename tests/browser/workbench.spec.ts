@@ -195,7 +195,6 @@ test("second part family: 6202 pillow block from the CAD form, single-fault pres
     await expect(page.getByRole("combobox", { name: "载荷方向" })).toHaveValue("away-from-base");
     // Physics optimisation follows the family: the housing's load case and its seat-distortion limit.
     await expect(page.getByText(/轴承径向载荷 1000 N（背离底座）/)).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "搜索策略" }).locator("option", { hasText: "BoTorch" })).toHaveAttribute("disabled", "");
     await page.getByRole("button", { name: "生成并检查 CAD 零件" }).click();
     await expect(page.getByRole("heading", { name: "零件检查通过" })).toBeVisible({ timeout: 300_000 });
     const row = page.locator(".check-table tr", { hasText: "轴承孔变形（FEA）" });

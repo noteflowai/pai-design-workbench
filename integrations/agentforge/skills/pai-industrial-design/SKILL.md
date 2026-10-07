@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.10.0"
+version: "1.11.0"
 ---
 
 # PAI industrial design
@@ -48,7 +48,7 @@ You cannot relax or change requirements, approve, release or move feedback.
   `bore-distortion`, the seat out-of-roundness under load. `cad-sweep` with `family: "pillow-block"` explores
   `{width, depth, baseThickness, boltPitch}` on geometry only; freeze the load on the chosen point, because the
   geometry-lightest housing can still fail on seat distortion. `cad-optimize` with `family: "pillow-block"`
-  (gp-nsga2, local) searches `{width, depth, baseThickness, boltPitch}` under the bearing load with seat distortion
+  (gp-nsga2 or botorch-qlognehvi, local or Batch) searches `{width, depth, baseThickness, boltPitch}` under the bearing load with seat distortion
   as a constraint; seed estimates are scored against CalculiX.
 - Prefer the shortest proposal that can work: a `cad-review` with `variant: "parametric"` and bounded recipe
   parameters (add `family: "pillow-block"` for the housing) is checked at plan time and answers fast; write
