@@ -5,7 +5,7 @@ description: >-
   MCP tools. Use when a task asks to lighten, strengthen, lay out, fix or optimize a physical design and the
   answer must be backed by native measurements (B-Rep checks, FEA, ray-measured layouts, robot simulation)
   rather than by the model's own estimate.
-version: "1.11.0"
+version: "1.12.0"
 ---
 
 # PAI industrial design
@@ -52,7 +52,8 @@ You cannot relax or change requirements, approve, release or move feedback.
   as a constraint; seed estimates are scored against CalculiX.
 - Prefer the shortest proposal that can work: a `cad-review` with `variant: "parametric"` and bounded recipe
   parameters (add `family: "pillow-block"` for the housing) is checked at plan time and answers fast; write
-  `cad-code` only when the recipe cannot express the change. Executor turns are bounded (60 s).
+  `cad-code` only when the recipe cannot express the change. The workbench's own planner turns are bounded
+  (180 s on the Kiro chain, 60 s otherwise); short, parametric answers still verify fastest.
 - An accepted part can have first-article inspections (`physicalMeasurement: true`). Quote them as the only physical
   evidence; never invent or summarise measured values.
   Its own default requirements apply; never carry the bracket's structural load case over.
