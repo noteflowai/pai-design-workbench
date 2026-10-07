@@ -28,5 +28,10 @@ if [ "$status" -eq 0 ] && ls "$W"/state/evidence/*.json >/dev/null 2>&1; then
 else
   /usr/bin/grep -v -e Warning -e trace-warnings -e "^\s*at " "$W/out.log" | /usr/bin/tail -20
 fi
+# Keep a failed run's state (private, service-owned) for diagnosis; a passed run leaves nothing behind.
+if [ "$status" -ne 0 ] || /usr/bin/grep -q '"result": *"failed"' "$W/out.log" 2>/dev/null; then
+  K=/var/lib/pai/data/state/e2e-failures/$(date -u +%Y%m%dT%H%M%SZ)-$E2E; install -d -o pai -m 0700 "$(dirname "$K")"
+  mv "$W/state" "$K" 2>/dev/null && echo "kept failed state in $K" >&2
+fi
 rm -rf "$W"
 exit "$status"
