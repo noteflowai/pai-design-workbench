@@ -5,6 +5,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as efs from "aws-cdk-lib/aws-efs";
 import * as iam from "aws-cdk-lib/aws-iam";
+import { BEDROCK_ENGINES, bedrockEngineStatements } from "./bedrock.js";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import * as secrets from "aws-cdk-lib/aws-secretsmanager";
@@ -67,7 +68,7 @@ export class AgentCoreBaseStack extends cdk.Stack {
       this.vpc.addInterfaceEndpoint(service.shortName.replace(/\W/g, ""), { service, securityGroups: [endpointSg], privateDnsEnabled: true,
         subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED, availabilityZones: ["ap-northeast-1c"] } });
     }
-    this.agentSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "Kiro service, Secrets Manager");
+    this.agentSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "Kiro service, Secrets Manager, Bedrock runtime (cross-region engines)");
     this.agentSg.addEgressRule(efsSg, ec2.Port.tcp(2049), "Ledger volume");
     efsSg.addIngressRule(this.agentSg, ec2.Port.tcp(2049), "Agent runtime");
 
@@ -146,6 +147,8 @@ export class AgentCoreRuntimeStack extends cdk.Stack {
     const agentRole = executionRole("AgentRole");
     const keys = secrets.Secret.fromSecretNameV2(this, "KiroKeys", "pai-workbench/kiro-keys");
     keys.grantRead(agentRole);
+    // Claude and Codex on Amazon Bedrock with the execution role's short-lived credentials (no Bedrock API key).
+    for (const statement of bedrockEngineStatements(this.account)) agentRole.addToPolicy(statement);
     agentRole.addToPolicy(new iam.PolicyStatement({ actions: ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"], resources: [base.ledger.fileSystemArn],
       conditions: { ArnEquals: { "elasticfilesystem:AccessPointArn": base.ledgerAccess.accessPointArn } } }));
     // Validated by CreateAgentRuntime for EFS mounts (read-only describe calls).
@@ -163,12 +166,14 @@ export class AgentCoreRuntimeStack extends cdk.Stack {
       lifecycleConfiguration: { idleRuntimeSessionTimeout: 120, maxLifetime: 1800 },
     });
     const agent = new agentcore.CfnRuntime(this, "Agent", {
-      agentRuntimeName: "pai_kiro_agent", description: "PAI bounded NoteFlow executor with Kiro x3; text proposals only; ledger on EFS",
+      agentRuntimeName: "pai_kiro_agent", description: "PAI bounded NoteFlow executor (Kiro x3; Codex and Claude on Bedrock with the execution role); text proposals only; ledger on EFS",
       roleArn: agentRole.roleArn, protocolConfiguration: "HTTP",
       agentRuntimeArtifact: { containerConfiguration: { containerUri: `${base.repo.repositoryUri}:agent-${imageTag}` } },
       networkConfiguration: { networkMode: "VPC", networkModeConfig: { subnets: subnets(ec2.SubnetType.PRIVATE_WITH_EGRESS), securityGroups: [base.agentSg.securityGroupId] } },
       filesystemConfigurations: [{ efsAccessPoint: { accessPointArn: base.ledgerAccess.accessPointArn, mountPath: "/mnt/ledger" } }],
-      environmentVariables: { PAI_AGENTCORE: "1", PAI_AI_KEYS_ARN: keys.secretArn, PAI_AI_PROFILES: "kiro-primary,kiro-backup,kiro-backup2" },
+      // Engines offered = these profiles ∩ the profiles the runtime's ledger policy configures (agentcore/server.py).
+      environmentVariables: { PAI_AGENTCORE: "1", PAI_AI_KEYS_ARN: keys.secretArn, PAI_AI_PROFILES: "kiro-primary,kiro-backup,kiro-backup2,codex,claude",
+        PAI_CLAUDE_BEDROCK_REGION: BEDROCK_ENGINES.claude.region },
       lifecycleConfiguration: { idleRuntimeSessionTimeout: 300, maxLifetime: 3600 },
     });
     // Roles (and their inline policies) must exist before AgentCore validates image pull and network access.

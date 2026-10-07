@@ -37,6 +37,27 @@ EXECUTOR = Path(os.environ.get("PAI_CONTROL_ROOT", "/opt/ai/executor")).resolve(
 POLICY = Path(os.environ.get("PAI_LEDGER_POLICY", "/opt/pai/agentcore-ledger-policy.json"))
 PROFILES = [p for p in os.environ.get("PAI_AI_PROFILES", "kiro-primary,kiro-backup,kiro-backup2").split(",") if p]
 VERSION = os.environ.get("PAI_IMAGE_VERSION", "dev")
+CLAUDE_BEDROCK_REGION = os.environ.get("PAI_CLAUDE_BEDROCK_REGION", "")
+# Codex is routed to Bedrock by the image's ~/.codex/config.toml (tools/bedrock_engines.py); Claude by this environment,
+# passed to the executor process only. Both authenticate with the execution role through the container credentials.
+ENGINE_ENV = {"CLAUDE_CODE_USE_BEDROCK": "1", "AWS_REGION": CLAUDE_BEDROCK_REGION} if re.fullmatch(r"[a-z]{2}(-[a-z]+)+-\d", CLAUDE_BEDROCK_REGION) else {}
+
+
+def ledger_profiles():
+    """Profiles the runtime's ledger was created for (its policy is immutable). An engine is offered only if both this
+    runtime's PAI_AI_PROFILES and the ledger configure it, so adding an engine never changes an existing ledger."""
+    try:
+        code = ("import json\nfrom pathlib import Path\nfrom agent_control.budget import BudgetLedger\n"
+                f"print(json.dumps(sorted(BudgetLedger(Path({str(ledger_path())!r})).policy()['profiles'])))")
+        r = run(["python3", "-B", "-c", code], 30, cwd=str(EXECUTOR))
+        return json.loads(r["stdout"]) if r["exit"] == 0 else []
+    except (ValueError, OSError):
+        return []
+
+
+def enabled_profiles():
+    configured = set(ledger_profiles()) if ledger_path().exists() else set()
+    return [p for p in PROFILES if p in configured]
 # Set only by the AgentCore runtime definition (infra/agentcore.ts); local runs never claim a VM boundary.
 IN_AGENTCORE = os.environ.get("PAI_AGENTCORE") == "1"
 CAD_FILES = ("part.step", "part.stl", "part.glb", "assembly.glb", "drawing.svg", "checks.json")
@@ -380,9 +401,10 @@ def op_text_proposal(body):
         raise Refused(400, "INVALID_INPUT", "run_id must match the executor identity pattern")
     if not isinstance(prompt, str) or not 1 <= len(prompt.encode()) <= 120_000:
         raise Refused(400, "INVALID_INPUT", "prompt must be 1–120000 bytes")
-    profiles = body.get("profiles") or PROFILES
-    if not isinstance(profiles, list) or any(p not in PROFILES for p in profiles):
-        raise Refused(422, "AI_PROFILE_NOT_ENABLED", "this runtime enables only " + ",".join(PROFILES))
+    enabled = enabled_profiles()
+    profiles = body.get("profiles") or enabled
+    if not isinstance(profiles, list) or not profiles or any(p not in enabled for p in profiles):
+        raise Refused(422, "AI_PROFILE_NOT_ENABLED", "this runtime enables only " + ",".join(enabled))
     images = images_of(body)
     timeout = int(body.get("timeout_seconds", 60))
     if not 1 <= timeout <= 60:
@@ -409,7 +431,8 @@ def op_text_proposal(body):
             [x["sha256"] for x in json.loads(request_file.read_text()).get("images", [])] != [d for _, d, _ in images]:
         raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt or images")
     entry = EXECUTOR / ".runtime/compiled/flows/execute.js"
-    r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470, cwd=str(EXECUTOR))
+    r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470,
+            env={**os.environ, **ENGINE_ENV}, cwd=str(EXECUTOR))
     lines = [l for l in r["stdout"].strip().splitlines() if l.strip()]
     if r["exit"] == 0 and not lines:
         # Never a silent success: an empty report is surfaced as an executor fault for reconciliation.
@@ -430,6 +453,49 @@ def op_text_proposal(body):
             "attempts": attempts, "ledger": ledger_status()}
 
 
+ADAPTER_PROBE = r"""
+const { spawn } = require("node:child_process");
+const [bin, mode] = process.argv.slice(2);
+const env = { ...process.env, INITIAL_AGENT_MODE: "read-only", NO_BROWSER: "1" };
+if (mode === "codex") env.CODEX_CONFIG = process.env.PAI_PROBE_CODEX_CONFIG;
+const p = spawn(bin, [], { env, stdio: ["pipe", "pipe", "ignore"] });
+let buf = ""; const send = m => p.stdin.write(JSON.stringify(m) + "\n");
+const done = o => { console.log(JSON.stringify(o)); p.kill(); process.exit(0); };
+p.stdout.on("data", d => { buf += d; let i; while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1);
+  try { const m = JSON.parse(line);
+    if (m.id === 1) send({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: process.cwd(), mcpServers: [] } });
+    if (m.id === 2) done({ session: !m.error, error: m.error ? String(m.error.message).slice(0, 160) : null,
+      model: ((m.result || {}).configOptions || []).find(x => x.id === "model")?.currentValue ?? (m.result || {}).models?.currentModelId ?? null });
+  } catch {} } });
+send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: {} } });
+setTimeout(() => done({ session: false, error: "timeout" }), 40000);
+"""
+
+
+def adapter_probe():
+    """Start each Bedrock engine adapter and open a session (no prompt, no model call, no ledger use): proves the
+    adapter binary runs on this image and its provider configuration loads with the execution role available."""
+    pins = json.loads((EXECUTOR / "config/engine-pins.json").read_text())
+    try:  # the execution role's short-lived credentials, as the adapters' default AWS chains will find them (never returned)
+        role = bool(credentials().get("key"))
+    except Exception:  # noqa: BLE001
+        role = False
+    out = {"roleCredentials": role, "claudeBedrock": bool(ENGINE_ENV),
+           "codexProvider": (Path.home() / ".codex/config.toml").exists()}
+    script = Path("/tmp/pai-adapter-probe.js"); script.write_text(ADAPTER_PROBE)
+    for name, package in (("codex", "codex-acp"), ("claude", "claude-agent-acp")):
+        binary = EXECUTOR / "node_modules/.bin" / package
+        if not binary.exists():
+            out[name] = {"session": False, "error": "adapter not installed"}; continue
+        env = {**os.environ, **ENGINE_ENV, "PAI_PROBE_CODEX_CONFIG": json.dumps({"model": pins["codex"]["model"], "model_reasoning_effort": pins["codex"]["effort"]})}
+        r = run(["node", str(script), str(binary), name], 60, env=env, cwd="/tmp")
+        try:
+            out[name] = json.loads(r["stdout"].strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            out[name] = {"session": False, "error": (r["stderr"] or "no output")[-160:]}
+    return out
+
+
 def op_agent_probe(_body):
     kiro = run(["kiro-cli-chat", "--version"], 10)
     commit = (EXECUTOR / ".pai-installed").read_text().strip() if (EXECUTOR / ".pai-installed").exists() else None
@@ -437,7 +503,12 @@ def op_agent_probe(_body):
         ledger = ledger_status()
     except Refused as e:
         ledger = {"error": e.code}
-    return {"kiro": kiro["stdout"].strip(), "executorCommit": commit, "profiles": PROFILES, "ledger": ledger,
+    try:
+        enabled = enabled_profiles()
+    except Refused:
+        enabled = []
+    return {"kiro": kiro["stdout"].strip(), "executorCommit": commit, "profiles": PROFILES, "enabledProfiles": enabled, "ledger": ledger,
+            "bedrockEngines": adapter_probe(),
             "egress": {"kiroEndpoint": can_connect("prod.download.cli.kiro.dev", 443)}, "keysConfigured": bool(os.environ.get("PAI_AI_KEYS_ARN")),
             "uid": os.getuid(), "arch": os.uname().machine}
 

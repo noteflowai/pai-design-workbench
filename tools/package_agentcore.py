@@ -11,7 +11,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 out = root / ".state/deploy/agentcore-context"
 files = ["Dockerfile.agentcore", "agentcore/server.py", "native/cadquery-runtime-requirements.txt", "tools/runtime-pins.json",
-         "tools/install_ai_runtime.py", "tools/agentcore-ledger-policy.json",
+         "tools/install_ai_runtime.py", "tools/agentcore-ledger-policy.json", "tools/bedrock-engines.json", "tools/bedrock_engines.py",
          *[f"native/{n}" for n in ("cad_bracket.py", "cad_recipe.py", "cad_checks.py", "cad_sweep.py", "cad_code_policy.py",
                                    "cad_lockdown.py", "cad_sandbox.py", "cad_generated.py", "cad_template.py", "cad_template_pillow.py", "cad_bearing.py", "cad_reopen.py")]]
 executor = root / ".state/deploy/executor.tar"

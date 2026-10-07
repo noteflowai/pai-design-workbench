@@ -47,7 +47,7 @@ PY"
 for d in .kiro .acpx .claude .codex .cache .local .local/share .local/state; do runuser -u pai -- install -d -m 0700 "/var/lib/pai/$d"; done
 # Codex on Amazon Bedrock (instance role, no auth.json). The model and effort come from the executor's engine pin
 # (CODEX_CONFIG); only the provider and its region live here.
-runuser -u pai -- sh -c 'umask 077; printf "%s\n" "model_provider = \"amazon-bedrock-runtime\"" "" "[model_providers.amazon-bedrock-runtime.aws]" "region = \"us-west-2\"" > /var/lib/pai/.codex/config.toml'
+python3 "$PAI_RELEASE/tools/bedrock_engines.py" codex-config | runuser -u pai -- sh -c 'umask 077; cat > /var/lib/pai/.codex/config.toml'
 install -d -m 0755 /etc/systemd/system/pai-workbench.service.d
 cat > /etc/systemd/system/pai-workbench.service.d/ai.conf <<EOF
 [Service]
@@ -56,7 +56,7 @@ Environment=PAI_CONTROLLER_ENTRYPOINT=$ROOT/.runtime/compiled/flows/execute.js
 Environment=PAI_CONTROLLER_DATABASE=$STATE/ai-ledger/ledger.sqlite3
 Environment=PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2,codex,claude
 # Claude engine through Amazon Bedrock with the instance role (no API key); passed to the executor process only.
-Environment=PAI_CLAUDE_BEDROCK_REGION=us-east-1
+Environment=PAI_CLAUDE_BEDROCK_REGION=$(python3 "$PAI_RELEASE/tools/bedrock_engines.py" claude-region)
 Environment=PAI_EXECUTOR_IMAGES=$(python3 -c "import json,sys; print('1' if 'images' in json.load(open(sys.argv[1]))['executor'].get('accepts', []) else '0')" "$PAI_RELEASE/tools/runtime-pins.json")
 Environment=PATH=$AI/bin:$NODE_BIN:/usr/local/bin:/usr/bin:/bin
 ReadWritePaths=/var/lib/pai/.kiro /var/lib/pai/.acpx /var/lib/pai/.claude /var/lib/pai/.codex /var/lib/pai/.cache /var/lib/pai/.local

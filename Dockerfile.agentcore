@@ -60,10 +60,15 @@ RUN ln -s /opt/ai/kiro/kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && ln -s /op
     && kiro-cli-chat --version | grep -qF "$(python3 -c "import json;print(json.load(open('/opt/ai/install.json'))['kiro'])")" \
     && test "$(cat /opt/ai/executor/.pai-installed)" = "$(python3 -c "import json;print(json.load(open('/opt/pai/tools/runtime-pins.json'))['executor']['commit'])")"
 COPY tools/agentcore-ledger-policy.json /opt/pai/agentcore-ledger-policy.json
+# Codex on Amazon Bedrock: provider and region only (tools/bedrock-engines.json); credentials are the execution role's.
+COPY tools/bedrock-engines.json tools/bedrock_engines.py /opt/pai/tools/
+RUN install -d -o pai -g pai -m 0700 /home/pai/.codex /home/pai/.claude \
+    && python3 /opt/pai/tools/bedrock_engines.py codex-config > /home/pai/.codex/config.toml \
+    && chown pai:pai /home/pai/.codex/config.toml && chmod 0600 /home/pai/.codex/config.toml
 COPY agentcore/server.py /opt/pai/agentcore/server.py
 ARG PAI_IMAGE_VERSION=dev
 ENV PAI_ROLE=agent PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin PAI_CONTROL_ROOT=/opt/ai/executor PAI_LEDGER_DIR=/mnt/ledger \
-    PAI_LEDGER_POLICY=/opt/pai/agentcore-ledger-policy.json PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2 \
+    PAI_LEDGER_POLICY=/opt/pai/agentcore-ledger-policy.json PAI_AI_PROFILES=kiro-primary,kiro-backup,kiro-backup2,codex,claude \
     PAI_IMAGE_VERSION=${PAI_IMAGE_VERSION} HOME=/home/pai PORT=8080
 USER pai
 WORKDIR /home/pai

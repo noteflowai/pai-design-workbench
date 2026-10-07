@@ -90,6 +90,12 @@ Codex 引擎同样走 Bedrock：服务用户的 `~/.codex/config.toml` 只写 `m
 
 沙箱和执行 Agent 的 arm64 运行时部署在两个独立的栈 `PAIAgentCoreBase` 和 `PAIAgentCoreRuntime` 中，使用专用 VPC，不改动 WordPress 所在的 VPC 和工作台栈。托管站点目前仍在主机上本地运行这两项；如果要改用 AgentCore，需要给实例角色增加 `bedrock-agentcore:InvokeAgentRuntime` 权限并设置两个 ARN。详见 [AGENTCORE.md](AGENTCORE.md)。
 
+### AgentCore 上的 Codex 与 Claude（Bedrock，执行角色）
+
+AgentCore agent 运行时用执行角色的短期凭证调用 Bedrock（microVM 提供 IMDS 兼容的凭证端点，两个适配器的 AWS 默认凭证链都能找到），不存 Bedrock API key。权限与托管实例同一来源（`infra/bedrock.ts`）：只允许 `anthropic.*`、`openai.*` 模型与推理配置，加上 Codex Responses 接口需要的 `project/default`。区域等设置只在 `tools/bedrock-engines.json` 一处，`tools/bedrock_engines.py` 生成镜像里的 `~/.codex/config.toml`（只有 provider 与区域）；Claude 的 Bedrock 路由只传给执行器进程。
+
+运行时提供的引擎 = `PAI_AI_PROFILES` ∩ 该运行时账本策略里配置的引擎。账本策略不可变，现有 AgentCore 账本创建时只配置了 Kiro 三个账号，所以 Codex 和 Claude 目前就绪但不提供；`probe` 返回 `enabledProfiles` 和 `bedrockEngines`（适配器在 arm64 镜像里启动并建立会话，不调用模型、不占账本）。
+
 ## 持久化与更新
 
 数据位于 `/var/lib/pai/data/state`，单进程 SQLite WAL 数据库及同一卷上的原生文件共同快照。删除栈保留数据卷、备份 vault、登录用户池和管理员 Secret。运行实例的 systemd 服务失败后重启，并保留任务身份；EC2 状态与 ALB 不健康目标有 CloudWatch 告警，未配置外发通知。

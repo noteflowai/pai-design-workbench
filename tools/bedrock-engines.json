@@ -1,0 +1,5 @@
+{
+  "note": "Bedrock routing for the model engines (one source for the hosted instance, the AgentCore runtime and the IAM policies). Credentials always come from the AWS default chain (instance role, AgentCore execution role); no Bedrock API key is stored. The models themselves are pinned by the executor (config/engine-pins.json).",
+  "claude": { "region": "us-east-1", "modelFamilies": ["anthropic"] },
+  "codex": { "region": "us-west-2", "modelFamilies": ["openai"], "provider": "amazon-bedrock-runtime" }
+}
