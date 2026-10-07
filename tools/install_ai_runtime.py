@@ -73,6 +73,11 @@ if not (ex_dir / ".pai-installed").exists():
     (tmp / ".pai-installed").write_text(ex["commit"] + "\n")
     shutil.rmtree(ex_dir, ignore_errors=True)
     tmp.rename(ex_dir)
+# The executor's own commit for its pre-exec launch evidence: an archive install has no .git (and must never let git
+# walk up into a surrounding repository). Written outside the install marker so existing installs gain it too.
+source = ex_dir / ".source-commit"
+if not source.exists() or source.read_text().strip() != ex["commit"]:
+    source.write_text(ex["commit"] + "\n")
 entry = ex_dir / ".runtime/compiled/flows/execute.js"
 if not entry.exists():
     raise SystemExit("Executor build output missing")
