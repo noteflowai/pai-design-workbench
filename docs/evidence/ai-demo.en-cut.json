@@ -1,0 +1,372 @@
+{
+ "schema": "pai-english-cut-1",
+ "video": "docs/media/ai-demo.mp4",
+ "receipt": "docs/evidence/ai-demo.json",
+ "crop": [
+  1280,
+  690
+ ],
+ "scale": 1.2,
+ "source_line": "PAI Design Workbench · AI autopilot run, Claude under a maintainer grant · UI in Chinese",
+ "segments": [
+  {
+   "source": [
+    5,
+    15
+   ],
+   "speed": 1,
+   "step": "1  Freeze the requirement",
+   "headline": "6202 bearing housing: Ø35 H7 bore, wall ≥ 5 mm, M8 bolt edge ≥ 1.5 d",
+   "detail": "Mass budget 175 g. The requirement version is frozen before any design work",
+   "evidence": [
+    {
+     "text": "Frozen, version 1",
+     "size": "value"
+    },
+    {
+     "text": "mass ≤ 175 g",
+     "size": "label"
+    },
+    {
+     "text": "edge distance ≥ {facts.compact.required} mm",
+     "size": "label"
+    },
+    {
+     "text": "wall ≥ 5 mm",
+     "size": "label"
+    }
+   ]
+  },
+  {
+   "source": [
+    15,
+    31
+   ],
+   "speed": 1.5,
+   "colour": "red",
+   "step": "2  A compact candidate fails a native check",
+   "headline": "Base 88 mm, bolt pitch 76 mm: lighter, but the bolt holes move to the edge",
+   "detail": "CadQuery measures the edge distance: {facts.compact.edge} mm against {facts.compact.required} mm ({facts.compact.mass} g). Rejected",
+   "evidence": [
+    {
+     "text": "CadQuery measured",
+     "size": "small"
+    },
+    {
+     "text": "edge {facts.compact.edge} mm",
+     "size": "big",
+     "colour": "red"
+    },
+    {
+     "text": "need ≥ {facts.compact.required} mm",
+     "size": "label"
+    },
+    {
+     "text": "REJECTED",
+     "size": "value",
+     "colour": "red"
+    }
+   ]
+  },
+  {
+   "source": [
+    31,
+    45
+   ],
+   "speed": 1.4,
+   "step": "3  A maintainer grants a narrow scope",
+   "headline": "AI may revise the CAD part only: at most 3 attempts within 8 hours",
+   "detail": "It cannot relax requirements, accept, release or close feedback. One real model call, no auto-retry",
+   "evidence": [
+    {
+     "text": "Grant",
+     "size": "value"
+    },
+    {
+     "text": "CAD-part review only",
+     "size": "label"
+    },
+    {
+     "text": "≤ 3 attempts · 8 h",
+     "size": "label"
+    },
+    {
+     "text": "Claude Code on",
+     "size": "small"
+    },
+    {
+     "text": "Amazon Bedrock",
+     "size": "small"
+    }
+   ]
+  },
+  {
+   "source": [
+    45,
+    59
+   ],
+   "speed": 1.4,
+   "colour": "amber",
+   "step": "4  The executor stops for a human",
+   "headline": "It cannot prove the model call had no side effects, so it waits",
+   "detail": "Receipt: read-only mode, no tool activity. The maintainer reconciles it inside the same grant",
+   "evidence": [
+    {
+     "text": "executorAction",
+     "size": "small"
+    },
+    {
+     "text": "{model.executorAction}",
+     "size": "big",
+     "colour": "amber"
+    },
+    {
+     "text": "read-only",
+     "size": "label"
+    },
+    {
+     "text": "no tool activity",
+     "size": "label"
+    },
+    {
+     "text": "human-reviewed",
+     "size": "label"
+    }
+   ]
+  },
+  {
+   "source": [
+    59,
+    67
+   ],
+   "speed": 1,
+   "colour": "red",
+   "step": "5  Claude proposes, CadQuery measures",
+   "headline": "{facts.ai.engine}: W {facts.ai.parameters.width}, base {facts.ai.parameters.baseDepth} × {facts.ai.parameters.baseThickness} mm, pitch {facts.ai.parameters.boltPitch}. Edge now {facts.ai.edge} mm. Its estimate: ≤ 170 g",
+   "detail": "Measured {facts.ai.mass} g against the 175 g limit: {facts.ai.verdict}. The solver decided, not the AI",
+   "evidence": [
+    {
+     "text": "AI estimate",
+     "size": "small"
+    },
+    {
+     "text": "≤ 170 g",
+     "size": "value"
+    },
+    {
+     "text": "CadQuery measured",
+     "size": "small"
+    },
+    {
+     "text": "{facts.ai.mass} g",
+     "size": "big",
+     "colour": "red"
+    },
+    {
+     "text": "limit 175 g",
+     "size": "label"
+    }
+   ],
+   "zoom": {
+    "at": 63,
+    "box": [
+     410,
+     526,
+     640,
+     562
+    ],
+    "scale": 1.45
+   }
+  },
+  {
+   "source": [
+    67,
+    72
+   ],
+   "speed": 1,
+   "step": "6  Freeze the structural requirement",
+   "headline": "1 kN uplift load on the bore: axis displacement ≤ 10 µm, bore distortion ≤ 6 µm",
+   "detail": "Next: a physics search. Reference plus Sobol seeds, then a surrogate ranks each round",
+   "evidence": [
+    {
+     "text": "Load case",
+     "size": "value"
+    },
+    {
+     "text": "1 kN radial uplift",
+     "size": "label"
+    },
+    {
+     "text": "axis ≤ 10 µm",
+     "size": "label"
+    },
+    {
+     "text": "bore ≤ 6 µm",
+     "size": "label"
+    }
+   ]
+  },
+  {
+   "source": [
+    72,
+    179
+   ],
+   "speed": 6,
+   "step": "7  Every recommendation is solved for real",
+   "headline": "Surrogate ranks, B-Rep screens, Gmsh meshes, CalculiX solves",
+   "detail": "The surrogate only orders the queue. Every reported point is a solver result",
+   "evidence": [
+    {
+     "text": "{facts.optimize.points} points proposed",
+     "size": "label"
+    },
+    {
+     "text": "{facts.optimize.solved} solved",
+     "size": "big"
+    },
+    {
+     "text": "{facts.optimize.feasible} feasible",
+     "size": "value"
+    }
+   ]
+  },
+  {
+   "source": [
+    179,
+    201
+   ],
+   "speed": 1.5,
+   "colour": "green",
+   "step": "8  Lightest feasible housing",
+   "headline": "{facts.optimize.solved} CalculiX solves, {facts.optimize.feasible} feasible. Best: {facts.optimize.best.mass} g, bore distortion {um:facts.optimize.best.bore} µm",
+   "detail": "Reference {facts.optimize.reference.mass} g, so {lighter:facts.optimize.best.mass|facts.optimize.reference.mass} % lighter. Searched under the 250 g family default; also meets 175 g",
+   "evidence": [
+    {
+     "text": "Reference",
+     "size": "small"
+    },
+    {
+     "text": "{facts.optimize.reference.mass} g",
+     "size": "value"
+    },
+    {
+     "text": "Best ({facts.optimize.best.origin} step)",
+     "size": "small"
+    },
+    {
+     "text": "{facts.optimize.best.mass} g",
+     "size": "big",
+     "colour": "green"
+    },
+    {
+     "text": "−{lighter:facts.optimize.best.mass|facts.optimize.reference.mass} %",
+     "size": "value",
+     "colour": "green"
+    }
+   ]
+  },
+  {
+   "source": [
+    201,
+    207
+   ],
+   "speed": 1,
+   "colour": "green",
+   "step": "9  Formal review on two mesh levels",
+   "headline": "Bore distortion {um:facts.formal.bore} µm ≤ 6 µm at {facts.formal.mass} g: all checks pass",
+   "detail": "Two-level mesh difference {pct1:facts.formal.convergence.boreDistortion} %. Verdict: {facts.formal.verdict}",
+   "evidence": [
+    {
+     "text": "Bore distortion",
+     "size": "small"
+    },
+    {
+     "text": "{um:facts.formal.bore} µm",
+     "size": "big",
+     "colour": "green"
+    },
+    {
+     "text": "limit 6 µm",
+     "size": "label"
+    },
+    {
+     "text": "mesh Δ {pct1:facts.formal.convergence.boreDistortion} %",
+     "size": "label"
+    }
+   ],
+   "zoom": {
+    "at": 204,
+    "box": [
+     466,
+     604,
+     696,
+     638
+    ],
+    "scale": 1.45
+   }
+  },
+  {
+   "source": [
+    211,
+    225
+   ],
+   "speed": 2,
+   "step": "10  The last failure case is closed, not forgotten",
+   "headline": "Logged, re-tested against the frozen requirement, then closed",
+   "detail": "A feedback item can close only through a bound retest",
+   "evidence": [
+    {
+     "text": "Failure case",
+     "size": "small"
+    },
+    {
+     "text": "logged",
+     "size": "value"
+    },
+    {
+     "text": "re-tested",
+     "size": "value"
+    },
+    {
+     "text": "closed",
+     "size": "value",
+     "colour": "green"
+    }
+   ]
+  },
+  {
+   "source": [
+    225,
+    238
+   ],
+   "speed": 1.25,
+   "colour": "green",
+   "step": "11  Admission check, then a signed release",
+   "headline": "Bound to requirement version 1, every failure case closed: STEP and FEA report released",
+   "detail": "Signed with a local Ed25519 key in this recording. The hosted site signs with AWS KMS",
+   "evidence": [
+    {
+     "text": "Release R1",
+     "size": "value"
+    },
+    {
+     "text": "STEP + FEA report",
+     "size": "label"
+    },
+    {
+     "text": "signed",
+     "size": "value",
+     "colour": "green"
+    },
+    {
+     "text": "Ed25519 (local)",
+     "size": "small"
+    },
+    {
+     "text": "KMS on hosted site",
+     "size": "small"
+    }
+   ]
+  }
+ ]
+}

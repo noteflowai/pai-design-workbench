@@ -50,6 +50,8 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 同一晚的前一次录制里，Claude 的提案被接受（137.957 g）；只因字幕把引擎写成了 "default" 才重录。两次结果都是真实的，回执与说明见 [ai-demo.json](docs/evidence/ai-demo.json)。
 
+英文讲解版（约 110 s，用于英文演讲）：`python3 tools/english_cut.py docs/evidence/ai-demo.en-cut.json ai-demo.en.mp4`。只做裁切和加速（画面上标出倍速），英文字幕里的数字从回执读出，不手写。
+
 **演示 C · 生成式 CAD**：
 
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)

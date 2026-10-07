@@ -34,7 +34,7 @@ PY
 fi
 
 if [ "$mode" != infra ]; then
-  python3 -m unittest discover -s tests -p 'test_cpu_check.py'
+  python3 -B -m unittest discover -s tests -p 'test_*.py'
   npm run check
 fi
 if [ "$mode" != core ]; then
