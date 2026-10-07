@@ -21,9 +21,9 @@
   },
   "executor": {
     "repository": "noteflowai/noteflow-agent-control (private)",
-    "commit": "abe1d9711393daae9e3e9a35ba5a82e1384dfd6a",
-    "archiveSha256": "5828393f8ba588c8febaffa5d01bb2bac5b223e58391ad34610a4ad426db5216",
-    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. abe1d97: complete ACP activity inventory over the whole capture (#162); e392b3c: Kiro 2.28.0 (official stable, #156) and durable native transport capture (#155); 0836a0b: operator reconciliation of unknown-effect text attempts (#153) and append-only ledger policy extension (#154); earlier #96 (an acpx TIMEOUT is recorded as timeout with the partial answer) and #120 (Codex sessions use the pinned model via CODEX_CONFIG). The workbench uses the text-proposal class (60 s per attempt); the 180 s development-proposal class (#118) is reserved by its owner for the development writer.",
+    "commit": "88c05b5cf81df309e87ac6979990cdc9391cb476",
+    "archiveSha256": "6ba9364178c7a1a72679e3848d3a6be92220a1dd46e97df502c8e0fd01b276c3",
+    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. 88c05b5: pre-exec launch evidence (#165) with the source commit from the install record in archive installs (#170); abe1d97: complete ACP activity inventory over the whole capture (#162); e392b3c: Kiro 2.28.0 (official stable, #156) and durable native transport capture (#155); 0836a0b: operator reconciliation of unknown-effect text attempts (#153) and append-only ledger policy extension (#154); earlier #96 (an acpx TIMEOUT is recorded as timeout with the partial answer) and #120 (Codex sessions use the pinned model via CODEX_CONFIG). The workbench uses the text-proposal class (60 s per attempt); the 180 s development-proposal class (#118) is reserved by its owner for the development writer.",
     "accepts": [
       "images"
     ]
