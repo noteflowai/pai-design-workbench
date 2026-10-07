@@ -135,10 +135,11 @@ export class WorkbenchStack extends cdk.Stack {
       `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}`, `arn:aws:batch:${this.region}:${this.account}:job-definition/${SOLVER.camJobDefinition}:*`,
       `arn:aws:batch:${this.region}:${this.account}:job/*`] }));
     role.addToPolicy(new iam.PolicyStatement({ actions: ["batch:DescribeJobs"], resources: ["*"] }));
-    // The Claude engine (claude-agent-acp, bundled Claude Code) on Amazon Bedrock with the instance role: invoke
-    // Anthropic models only, directly or through cross-region inference profiles (which route to other regions).
+    // The Claude (claude-agent-acp) and Codex (codex-acp) engines on Amazon Bedrock with the instance role: invoke
+    // Anthropic and OpenAI models only, directly or through cross-region / global inference profiles.
     role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"], resources: [
-      "arn:aws:bedrock:*::foundation-model/anthropic.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*anthropic.*`] }));
+      "arn:aws:bedrock:*::foundation-model/anthropic.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*anthropic.*`,
+      "arn:aws:bedrock:*::foundation-model/openai.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*openai.*`] }));
     role.addToPolicy(new iam.PolicyStatement({ actions: ["bedrock:GetInferenceProfile", "bedrock:ListInferenceProfiles", "bedrock:GetFoundationModel", "bedrock:ListFoundationModels"], resources: ["*"] }));  // DescribeJobs has no resource-level permissions
     role.addToPolicy(new iam.PolicyStatement({ actions: ["s3:PutObject", "s3:GetObject"], resources: [`arn:aws:s3:::${SOLVER.bucket(this.account, this.region)}/jobs/*`] }));
     // Write-once archive of sealed release packages. Object Lock (COMPLIANCE default retention) means no principal,
