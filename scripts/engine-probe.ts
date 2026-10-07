@@ -15,7 +15,11 @@ if (!enabledProfiles(config).includes(profile)) throw new Error(`profile ${profi
 const id = `pai-probe-${randomUUID()}`;
 const dir = resolve(config.state, "probe", id);
 await mkdir(dir, { recursive: true, mode: 0o700 });
-const r = await runController(config, dir, id, 'Reply with exactly this JSON and nothing else: {"probe":"ok"}', { profiles: [profile], timeoutSeconds: 60 });
+// The executor requires Kiro requests to keep its key order (primary, backup, backup2): probing a later Kiro key
+// sends the chain up to it, so an exhausted primary falls through to the key under test within one bounded run.
+const kiro = ["kiro-primary", "kiro-backup", "kiro-backup2"];
+const profiles = (kiro.includes(profile) ? kiro.slice(0, kiro.indexOf(profile) + 1) : [profile]) as Profile[];
+const r = await runController(config, dir, id, 'Reply with exactly this JSON and nothing else: {"probe":"ok"}', { profiles, timeoutSeconds: 60 });
 const parsed = /\{\s*"probe"\s*:\s*"ok"\s*\}/.test(r.answer ?? "");
 // The probe's prompt is a fixed constant and its answer is never executed, so the probe settles its own unknown-effect
 // attempt through the executor (which still checks the receipt); otherwise each probe would hold a ledger slot forever.
