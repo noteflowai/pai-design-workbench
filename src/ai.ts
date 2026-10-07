@@ -18,7 +18,7 @@ import { DEFAULT_OPTIMIZE_BUDGET, OPTIMIZE_STRATEGIES, OptimizeBudget, OptimizeR
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryCriteriaValues, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryReview } from "./factory.js";
 import type { Release } from "./release.js";
-import { attemptBound, settleRun, type Settlement, controllerConfigured, controllerTransport, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
+import { attemptBound, requestClass, settleRun, type Settlement, controllerConfigured, controllerTransport, enabledProfiles, PROFILES, runController, SETTLED, type ControllerAttempt, type Profile } from "./controller.js";
 import type { Lifecycle } from "./lifecycle.js";
 import type { CadOptimization } from "./optimize.js";
 import type { CadSweep } from "./sweep.js";
@@ -615,7 +615,10 @@ export async function createAiPlan(store: Store, config: Config, input: unknown,
       a.status === "succeeded" ? "done" : "failed", a.status === "succeeded" ? `${a.model ?? "模型未知"} · 已返回` : ERROR_LABEL[a.errorKind ?? ""] ?? a.errorKind ?? a.status);
     const images = await attachedImages(store, config, request.attachments ?? []);
     if (images.length) step("context", `附加 ${images.length} 张原生图像做视觉评审`, "done", (request.attachments ?? []).map(a => `${a.which}/${a.file}`).join("、"));
-    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, timeoutSeconds: controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config), onAttempt, images });
+    // Plans are domain data: with the three Kiro keys and no images the extended class gives long planning turns
+    // (code, studies) 180 s per attempt; otherwise the short text class.
+    const cls = await requestClass(config, profiles, images.length);
+    const r = await runController(config, join(config.state, "ai", record.id), `pai-ai-${record.id}`, prompt, { profiles, ...cls, onAttempt, images });
     record.ai = { action: r.action, reason: r.reason, effects: r.effects, reportSha256: r.reportSha256, engine: r.engine,
       attempts: r.attempts.map(a => ({ profile: a.profile, provider: a.provider, status: a.status, errorKind: a.errorKind, model: a.model })) };
     record.state = STATE[r.action] ?? "reconcile";

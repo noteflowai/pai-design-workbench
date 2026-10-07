@@ -414,9 +414,17 @@ def op_text_proposal(body):
     if not isinstance(profiles, list) or not profiles or any(p not in enabled for p in profiles):
         raise Refused(422, "AI_PROFILE_NOT_ENABLED", "this runtime enables only " + ",".join(enabled))
     images = images_of(body)
+    # Executor request classes: short text (60 s) or the reviewed extended domain data class (180 s; text only, exactly
+    # the three ordered Kiro keys). The executor re-validates both; this is an early, clear refusal.
+    kind = body.get("kind", "text-proposal")
+    if kind not in ("text-proposal", "domain-data-proposal"):
+        raise Refused(400, "INVALID_INPUT", "kind must be text-proposal or domain-data-proposal")
+    bound = 180 if kind == "domain-data-proposal" else 60
+    if kind == "domain-data-proposal" and (images or profiles != ["kiro-primary", "kiro-backup", "kiro-backup2"]):
+        raise Refused(422, "INVALID_REQUEST_CLASS", "domain-data-proposal needs exactly the three ordered Kiro keys and no images")
     timeout = int(body.get("timeout_seconds", 60))
-    if not 1 <= timeout <= 60:
-        raise Refused(400, "INVALID_INPUT", "timeout_seconds must be 1–60")
+    if not 1 <= timeout <= bound:
+        raise Refused(400, "INVALID_INPUT", f"timeout_seconds must be 1–{bound}")
     status = ledger_status()
     if not status["exists"]:
         raise Refused(503, "LEDGER_NOT_INITIALISED", "the dedicated AgentCore ledger has not been created (op init-ledger)")
@@ -432,14 +440,14 @@ def op_text_proposal(body):
             path = run_dir / f"attach-{k}.{'png' if media == 'image/png' else 'jpg'}"
             path.write_bytes(data); os.chmod(path, 0o600)
             attached.append({"path": str(path), "media_type": media, "sha256": digest})
-        request = {"schema_version": 1, "kind": "text-proposal", "run_id": run_id, "prompt_file": str(prompt_file), "profiles": profiles,
+        request = {"schema_version": 1, "kind": kind, "run_id": run_id, "prompt_file": str(prompt_file), "profiles": profiles,
                    "timeout_seconds": timeout, "max_attempts": len(profiles), "cost_bounds_microusd": None, **({"images": attached} if attached else {})}
         request_file.write_text(json.dumps(request)); os.chmod(request_file, 0o600)
     elif sha(prompt_file.read_bytes()) != sha(prompt.encode()) or \
             [x["sha256"] for x in json.loads(request_file.read_text()).get("images", [])] != [d for _, d, _ in images]:
         raise Refused(409, "RUN_ID_REUSED", "run_id already used with a different prompt or images")
     entry = EXECUTOR / ".runtime/compiled/flows/execute.js"
-    r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470,
+    r = run(["node", str(entry.resolve()), "--state", str(run_dir / "state"), "--database", str(ledger_path()), "--request", str(request_file)], 470 if kind == "text-proposal" else 900,
             env={**os.environ, **ENGINE_ENV, "PATH": executor_path()}, cwd=str(EXECUTOR))
     lines = [l for l in r["stdout"].strip().splitlines() if l.strip()]
     if r["exit"] == 0 and not lines:

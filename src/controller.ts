@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { realpathSync } from "node:fs";
 import { z } from "zod";
 import { command, writePrivate } from "./adapters.js";
 import type { Config } from "./config.js";
@@ -102,11 +103,47 @@ export async function attemptBound(config: Config): Promise<number> {
  * PAI_CLAUDE_BEDROCK_REGION=us-east-1 → CLAUDE_CODE_USE_BEDROCK=1, AWS_REGION=us-east-1 for the executor only.
  */
 export function engineEnv(config: Config): Record<string, string> {
-  return config.claudeBedrockRegion ? { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: config.claudeBedrockRegion } : {};
+  return { ...(config.claudeBedrockRegion ? { CLAUDE_CODE_USE_BEDROCK: "1", AWS_REGION: config.claudeBedrockRegion } : {}), PATH: executorPath() };
+}
+/**
+ * PATH for the executor with the real directory of `kiro-cli-chat` first: its pre-exec launch evidence hashes the
+ * native binary and refuses a symlinked path (e.g. ~/.local/bin or a link directory).
+ */
+export function executorPath(path = process.env.PATH ?? ""): string {
+  for (const dir of path.split(delimiter).filter(Boolean)) {
+    const candidate = join(dir, "kiro-cli-chat");
+    try { return [dirname(realpathSync(candidate)), path].join(delimiter); } catch { /* not here */ }
+  }
+  return path;
 }
 
 /** Outcome of settling one executor attempt after a human reconciliation (executor `reconcile`). */
 export interface Settlement { attemptId: string; profile: string; state: "reconciled" | "already-reconciled" | "refused" | "failed"; blockers?: string[] }
+/**
+ * Request classes of the executor. `domain-data-proposal` (noteflow-agent-control#178) is the reviewed extended class
+ * for domain data returns: text only, exactly the three ordered Kiro keys, the same shared ledger, and at most 180 s
+ * per attempt (short `text-proposal` keeps its 60 s). The workbench's plans are domain data (typed JSON, applied only
+ * by its own validated contracts), so long planning turns (code, parameter studies) select it explicitly.
+ */
+export type RequestKind = "text-proposal" | "domain-data-proposal";
+export const DOMAIN_DATA_BOUND_SECONDS = 180;
+export const KIRO_CHAIN: readonly Profile[] = ["kiro-primary", "kiro-backup", "kiro-backup2"];
+/** Whether the pinned executor registers the extended domain data class. */
+export async function executorDomainData(config: Config): Promise<boolean> {
+  try { return (await readFile(join(await realpath(config.controlRoot), "agent_control/executor.py"), "utf8")).includes('"domain-data-proposal"'); }
+  catch { return false; }
+}
+/**
+ * The class and per-attempt bound for one planning call: the extended class when the engines are exactly the
+ * three ordered Kiro keys and there are no images (its contract), otherwise the short text class.
+ */
+export async function requestClass(config: Config, profiles: readonly Profile[], images: number): Promise<{ kind: RequestKind; timeoutSeconds: number }> {
+  const extended = images === 0 && profiles.length === KIRO_CHAIN.length && profiles.every((p, i) => p === KIRO_CHAIN[i])
+    && (controllerTransport(config) === "agentcore" || await executorDomainData(config));
+  if (extended) return { kind: "domain-data-proposal", timeoutSeconds: DOMAIN_DATA_BOUND_SECONDS };
+  return { kind: "text-proposal", timeoutSeconds: controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config) };
+}
+
 /** Whether the pinned executor offers operator reconciliation (noteflow-agent-control#153). */
 export async function executorReconciles(config: Config): Promise<boolean> {
   try { return (await readFile(join(await realpath(config.controlRoot), "agent_control/executor.py"), "utf8")).includes("operator-effects-reconciliation-v1"); }
@@ -147,14 +184,18 @@ export async function settleRun(config: Config, directory: string, runId: string
 }
 
 export async function runController(config: Config, directory: string, runId: string, prompt: string, options: {
-  profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
+  profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void; kind?: RequestKind;
   /** Optional images for visual review (PNG/JPEG bytes); copied privately and pinned by SHA-256 in the request. */
   images?: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[];
 }): Promise<ControllerResult> {
   if (!controllerConfigured(config)) throw new DomainError("CONTROLLER_NOT_CONFIGURED", "Configure the native flow entrypoint and the reviewed admission ledger", 503);
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) throw new DomainError("INVALID_RUN_ID", "Run identity does not match the executor contract", 422);
   if (Buffer.byteLength(prompt) > 120_000) throw new DomainError("PROMPT_TOO_LARGE", "Context exceeds the executor prompt bound", 422);
-  const bound = controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config);
+  const kind = options.kind ?? "text-proposal";
+  if (kind === "domain-data-proposal" && (options.images?.length || options.profiles.join() !== KIRO_CHAIN.join())) {
+    throw new DomainError("INVALID_REQUEST_CLASS", "The extended domain data class needs exactly the three ordered Kiro keys and no images", 422);
+  }
+  const bound = kind === "domain-data-proposal" ? DOMAIN_DATA_BOUND_SECONDS : controllerTransport(config) === "agentcore" ? 60 : await attemptBound(config);
   if (!(options.timeoutSeconds >= 1 && options.timeoutSeconds <= bound)) throw new DomainError("INVALID_TIMEOUT", `Executor attempts are limited to ${bound} s`, 422);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (controllerTransport(config) === "agentcore") return runRemote(config, directory, runId, prompt, options);
@@ -169,7 +210,7 @@ export async function runController(config: Config, directory: string, runId: st
     attached.push({ path, media_type: image.mediaType, sha256: sha256(image.data) });
   }
   await writePrivate(join(directory, "request.json"), JSON.stringify({
-    schema_version: 1, kind: "text-proposal", run_id: runId, prompt_file: join(directory, "prompt.txt"),
+    schema_version: 1, kind, run_id: runId, prompt_file: join(directory, "prompt.txt"),
     profiles: options.profiles, timeout_seconds: options.timeoutSeconds, max_attempts: options.profiles.length, cost_bounds_microusd: null,
     ...(attached.length ? { images: attached } : {}),
   }, null, 2));
@@ -197,7 +238,7 @@ export async function runController(config: Config, directory: string, runId: st
 
 /** Same request on the AgentCore agent runtime; its report goes through the same checks as a local run. */
 async function runRemote(config: Config, directory: string, runId: string, prompt: string, options: {
-  profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void;
+  profiles: readonly Profile[]; timeoutSeconds: number; onAttempt?: (attempt: ControllerAttempt) => void; kind?: RequestKind;
   images?: { mediaType: "image/png" | "image/jpeg"; data: Buffer }[];
 }): Promise<ControllerResult> {
   if (options.profiles.some(p => !enabledProfiles(config).includes(p))) throw new DomainError("AI_PROFILE_NOT_ENABLED", "AgentCore 执行器未启用该引擎", 422);
@@ -208,7 +249,8 @@ async function runRemote(config: Config, directory: string, runId: string, promp
   const images = (options.images ?? []).map(i => ({ media_type: i.mediaType, sha256: sha256(i.data), data: i.data.toString("base64") }));
   if (images.length > 3 || (options.images ?? []).some(i => i.data.length > 1_500_000)) throw new DomainError("IMAGES_TOO_LARGE", "At most 3 images of up to 1.5 MB each", 422);
   const raw = await invokeRuntime<unknown>(config.agentcoreAgentArn!, { op: "text-proposal", run_id: runId, prompt, profiles: options.profiles,
-    timeout_seconds: options.timeoutSeconds, ...(images.length ? { images } : {}) }, { timeoutMs: 600_000 });
+    timeout_seconds: options.timeoutSeconds, ...(options.kind && options.kind !== "text-proposal" ? { kind: options.kind } : {}),
+    ...(images.length ? { images } : {}) }, { timeoutMs: 900_000 });
   const error = z.object({ error: z.string(), message: z.string().optional() }).safeParse(raw);
   if (error.success) throw new DomainError(error.data.error, `AgentCore 执行器拒绝：${error.data.message ?? error.data.error}`, 502);
   const r = Remote.parse(raw);
