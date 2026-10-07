@@ -447,7 +447,8 @@ def op_text_proposal(body):
         raise Refused(502, "EXECUTOR_NO_REPORT", "executor exited 0 without a report; nothing was dispatched")
     attempts = []
     for f in sorted((run_dir / "state/runs").glob("*/*.json")) if (run_dir / "state/runs").exists() else []:
-        if f.name.endswith((".credential.json", "request.json", "mcp.json", "prompt.acp.json")):
+        # Attempt receipts only (<attempt>.json); launch/transport/credential/reconciliation records sit beside them.
+        if not re.fullmatch(r"[a-f0-9]{64}\.json", f.name):
             continue
         try:
             d = json.loads(f.read_text())
