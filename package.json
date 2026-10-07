@@ -53,7 +53,7 @@
     "@aws-sdk/client-kms": "3.1146.0",
     "@aws-sdk/client-s3": "3.1146.0",
     "@fastify/static": "10.1.5",
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "aws-jwt-verify": "5.2.1",
     "fastify": "5.12.5",
     "proper-lockfile": "4.1.2",
