@@ -21,9 +21,9 @@
   },
   "executor": {
     "repository": "noteflowai/noteflow-agent-control (private)",
-    "commit": "e392b3c955c8835bdadf8bcec5deda8306e60e8a",
-    "archiveSha256": "d98f2238b027e2f0762caab63799e5677b10a6239619db4a3d4cffa3093eb1ff",
-    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. e392b3c: Kiro 2.28.0 (official stable, #156) and durable native transport capture (#155); 0836a0b: operator reconciliation of unknown-effect text attempts (#153) and append-only ledger policy extension (#154); earlier #96 (an acpx TIMEOUT is recorded as timeout with the partial answer) and #120 (Codex sessions use the pinned model via CODEX_CONFIG). The workbench uses the text-proposal class (60 s per attempt); the 180 s development-proposal class (#118) is reserved by its owner for the development writer.",
+    "commit": "abe1d9711393daae9e3e9a35ba5a82e1384dfd6a",
+    "archiveSha256": "5828393f8ba588c8febaffa5d01bb2bac5b223e58391ad34610a4ad426db5216",
+    "note": "Engine versions (Kiro CLI, acpx, Codex/Claude ACP) are pinned inside the executor: config/engine-pins.json and package.json. accepts.images: digest-bound images in text-proposal requests (noteflow-agent-control#60); the installers derive PAI_EXECUTOR_IMAGES from it. abe1d97: complete ACP activity inventory over the whole capture (#162); e392b3c: Kiro 2.28.0 (official stable, #156) and durable native transport capture (#155); 0836a0b: operator reconciliation of unknown-effect text attempts (#153) and append-only ledger policy extension (#154); earlier #96 (an acpx TIMEOUT is recorded as timeout with the partial answer) and #120 (Codex sessions use the pinned model via CODEX_CONFIG). The workbench uses the text-proposal class (60 s per attempt); the 180 s development-proposal class (#118) is reserved by its owner for the development writer.",
     "accepts": [
       "images"
     ]
