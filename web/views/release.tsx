@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, requestIdFor } from "../api";
+import { api, authFetch, requestIdFor } from "../api";
 import { ADMISSION_LABELS, KIND_LABEL, MATURITY, useApp, type RunKind } from "../context";
 import { Card, Check, Chip, Empty, projectRuns, time, verdictOf } from "../ui";
 import type { AdmissionCheck, Release } from "../../src/release";
@@ -30,7 +30,7 @@ export function ReleasePanel() {
   // Fetch the package as a third party would and verify it against the separately published public key.
   const verifyRelease = async (id: string) => {
     try {
-      const [pkg, key] = await Promise.all([fetch(`/api/releases/${id}/package`).then(r => r.json()), api<{ publicKeyPem: string }>("/signing/public-key")]);
+      const [pkg, key] = await Promise.all([authFetch(`/api/releases/${id}/package`).then(r => r.json()), api<{ publicKeyPem: string }>("/signing/public-key")]);
       const v = await api<{ files: number; signer: { trusted: boolean; algorithm: string; keyId: string }; timestamp?: { genTime: string; tsa: string } | null }>("/packages/verify", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
       setVerified(x => ({ ...x, [id]: { ok: v.signer.trusted, text: `签名有效 · ${v.signer.algorithm === "ECDSA_P256_SHA256" ? "AWS KMS ECDSA P-256" : "本机 Ed25519"} · ${v.files} 个原生文件摘要一致 · 签名者已固定`
         + (v.timestamp ? ` · RFC 3161 可信时间 ${v.timestamp.genTime}（${new URL(v.timestamp.tsa).hostname}）` : "") } }));

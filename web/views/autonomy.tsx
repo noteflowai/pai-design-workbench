@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, authFetch } from "../api";
 import { useApp } from "../context";
 import { Card, Chip, time, type Tone } from "../ui";
 import type { AutonomyGrant } from "../../src/autonomy";
@@ -44,12 +44,12 @@ export function AutonomyCard() {
   const start = async () => {
     const grant = live.at(-1)!;
     // Start, then follow the record; do not hold the UI for the whole run.
-    const r = await fetch(`/api/projects/${project.id}/autopilot`, { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await authFetch(`/api/projects/${project.id}/autopilot`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestId: crypto.randomUUID(), grantId: grant.id, goal: goal.trim(), maxRounds: rounds }) });
     const data = await r.json();
     if (r.status !== 202 && !r.ok) { c.toast(`${data.error}: ${data.message ?? "请求被拒绝"}`, "bad"); return; }
     const location = r.headers.get("Location");
-    const record = r.status === 202 && location ? await (await fetch(location)).json() as Autopilot : data as Autopilot;
+    const record = r.status === 202 && location ? await (await authFetch(location)).json() as Autopilot : data as Autopilot;
     setCurrent(record); c.toast("AI 已开始自主迭代；每一轮的原生结论会在这里出现。"); void c.refresh();
   };
 

@@ -933,3 +933,16 @@ test("aerodynamics lane: form submits the typed request and the API refuses an o
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
 });
+
+test("expired hosted login: an API call redirected to the identity provider signs in again with a top-level navigation, nothing runs", async ({ page }) => {
+  // What the ALB does when the session cookie has expired: redirect to Cognito before forwarding the request.
+  let posted = 0;
+  await page.route("**/api/projects", route => { posted++; return route.fulfill({ status: 302, headers: { location: "https://idp.example.invalid/oauth2/authorize" } }); });
+  await page.goto("/#/requirements?new=1");
+  await expect(page.getByRole("button", { name: "创建评审任务" })).toBeVisible();
+  const navigation = page.waitForRequest(r => r.isNavigationRequest() && r.frame() === page.mainFrame() && new URL(r.url()).pathname === "/");
+  await page.getByRole("button", { name: "创建评审任务" }).click();
+  await navigation; // the tab reloads, so the ALB starts a fresh login with a valid state cookie
+  expect(posted).toBe(1); // no automatic replay of the redirected request
+  await expect(page.getByRole("button", { name: "创建评审任务" })).toBeVisible();
+});
