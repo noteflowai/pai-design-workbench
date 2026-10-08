@@ -18,7 +18,7 @@ import { sha256 } from "../src/domain.js";
 import { packageManifest, type ArtifactPackage, type ArtifactVersion } from "../src/artifacts/registry.js";
 import type { Workflow, WorkflowRun } from "../src/artifacts/workflows.js";
 import { signManifest } from "../src/signing.js";
-import { planning } from "../tests/fixtures/workflows.js";
+import { planningWorkflow } from "../src/artifacts/samples.js";
 
 const base = configuration();
 assert.ok(base.logisticsPython, "Run python3 tools/setup_logistics.py (sets PAI_LOGISTICS_PYTHON in .state/demo.env)");
@@ -26,12 +26,14 @@ assert.ok(base.logisticsPython, "Run python3 tools/setup_logistics.py (sets PAI_
 const cleanArg = process.argv.indexOf("--clean");
 const root = cleanArg > 0 ? process.argv[cleanArg + 1] : join(base.state, "artifact-e2e", randomUUID());
 const REF = "logistics-pdptw@1.0.0";
+const planning = (over: Record<string, unknown> = {}) => planningWorkflow(REF, over);
 const evidence: Record<string, unknown> = { schema: "pai-artifact-e2e-1", startedAt: new Date().toISOString(), synthetic: true };
 let originKey = "";
 
 async function environment(name: string, logisticsPython = base.logisticsPython) {
   const state = join(root, name);
-  const config = { ...base, state, logisticsPython, controllerEntrypoint: undefined, controllerDatabase: undefined };
+  // In-process app: no network, so no ALB/Cognito authentication and no public origin (the auth tests cover those).
+  const config = { ...base, state, logisticsPython, controllerEntrypoint: undefined, controllerDatabase: undefined, albAuth: undefined, agentAuth: undefined, publicOrigin: undefined };
   const { app } = await createApp(config, {} as never);
   const host = `127.0.0.1:${config.port}`;
   const call = async (method: "GET" | "POST", url: string, payload?: unknown) => {
@@ -45,7 +47,7 @@ async function environment(name: string, logisticsPython = base.logisticsPython)
 }
 const instance = async (scenario: string, seed: number, orders: number, vehicles: number) => {
   const f = join(root, `${scenario}-${seed}-${orders}.json`);
-  execFileSync("python3", ["-I", "native/logistics_generate.py", "--seed", String(seed), "--orders", String(orders), "--vehicles", String(vehicles), "--scenario", scenario, "--output", f]);
+  execFileSync("python3", ["-I", join(base.repository, "native/logistics_generate.py"), "--seed", String(seed), "--orders", String(orders), "--vehicles", String(vehicles), "--scenario", scenario, "--output", f]);
   return JSON.parse(await readFile(f, "utf8"));
 };
 const summary = (run: WorkflowRun) => ({ id: run.id, state: run.state, error: run.error ?? null,
@@ -127,17 +129,18 @@ try {
 let cleanPython = base.logisticsPython!, cleanVenv: string | null = null;
 if (process.env.PAI_ARTIFACT_CLEAN_VENV) {
   cleanVenv = process.env.PAI_ARTIFACT_CLEAN_VENV;
-  execFileSync("python3.12", ["tools/setup_logistics.py"], { env: { ...process.env, PAI_TOOLS_DIR: cleanVenv, PAI_ENV_FILE: join(root, "clean.env") }, stdio: "ignore" });
+  execFileSync("python3.12", [join(base.repository, "tools/setup_logistics.py")], { env: { ...process.env, PAI_TOOLS_DIR: cleanVenv, PAI_ENV_FILE: join(root, "clean.env") }, stdio: "ignore" });
   cleanPython = join(cleanVenv, "logistics-1", "bin", "python");
 }
 await writeFile(join(root, "handoff.json"), JSON.stringify({ originKey, routesSha256: (evidence.run as { plan: { routesSha256: string } }).plan.routesSha256,
   digest: (evidence.artifact as { digest: string }).digest }), { mode: 0o600 });
-execFileSync(process.execPath, ["--import", "tsx", "scripts/artifact-e2e.ts", "--clean", root],
+// Same runtime flags as this process (tsx locally, type stripping on the host), separate process.
+execFileSync(process.execPath, [...process.execArgv, process.argv[1], "--clean", root],
   { env: { ...process.env, PAI_LOGISTICS_PYTHON: cleanPython, PAI_STATE: join(root, "clean-process") }, stdio: ["ignore", "ignore", "inherit"] });
 const reproduction = JSON.parse(await readFile(join(root, "reproduction.json"), "utf8"));
 const originSigner = (evidence.package as { signer: { keyId: string } }).signer.keyId;
-assert.notEqual(reproduction.signerKeyId, originSigner, "the clean side signs with its own key");
-evidence.reproduction = { ...reproduction, environment: `separate process; fresh state directory, store and signing key${cleanVenv ? "; own OR-Tools venv installed from the hash lock" : "; shared OR-Tools venv"}; only the package file and the pinned origin key crossed` };
+if (!base.signingKmsKeyId) assert.notEqual(reproduction.signerKeyId, originSigner, "the clean side signs with its own key");
+evidence.reproduction = { ...reproduction, environment: `separate process; fresh state directory and store; ${base.signingKmsKeyId ? "the deployment's KMS signer" : "its own signing key"}${cleanVenv ? "; own OR-Tools venv installed from the hash lock" : "; shared OR-Tools venv"}; only the package file and the pinned origin key crossed` };
 
 async function clean() {
 const handoff = JSON.parse(await readFile(join(root, "handoff.json"), "utf8")) as { originKey: string; routesSha256: string; digest: string };
@@ -161,9 +164,11 @@ try {
   Object.assign(claims, await signManifest(B.config, packageManifest(claimsBody)));
   const claimsImport = await B.call("POST", "/api/v1/artifact-packages", { package: claims });
   assert.equal(claimsImport.status, 422); assert.equal(claimsImport.body.error, "UNTRUSTED_CLAIMS");
-  // The genuine package from another deployment needs its signer pinned explicitly.
-  const unpinned = await B.call("POST", "/api/v1/artifact-packages", { package: pkg });
-  assert.equal(unpinned.status, 422); assert.equal(unpinned.body.error, "UNTRUSTED_SIGNER");
+  // The genuine package from another deployment needs its signer pinned explicitly. With a shared KMS key (hosted)
+  // both sides are the same deployment signer, so this negative does not apply there.
+  const sameSigner = !!base.signingKmsKeyId;
+  const unpinned = sameSigner ? { status: 0, body: { error: "not applicable: same KMS signer" } } : await B.call("POST", "/api/v1/artifact-packages", { package: pkg });
+  if (!sameSigner) { assert.equal(unpinned.status, 422); assert.equal(unpinned.body.error, "UNTRUSTED_SIGNER"); }
   const imported = await B.ok<{ artifact: ArtifactVersion; verified: { valid: boolean } }>("POST", "/api/v1/artifact-packages", { package: pkg, trustedPublicKeyPem: originKey });
   assert.equal(imported.artifact.state, "draft"); assert.equal(imported.artifact.origin, "imported");
   const v = await B.ok<ArtifactVersion>("POST", `/api/v1/artifacts/${REF}/validation`);

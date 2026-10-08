@@ -7,7 +7,8 @@
  * Verifier: native/logistics_verify.py, standard library only, sharing no code with the solver; a plan is usable only
  * when it passes. Benchmarks are synthetic and labelled; they show behaviour and correctness, not production value.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { z } from "zod";
@@ -51,7 +52,9 @@ function lockVersions(lock: string) {
   return Object.fromEntries([...lock.matchAll(/^([a-z0-9-]+)==([^\s\\]+)/gim)].map(m => [m[1].toLowerCase(), m[2]]));
 }
 function sourceCommit(repository: string): string | null {
-  if (process.env.PAI_SOURCE_COMMIT && /^[a-f0-9]{40}$/.test(process.env.PAI_SOURCE_COMMIT)) return process.env.PAI_SOURCE_COMMIT;
+  // A packaged release records its clean source commit (tools/package_release.py); a checkout asks git.
+  const recorded = (() => { try { return readFileSync(join(repository, ".source-commit"), "utf8").trim(); } catch { return ""; } })();
+  if (/^[a-f0-9]{40}$/.test(recorded)) return recorded;
   try {
     // Only the repository's own commit; never one of a surrounding repository.
     const top = execFileSync("git", ["-C", repository, "rev-parse", "--show-toplevel"], { encoding: "utf8", timeout: 5000 }).trim();

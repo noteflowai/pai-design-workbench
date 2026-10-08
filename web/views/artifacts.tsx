@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useApp } from "../context";
 import { Card, Check, Chip, Empty, ViewHeader, time, type Tone } from "../ui";
 import type { ArtifactVersion } from "../../src/artifacts/registry";
+import { planningWorkflow } from "../../src/artifacts/samples";
 import type { Workflow, WorkflowRun } from "../../src/artifacts/workflows";
 
 /** Workspace-level: the artifact registry (algorithms/models) and configurable business workflows over them. */
@@ -14,17 +15,6 @@ const NODE: Record<string, [string, Tone]> = { pending: ["未执行", "muted"], 
   "waiting-approval": ["待确认", "warn"], rejected: ["拒绝", "bad"], skipped: ["跳过", "muted"] };
 const CHECK: Record<string, string> = { "routes-continuous": "路线连续（从车场出发并返回）", "each-order-once": "每单恰好一次", "pickup-before-delivery": "先取后送、同一辆车",
   capacity: "载重不超限", "time-windows": "时间窗与班次", "reported-figures": "里程与成本复算一致", "status-consistent": "状态与计划一致" };
-const DEFAULT_WORKFLOW = (ref: string) => ({
-  schema: "pai-workflow-1", name: "offsite-delivery-plan", version: 1, title: "场外配送计划：求解 → 独立核验 → 调度员确认",
-  inputs: { problem: { schema: "pai-logistics-problem-1" } },
-  nodes: [
-    { id: "solve", type: "artifact", artifact: ref, operation: "solve", inputs: { problem: "$input.problem" }, params: { strategy: "deterministic", timeLimitSeconds: 10 } },
-    { id: "verify", type: "artifact", artifact: ref, operation: "verify", inputs: { problem: "$input.problem", plan: "$solve.plan" } },
-    { id: "gate", type: "condition", status: "$verify", pass: ["feasible-plan"] },
-    { id: "dispatcher", type: "approval", prompt: "调度员确认计划后才可交付（不会自动派车）", after: ["gate"] },
-  ],
-  outputs: { plan: "$solve.plan", verification: "$verify.verification" },
-});
 const download = (name: string, value: unknown) => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(value)], { type: "application/json" })); a.download = name; a.click();
@@ -50,7 +40,7 @@ export function Artifacts() {
   }, []);
   useEffect(() => { void load().then(a => {
     const usable = a.find(x => x.state === "released") ?? a.find(x => x.state === "validated") ?? a[0];
-    setDefinition(d => d || JSON.stringify(DEFAULT_WORKFLOW(usable?.id ?? `logistics-pdptw@1.0.0`), null, 2));
+    setDefinition(d => d || JSON.stringify(planningWorkflow(usable?.id ?? "logistics-pdptw@1.0.0"), null, 2));
   }).catch(e => c.toast(String(e), "bad")); }, [load]);
   const act = (f: () => Promise<unknown>, message: string) => c.perform(async () => { await f(); await load(); }, message);
   const reason = (label: string) => { const r = prompt(label)?.trim(); if (!r || r.length < 5) { c.toast("需要至少 5 个字的理由。", "bad"); return undefined; } return r; };
