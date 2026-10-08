@@ -1,0 +1,76 @@
+{
+ "schema": "pai-english-cut-1",
+ "video": "docs/media/physics-demo.mp4",
+ "receipt": "docs/evidence/physics-demo.json",
+ "crop": [1280, 690],
+ "scale": 1.2,
+ "source_line": "PAI Design Workbench · Demo A, robot work cell · recorded live on pai.oneai.host · UI in Chinese",
+ "segments": [
+  {
+   "source": [4, 13],
+   "speed": 1,
+   "step": "1  Freeze the target",
+   "headline": "Robot work cell: cycle time from {loop.mujocoRejection.referenceCycleSeconds} s down to 5 s or less",
+   "detail": "No collisions, at least 90 % of 10 seeds succeed, motor bracket stays stiff under the belt load",
+   "evidence": [
+    {"text": "Reference cell", "size": "small"},
+    {"text": "{loop.mujocoRejection.referenceCycleSeconds} s", "size": "value"},
+    {"text": "target ≤ 5 s", "size": "label"}
+   ]
+  },
+  {
+   "source": [13, 38],
+   "speed": 2,
+   "colour": "red",
+   "step": "2  MuJoCo runs the engineer's first draft on 10 seeds",
+   "headline": "Joint speed 75 %, guard pulled in to {loop.mujocoRejection.cell.guardClearance} m: cycle {loop.mujocoRejection.cycleSeconds} s",
+   "detail": "Fast enough, but {loop.mujocoRejection.collisionFreeSeeds} of {loop.mujocoRejection.of} seeds are collision-free: the elbow hits the guard. Rejected",
+   "evidence": [
+    {"text": "MuJoCo, 10 seeds", "size": "small"},
+    {"text": "{loop.mujocoRejection.collisionFreeSeeds} / {loop.mujocoRejection.of}", "size": "big", "colour": "red"},
+    {"text": "collision-free", "size": "label"},
+    {"text": "REJECTED", "size": "value", "colour": "red"}
+   ]
+  },
+  {
+   "source": [38, 57],
+   "speed": 1.5,
+   "step": "3  Ask AI on the failed check",
+   "headline": "{loop.aiCellFix.engine.model} via Kiro {loop.aiCellFix.engine.engineVersion}: guard clearance 0.12 → 0.3 m",
+   "detail": "Speed kept at 75 %, no requirement relaxed. The AI only proposes; the change is re-simulated",
+   "evidence": [
+    {"text": "AI proposal", "size": "small"},
+    {"text": "guard 0.3 m", "size": "value"},
+    {"text": "nothing relaxed", "size": "label"}
+   ]
+  },
+  {
+   "source": [57, 65],
+   "speed": 1,
+   "colour": "green",
+   "step": "4  MuJoCo retest passes",
+   "headline": "Cycle {loop.fixedCell.cycleSeconds} s: {lighter:loop.fixedCell.cycleSeconds|loop.mujocoRejection.referenceCycleSeconds} % faster than the reference, 10 of 10 seeds succeed",
+   "detail": "The failure case is closed by a bound retest, not overwritten",
+   "evidence": [
+    {"text": "Cycle time", "size": "small"},
+    {"text": "{loop.fixedCell.cycleSeconds} s", "size": "big", "colour": "green"},
+    {"text": "−{lighter:loop.fixedCell.cycleSeconds|loop.mujocoRejection.referenceCycleSeconds} % vs {loop.mujocoRejection.referenceCycleSeconds} s", "size": "label"},
+    {"text": "10 / 10 seeds", "size": "value", "colour": "green"}
+   ]
+  },
+  {
+   "source": [309, 317],
+   "speed": 1,
+   "colour": "green",
+   "step": "5  Admission, then a signed release",
+   "headline": "Release {loop.release.number}: admission {loop.release.admission}, every failure case closed",
+   "detail": "Evidence and all native files (STEP, FEA, MJCF) signed with AWS KMS, ECDSA P-256",
+   "evidence": [
+    {"text": "Release", "size": "small"},
+    {"text": "{loop.release.number}", "size": "big", "colour": "green"},
+    {"text": "admission {loop.release.admission}", "size": "label"},
+    {"text": "KMS-signed", "size": "value", "colour": "green"}
+   ]
+  }
+ ]
+}

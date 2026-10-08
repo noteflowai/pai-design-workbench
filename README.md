@@ -14,6 +14,8 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 回执见 [physics-demo.json](docs/evidence/physics-demo.json)。
 
+英文讲解版（约 50 s，用于英文演讲）：`python3 tools/english_cut.py docs/evidence/physics-demo.en-cut.json physics-demo.en.mp4`。只做裁切和加速（画面上标出倍速），英文字幕里的数字从回执读出，不手写。
+
 [![AI + Blender 设计工厂产线：原生生成、射线实测、AI 修正、复测通过](docs/media/factory-demo.gif)](docs/media/factory-demo.mp4)
 
 **演示 B · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-factory-2026-10-03) 下载。
