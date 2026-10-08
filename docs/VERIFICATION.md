@@ -36,6 +36,24 @@ their original identities.
 
 2026-09-30，最新 Node 24.21.0 LTS、TypeScript 7.0.2、Blender 5.2.2 LTS。
 
+## 制品平台
+
+2026-10-08，本机（Linux x86_64），`npm run test:artifacts`，OR-Tools 9.15.6755。全部是合成、标注的实例；不派车，不计费。回执写在 `.state/evidence/artifact-e2e.json`（被 Git 忽略）。
+
+| 检查 | 实际结果 |
+|---|---|
+| 验收基准（种子 7，24 单 / 5 车） | 6 项期望全部满足：常规实例可行且核验通过；确定性策略重跑路线完全相同；收窄时间窗得到部分计划（4 单未分配）并核验为 `partial-plan`；超重订单 `infeasible`；改过里程的计划被核验器拒绝 |
+| 与基线对照（同一实例） | OR-Tools：3 辆车 698.251 km，成本 848.251，可行；顺序启发式：5 辆车 1538.21 km，2 单未分配。不声称最优（`optimality: "not proven"`） |
+| 流程运行（种子 11，40 单 / 8 车） | 求解 → 独立核验 7 项通过 → 条件放行 → 调度员确认；5 辆车 1381.006 km。求解节点墙钟约 1.2–3.3 s、CPU 1.2–2.1 s、峰值内存约 50 MB；模型 Token 记为"无模型调用" |
+| 反例 | 流程结构错误 `WORKFLOW_SCHEMA`；草稿版本不能被引用；超重订单 → `infeasible` → 运行 `rejected`（不请求人工确认）；200 单限时 0.05 s → `timeout` → `rejected`；输入不合 schema `INVALID_INPUT`；同一 `requestId` 换输入 409 |
+| 签名包 | Ed25519（本机）签名，在线与离线核验通过；改动 `logistics_verify.py` → `PACKAGE_FILE`；改清单 → `PACKAGE_MANIFEST`；改签名 → `PACKAGE_SIGNATURE` |
+| 外来代码 | 换掉求解脚本并用新环境自己的密钥重新签名：签名有效，但导入被拒绝 `UNTRUSTED_CODE` |
+| 新环境复现 | 新的状态目录、存储和签名密钥，并按哈希锁另装一份 OR-Tools（`PAI_ARTIFACT_CLEAN_VENV`），只把包文件带过去：导入为草稿 → 本地重新验收 → 发布 → 同一流程，路线摘要 `d37fcf6f…` 与原环境一致 |
+| 越权 | 托管配置下匿名访问 `/api/v1/*` 返回 401；`/api/agent/v1/*` 不在白名单内，404；本机跨源写入 403 |
+| 界面（390 px） | 浏览器测试 "artifact platform"：构建 → 验收 → 发布 → 校验流程（结构错误被拒）→ 运行 → 确认；超重实例被拒并显示原因；无横向溢出 |
+
+尚未验证：托管站点上的运行、多租户隔离、真实路网与真实订单。
+
 ## 物理 AI 工具链：Newton 与 DoMINO（2026-10-04 夜）
 
 | 检查 | 实际结果 |

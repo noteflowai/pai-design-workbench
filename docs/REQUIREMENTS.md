@@ -49,6 +49,11 @@
 | F27 | AI 气动预筛：NVIDIA DoMINO（PhysicsNeMo-CFD）在同一 STL 上预估 Cd，与原生求解并行，只作参考；按校准门禁决定能否参与排序 | `tools/prescreen_calibrate.py`；`npm run test:aero` 在配置 GPU 时断言预筛已登记且不进入检查 | 评估后移出评审：12 个车身 Spearman −0.35，未通过校准，从未影响结论；适配器与校准工具保留，见 [AERO.md](AERO.md) |
 | F29 | CAM：FreeCAD 1.1 CAM（ocp-freecad-cam）+ OpenCAMLib 按装夹生成 G-code，独立的高度图切削仿真检查过切、残料、刀具过载和快移碰撞，并给出节拍 | `npm run test:cam`；4 个注入故障的反例全部被拒绝，见 [CAM.md](CAM.md) | 已验证：本机；托管站点上程序由 PAISolver Batch 作业生成、在主机上独立仿真，参考支架通过（[cam-batch.json](evidence/cam-batch.json)） |
 | F26 | 虚实结合：G-code（ocp-freecad-cam）、实测数据回流；只有实测那一级才是物理证据；写操作经硬件三道闸 | G-code：F29。首件检验：`tests/inspection.test.ts`、浏览器测试（390 px）、`npm run test:package`（检验记录随发布签名） | 部分：首件检验已实现。验收过的零件按冻结要求生成检验计划（轴承座：Ø35 H7 孔径、孔深、止口、外形、壁厚、质量；支架：止口、孔距、外形、壁厚、质量，每项带公差和量具），实测值逐项判定为合格或不合格，记录 `physicalMeasurement: true` 并随发布签名；仿真评审本身仍是 `physicalValidation: false`，不会被改写。待做：CMM 报告导入、应变实测、硬件只读接入 |
+| F30 | 制品库：算法和模型按 `name@x.y.z` 登记为不可变版本（`pai-artifact-1`：操作及其输入输出 schema、能力与限制、运行时锁文件、依赖的版本/许可证/来源、代码出处、文件摘要）；生命周期 草稿 → 已验收 → 已发布 → 已弃用，验收只能由制品自己的基准给出，发布和弃用只能由人做；按适配器插件扩展 | `tests/artifacts.test.ts`；`npm run test:artifacts`；浏览器测试 "artifact platform" | 已验证：本机。设计见 [ADR 0001](adr/0001-artifacts-and-workflows.md) |
+| F31 | 流程编排：用 JSON（`pai-workflow-1`）配置业务流程，节点引用精确制品版本，含条件和人工确认；运行前拒绝结构错误、类型不匹配、未解析引用和环；逐节点记录产物、证据、回执与用量；不自动重试，重启后只恢复无外部副作用的节点 | 同上；结构错误返回 `WORKFLOW_SCHEMA` / `WORKFLOW_INVALID` | 已验证：本机 |
+| F32 | 签名制品包（`pai-artifact-package-1`，与发布包同一签名器）可离线核验；篡改文件、清单或签名都被拒绝；导入不加载外来代码（必须与可信源逐字节一致），导入后在新环境重新验收，用同一流程复现出相同的计划 | `npm run test:artifacts`（含 `PAI_ARTIFACT_CLEAN_VENV`：新环境自己按哈希锁安装 OR-Tools） | 已验证：本机 |
+| F33 | 第一个制品：场外（公路）物流规划 `logistics-pdptw`，OR-Tools 取送货车辆路径（载重、先取后送、时间窗、班次、固定车辆成本）；独立核验器只用标准库；如实区分可行、部分、不可行、超时；固定种子的合成基准，并与顺序启发式基线对照 | 验收基准（6 项期望）；`npm run test:artifacts` | 已验证：本机，合成实例。不派车、不代表生产收益、不声称最优 |
+| F34 | 用量：原生计算（墙钟、CPU、峰值内存、存储）与模型 Token 分开记录（`pai-usage-1`），没有调用记 `none`，量不出来记 `unknown` | 运行记录与界面"模型 Token"列 | 部分：记录已实现；价格版本为空，计费和收费没有上线 |
 
 ## N. 非功能需求
 

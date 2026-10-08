@@ -747,3 +747,12 @@ h1 { font-size: 22px; }
 .autopilot-run header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .autopilot-run ol { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
 .autopilot-run li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Artifact registry and workflow runs */
+.artifact-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.artifact-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.artifact-id { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; min-width: 0; }
+.artifact-id small { flex-basis: 100%; color: var(--ink-3); }
+.artifact-list .button-row button { white-space: nowrap; }
+.data-table.nodes th, .data-table.nodes td { white-space: nowrap; }
+.run-detail { margin-top: 10px; }

@@ -9,3 +9,8 @@
 - Ordinary reversible local changes are authorized. Deployment, outside messages and publication follow the user's actual authorization; no extra confirmation is required for implied local implementation.
 - Domain expansion requires native executable artifacts and appropriate evaluators. Recorded simulation is not physical validation.
 - Network binding requires an exact HTTPS origin and verified ALB/Cognito authentication. Cloud deployment must preserve existing WordPress listener rules and its default behavior. Never publish credentials or automatically replay interrupted native work.
+
+## Assignments
+
+- 2026-10-08, task `pai-artifact-platform-20261008` (artifact registry + configurable workflows; first artifact: off-site logistics planning), assigned by the user to logical role `pai-workbench`. Session ↔ role registration belongs to the noteflow-auto coordination owner; do not record tab numbers here.
+- Boundary: PAI owns the domain product, artifact contracts/adapters, verifiers and UI (`src/artifacts/`, ADR 0001). Scheduling, failover, ledgers and long tasks stay in noteflow-auto; the agent gateway stays in AgentForge.

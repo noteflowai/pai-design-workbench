@@ -15,6 +15,7 @@ import { Validate } from "./views/validate";
 import { Evidence } from "./views/evidence";
 import { FeedbackView } from "./views/feedback";
 import { Deliver } from "./views/deliver";
+import { Artifacts } from "./views/artifacts";
 import { runScene } from "./actions";
 import { MATURITY } from "./context";
 import "./style.css";
@@ -131,7 +132,7 @@ function App() {
   ], [navigate, ctx, data?.capabilities.blender, theme, railCollapsed]);
 
   if (!ctx) return <div className="boot" role="status">{loadError ? `无法加载工作区：${loadError}` : "正在加载工作区…"}</div>;
-  const view = { overview: <Overview />, requirements: <Requirements />, design: <Design />, validate: <Validate />, evidence: <Evidence />, feedback: <FeedbackView />, deliver: <Deliver /> }[route.view];
+  const view = { overview: <Overview />, requirements: <Requirements />, design: <Design />, validate: <Validate />, evidence: <Evidence />, feedback: <FeedbackView />, deliver: <Deliver />, artifacts: <Artifacts /> }[route.view];
   return <AppContext.Provider value={ctx}>
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); (document.querySelector("main h1") as HTMLElement | null)?.focus(); }}>跳到主要内容</a>
     <div className={`app ${assistant ? "with-assistant" : ""} ${railCollapsed ? "rail-collapsed" : ""}`}>

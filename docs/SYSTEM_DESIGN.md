@@ -94,6 +94,24 @@ flowchart TB
 - 用底座 `eval/` 的 golden-task harness 度量模型的物理推理能力：`estimate-bracket-deflection`，评分程序放在工作区外，用 CalculiX 留出集打分（框架已完成）；
 - 让 Host 的 OTel GenAI 遥测接入外部 Agent 的调用链。
 
+### 2.1 制品库与流程编排（`src/artifacts/`）
+
+PAI 交付的是可独立核验的制品。模块与依赖方向（只能自上而下）：
+
+```text
+routes.ts（/api/v1，沿用 ALB/Cognito 鉴权，不进 /api/agent）
+  → workflows.ts（pai-workflow-1：校验、按依赖执行、条件、人工确认、恢复）
+    → registry.ts（版本、生命周期、验收、签名包、导入；ADAPTERS 插件表）
+      → contract.ts（pai-artifact-1、pai-usage-1、ArtifactAdapter 接口）
+      → logistics.ts 等适配器 → native/*（求解器与独立核验器）
+  signing.ts（与发布包共用签名器）  store.ts（SQLite，乐观锁）
+```
+
+- 注册表和流程引擎不会按制品名分支；新增一类算法或模型只需登记一个适配器。
+- 不在 PAI 里做通用调度器、账本或 ACP 引擎：长任务、故障转移和账本归 noteflow-auto，Agent 网关归 AgentForge。
+- 运行数据在 `.state/workflow-runs/<id>/`，读取时按记录的摘要复核；制品文件随版本存进 SQLite，运行时从这些字节物化，不从仓库读。
+- 选型与备选方案（OCI/ORAS、MLflow、Temporal/Argo）见 [ADR 0001](adr/0001-artifacts-and-workflows.md)。
+
 ## 4. 复用矩阵（不重造轮子）
 
 下一阶段的开源复用与行业对标见 [INDUSTRY_BENCHMARK.md](INDUSTRY_BENCHMARK.md)。
@@ -111,6 +129,7 @@ flowchart TB
 | 模型运行 | acpx、NoteFlow 执行器、Bedrock AgentCore | 提示词契约与计划校验 |
 | Agent 治理 | AgentForge mcp-gateway、Cognito | 工具 allowlist 与 scope |
 | 证据可信 | AWS KMS、RFC 3161（DigiCert）+ OpenSSL、S3 Object Lock | 清单规范、封存流程 |
+| 规划求解 | Google OR-Tools 路由（哈希锁定 wheel） | 场外物流制品适配器、独立核验器、合成基准 |
 
 ## 5. 核心数据与状态
 
@@ -144,3 +163,4 @@ flowchart TB
 | 外部 Agent | 经 AgentForge MCP 网关，只能读和提议 | [MCP.md](MCP.md) |
 | 代理模型的角色 | 只排序；推荐点必须实测并正式复核 | [PHYSICS.md](PHYSICS.md) |
 | 证据可信 | KMS 签名 + RFC 3161 时间戳 + Object Lock；归档需显式开启 | [VERIFICATION.md](VERIFICATION.md) |
+| 制品与流程 | 自有签名包 + 类型化 JSON 流程；暂不引入 OCI/ORAS、MLflow、Temporal | [adr/0001](adr/0001-artifacts-and-workflows.md) |

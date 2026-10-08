@@ -39,6 +39,8 @@ import { DEFAULT_OPTIMIZE_BUDGET, MAX_OPTIMIZE_EVALUATIONS, botorchVersion, opti
 import { KIND_STORE, admission, createRelease, decideRelease, supersedeForRevision, type Release } from "./release.js";
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
+import { artifactRoutes } from "./artifacts/routes.js";
+import { interruptRunning } from "./artifacts/workflows.js";
 import { agentAuthentication, agentRoute, rewriteAgentUrl, type AgentPrincipal } from "./agent-api.js";
 
 export async function createApp(config: Config, adapters: Adapters = new NativeAdapters(config)) {
@@ -46,7 +48,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const release = await acquireRuntime(config.state);
   let store: Store;
   try { store = new Store(join(config.state, "workbench.sqlite")); } catch (error) { await release(); throw error; }
-  store.interruptPending();
+  store.interruptPending(); interruptRunning(store);
   const live = new LiveBus();
   const workbench = new Workbench(store, adapters, config.state, live);
   const streams = new Set<() => void>();
@@ -143,6 +145,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   // The auth hook has already verified the ALB-signed token and that its subject equals this header.
   const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
     ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
+  artifactRoutes(app, { store, config, actor, executeNative });
   app.get("/api/projects/:id/ai-track-record", async request => trackRecord(store, workbench.project(paramId(request.params)).id));
   app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));
   app.get("/api/projects/:id/admission", async request => {

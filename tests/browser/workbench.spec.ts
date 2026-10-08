@@ -945,4 +945,62 @@ test("expired hosted login: an API call redirected to the identity provider sign
   await navigation; // the tab reloads, so the ALB starts a fresh login with a valid state cookie
   expect(posted).toBe(1); // no automatic replay of the redirected request
   await expect(page.getByRole("button", { name: "创建评审任务" })).toBeVisible();
+
+test("artifact platform: build, benchmark, release, configure a workflow, run with the real solver, approval and rejections, phone width", async ({ page }, testInfo) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Unique version per run: versions are immutable and the browser state directory persists between runs.
+  const n = Date.now() % 100_000, ref = `logistics-pdptw@1.${Math.floor(n / 1000)}.${n % 1000}`;
+  await page.goto("/#/artifacts");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("制品库与流程编排");
+  await page.getByLabel("从可信源构建 logistics-pdptw 版本").fill(ref.split("@")[1]);
+  await advance(page, ["构建草稿"]);
+  const row = page.getByRole("list", { name: "制品版本" }).getByRole("listitem").filter({ hasText: ref });
+  await expect(row.getByText("草稿")).toBeVisible();
+  // A workflow cannot pin a draft.
+  const definition = (version: number, extra: Record<string, unknown> = {}) => JSON.stringify({ schema: "pai-workflow-1", name: "offsite-delivery-plan", version, title: "场外配送计划",
+    inputs: { problem: { schema: "pai-logistics-problem-1" } }, nodes: [
+      { id: "solve", type: "artifact", artifact: ref, operation: "solve", inputs: { problem: "$input.problem" }, params: { timeLimitSeconds: 10 }, ...extra },
+      { id: "verify", type: "artifact", artifact: ref, operation: "verify", inputs: { problem: "$input.problem", plan: "$solve.plan" } },
+      { id: "gate", type: "condition", status: "$verify", pass: ["feasible-plan"] },
+      { id: "dispatcher", type: "approval", prompt: "调度员确认", after: ["gate"] }],
+    outputs: { plan: "$solve.plan" } }, null, 2);
+  const editor = page.getByLabel("流程定义 JSON");
+  await editor.fill(definition(n));
+  await advance(page, ["校验"]);
+  await expect(page.getByText(/未通过：.*draft/)).toBeVisible();
+  await row.getByRole("button", { name: "运行验收基准" }).click();
+  await expect(row.getByText("已验收")).toBeVisible({ timeout: 120_000 });
+  page.once("dialog", d => void d.accept("基准通过，范围限合成实例"));
+  await row.getByRole("button", { name: "发布" }).click();
+  await expect(row.getByText("已发布")).toBeVisible();
+  // Schema error: an unknown field (no blind retries in this contract) is refused before anything runs.
+  await editor.fill(definition(n, { retries: 3 }));
+  await advance(page, ["校验"]);
+  await expect(page.getByText(/未通过：.*retries/)).toBeVisible();
+  await editor.fill(definition(n));
+  await advance(page, ["校验"]);
+  await expect(page.getByText("执行顺序 solve → verify → gate → dispatcher")).toBeVisible();
+  await advance(page, ["保存流程版本"]);
+  await advance(page, ["用合成实例运行"]);
+  const run = page.locator("details.run-detail").first();
+  await expect(run.getByText("待人工确认")).toBeVisible();
+  await expect(run.getByRole("list", { name: "独立核验" }).getByText("先取后送、同一辆车")).toBeVisible();
+  await expect(run.getByRole("row", { name: /solve/ }).getByText("无模型调用")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("artifacts-run-390.png"), fullPage: true });
+  await noOverflow(page);
+  page.once("dialog", d => void d.accept("调度员核对后确认（合成实例）"));
+  await run.getByRole("button", { name: "确认 dispatcher" }).click();
+  await expect(run.locator("summary").getByText("完成")).toBeVisible();
+  // Infeasible business input: an order heavier than any vehicle. The run ends rejected with the reason; no approval asked.
+  await page.getByLabel("合成实例").selectOption("overload");
+  await advance(page, ["用合成实例运行"]);
+  const rejected = page.locator("details.run-detail").first();
+  await rejected.locator("summary").click();
+  await expect(rejected.getByText(/原因：gate: verify is no-plan/)).toBeVisible();
+  await expect(rejected.getByRole("row", { name: /solve/ }).getByText("infeasible")).toBeVisible();
+  await noOverflow(page);
+  // Unauthorised write: a cross-origin request cannot create artifacts or runs.
+  const cross = await page.request.post("/api/v1/artifacts", { data: { adapter: "logistics-pdptw", version: "9.9.9" }, headers: { origin: "https://attacker.example" } });
+  expect(cross.status()).toBe(403);
 });
