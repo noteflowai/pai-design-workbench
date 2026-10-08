@@ -945,6 +945,7 @@ test("expired hosted login: an API call redirected to the identity provider sign
   await navigation; // the tab reloads, so the ALB starts a fresh login with a valid state cookie
   expect(posted).toBe(1); // no automatic replay of the redirected request
   await expect(page.getByRole("button", { name: "创建评审任务" })).toBeVisible();
+});
 
 test("artifact platform: build, benchmark, release, configure a workflow, run with the real solver, approval and rejections, phone width", async ({ page }, testInfo) => {
   test.setTimeout(240_000);
