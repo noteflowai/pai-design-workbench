@@ -207,7 +207,9 @@ export const logisticsAdapter: ArtifactAdapter = {
     const bp = base.outputs.plan as { totalDistanceKm: number; totalCost: number; vehiclesUsed: number; unassigned: string[] };
     const expectations = {
       normalFeasibleAndVerified: solved.status === "feasible" && verified.status === "feasible-plan",
-      deterministicReplay: JSON.stringify(plan.routes) === JSON.stringify((replay.outputs.plan as { routes: unknown[] }).routes),
+      // Both runs ended at the search's local optimum (not the time limit) and produced the same routes.
+      deterministicReplay: (plan.solver as { replayable?: boolean })?.replayable === true && (replay.outputs.plan as { solver?: { replayable?: boolean } }).solver?.replayable === true
+        && JSON.stringify(plan.routes) === JSON.stringify((replay.outputs.plan as { routes: unknown[] }).routes),
       baselineVerified: baseVerified.status === "feasible-plan" || baseVerified.status === "partial-plan",
       tightPartialVerified: partial.status === "partial" && partialVerified.status === "partial-plan",
       overloadInfeasible: infeasible.status === "infeasible",

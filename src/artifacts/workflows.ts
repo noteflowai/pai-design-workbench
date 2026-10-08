@@ -162,16 +162,27 @@ async function readData(config: Config, runId: string, file: string, digest: str
   return JSON.parse(text);
 }
 
-/** Any unexpected error ends the run as failed with its reason (never left "running"); nothing is retried. */
+/**
+ * Any unexpected error ends the run with its reason (never left "running"); nothing is retried. A node that was
+ * running an operation with external effects makes the run "interrupted" (reconcile first) instead of "failed".
+ */
 async function advance(d: Deps, runId: string): Promise<WorkflowRun> {
   try { return await step(d, runId); } catch (e) {
-    const run = d.store.get<WorkflowRun>("workflow-run", runId)!;
-    if (run.state !== "running") return run;
     const error = e instanceof DomainError ? `${e.code}: ${e.message}` : String(e);
-    const nodes = Object.fromEntries(Object.entries(run.nodes).map(([k, n]) => [k, n.state === "running" ? { ...n, state: "failed" as NodeState, error } : n]));
-    const failed: WorkflowRun = { ...run, revision: run.revision + 1, state: "failed", error, nodes, finishedAt: new Date().toISOString() };
-    d.store.put("workflow-run", failed, run.revision);
-    return failed;
+    for (let attempt = 0; ; attempt++) {
+      const run = d.store.get<WorkflowRun>("workflow-run", runId)!;
+      if (run.state !== "running") return run;
+      const w = d.store.get<Workflow>("workflow", run.workflowId);
+      const effects = Object.entries(run.nodes).some(([k, n]) => n.state === "running" && (() => {
+        const node = w?.definition.nodes.find(x => x.id === k);
+        const a = node?.type === "artifact" ? d.store.get<ArtifactVersion>("artifact", node.artifact) : undefined;
+        return a?.manifest.operations.find(o => node?.type === "artifact" && o.id === node.operation)?.effects !== "none";
+      })());
+      const nodes = Object.fromEntries(Object.entries(run.nodes).map(([k, n]) => [k, n.state === "running" ? { ...n, state: (effects ? "running" : "failed") as NodeState, error } : n]));
+      const ended: WorkflowRun = { ...run, revision: run.revision + 1, state: effects ? "interrupted" : "failed", error, nodes, ...(effects ? {} : { finishedAt: new Date().toISOString() }) };
+      try { d.store.put("workflow-run", ended, run.revision); return ended; }
+      catch (conflict) { if (attempt >= 2) throw conflict; } // a concurrent update: re-read and record again
+    }
   }
 }
 

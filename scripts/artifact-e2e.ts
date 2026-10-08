@@ -86,7 +86,8 @@ try {
   assert.equal(reused.status, 409, "request identity cannot be reused for other inputs");
   const done = await A.ok<WorkflowRun>("POST", `/api/v1/workflow-runs/${waiting.id}/decisions`, { node: "dispatcher", approve: true, reason: "调度员核对后确认（合成实例）" });
   assert.equal(done.state, "succeeded");
-  const plan = await A.ok<{ routes: unknown[]; totalDistanceKm: number; status: string }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=plan`);
+  const plan = await A.ok<{ routes: unknown[]; totalDistanceKm: number; status: string; solver: { replayable?: boolean } }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=plan`);
+  assert.equal(plan.solver.replayable, true);
   const verification = await A.ok<{ verdict: string; checks: { id: string; passed: boolean }[] }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=verification`);
   assert.equal(verification.verdict, "feasible-plan"); assert.ok(verification.checks.every(c => c.passed));
   const planDigest = sha256(JSON.stringify(plan.routes));
@@ -172,7 +173,8 @@ try {
   const run = await B.ok<WorkflowRun>("POST", "/api/v1/workflow-runs", { requestId: randomUUID(), workflow: workflow.id, inputs: { problem: await instance("normal", 11, 40, 8) } });
   const done = await B.ok<WorkflowRun>("POST", `/api/v1/workflow-runs/${run.id}/decisions`, { node: "dispatcher", approve: true, reason: "复现核对（合成实例）" });
   assert.equal(done.state, "succeeded");
-  const plan = await B.ok<{ routes: unknown[] }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=plan`);
+  const plan = await B.ok<{ routes: unknown[]; solver: { replayable?: boolean } }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=plan`);
+  assert.equal(plan.solver.replayable, true, "the deterministic search ended at its local optimum, not the time limit");
   assert.equal(sha256(JSON.stringify(plan.routes)), handoff.routesSha256, "the clean environment reproduces the same plan");
   assert.equal(v.digest, handoff.digest, "same artifact digest");
   const own = await B.ok<{ keyId: string }>("GET", "/api/signing/public-key");
