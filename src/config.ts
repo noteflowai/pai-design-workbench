@@ -12,6 +12,8 @@ export interface Config {
   newtonPython?: string;
   /** FreeCAD 1.1 CAM toolchain (npm run setup:cam): Python with FreeCAD, OpenCAMLib and ocp-freecad-cam. */
   camPython?: string;
+  /** Pinned OR-Tools venv (tools/setup_logistics.py) for the logistics planning artifact. */
+  logisticsPython?: string;
   /** AWS KMS asymmetric key (ECC_NIST_P256) that signs release packages; local Ed25519 when unset. */
   signingKmsKeyId?: string;
   /** RFC 3161 time-stamping authority for release seals (only a SHA-256 digest is sent) and its CA bundle. */
@@ -77,6 +79,7 @@ export function configuration(): Config {
     cadquery: process.env.PAI_CADQUERY_PYTHON,
     physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX, newtonPython: process.env.PAI_NEWTON_PYTHON || undefined,
     camPython: process.env.PAI_CAM_PYTHON || undefined,
+    logisticsPython: process.env.PAI_LOGISTICS_PYTHON || undefined,
     signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
     tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
     openfoamImage: /^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$/.test(process.env.PAI_OPENFOAM_IMAGE ?? "") ? process.env.PAI_OPENFOAM_IMAGE : undefined,

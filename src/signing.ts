@@ -58,7 +58,28 @@ async function localSigner(state: string): Promise<Signer> {
     async sign(digest) { return edSign(null, digest, key); } };
 }
 
-const FileEntry = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative(), contentBase64: z.string() }).strict();
+/** Sign a canonical manifest text with the deployment's signer (KMS hosted, Ed25519 local). Shared by every package type. */
+export async function signManifest(config: Config, text: string) {
+  const digest = createHash("sha256").update(text).digest();
+  const s = await signer(config);
+  const value = await s.sign(digest);
+  return { manifestSha256: digest.toString("hex"),
+    signature: { algorithm: s.algorithm, keyId: s.keyId, publicKeyPem: s.publicKeyPem, value: value.toString("base64"), signedAt: new Date().toISOString() } };
+}
+/** Verify a signature over a canonical manifest text; returns whether the signer equals a pinned key (if given). */
+export function verifyManifestSignature(text: string, manifestSha256: string,
+  signature: { algorithm: "ECDSA_P256_SHA256" | "ED25519"; publicKeyPem: string; value: string }, trustedPublicKeyPem?: string) {
+  const digest = createHash("sha256").update(text).digest();
+  if (digest.toString("hex") !== manifestSha256) throw new DomainError("PACKAGE_MANIFEST", "Manifest digest mismatch", 422);
+  const key = createPublicKey(signature.publicKeyPem);
+  const ok = signature.algorithm === "ED25519" ? cryptoVerify(null, digest, key, Buffer.from(signature.value, "base64"))
+    : cryptoVerify(null, digest, { key, dsaEncoding: "der" }, Buffer.from(signature.value, "base64"))
+      || cryptoVerify("sha256", Buffer.from(text), { key, dsaEncoding: "der" }, Buffer.from(signature.value, "base64"));
+  if (!ok) throw new DomainError("PACKAGE_SIGNATURE", "Signature does not verify", 422);
+  return trustedPublicKeyPem ? createPublicKey(trustedPublicKeyPem).export({ format: "pem", type: "spki" }).toString() === key.export({ format: "pem", type: "spki" }).toString() : undefined;
+}
+
+export const FileEntry = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative(), contentBase64: z.string() }).strict();
 export const ReleasePackage = z.object({
   schema: z.literal("pai-release-package-1"),
   release: z.object({ id: z.string(), number: z.string(), title: z.string(), maturity: z.string(), projectId: z.string(), projectRevision: z.number().int(),

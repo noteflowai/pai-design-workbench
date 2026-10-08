@@ -78,6 +78,9 @@ jobs:
         run: |
           sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
           "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py --with-newton && npm run test:fea && npm run test:robot && npm run test:optimize && npm run test:optimize-pillow && npm run test:package
+      - name: Hash-locked OR-Tools and the artifact platform loop (registry, workflow, signed package, clean reproduction)
+        if: matrix.node == '24.21.0'
+        run: '"${{ steps.py312.outputs.python-path }}" tools/setup_logistics.py && npm run test:artifacts'
       - name: Pinned FreeCAD 1.1 CAM toolchain and the CAM loop (G-code + independent dexel simulation)
         if: matrix.node == '24.21.0'
         run: python3 tools/setup_cam.py && npm run test:cam

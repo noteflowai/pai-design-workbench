@@ -84,6 +84,21 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 | 自主 | 维护者在总览的"AI 自主迭代"卡片里签发授权（工具、次数、有效期）、给出目标，autopilot 多轮执行"提议 → 原生检查 → 修改"；执行器无法确认副作用时停下等人核对，核对后在同一授权内继续；外部 Agent 用 `pai_run_plan` 在同一授权内触发求解。实跑：Codex 为轴承座提出参数化修正，原生检查通过（150.654 g，见 [VERIFICATION.md](docs/VERIFICATION.md)）；所有冻结要求（外形、载荷、DFM、CAM 节拍）都参与放宽判断，不能放宽要求、验收或发布 | [INDUSTRY_BENCHMARK.md](docs/INDUSTRY_BENCHMARK.md) |
 | 外部 Agent | AgentForge 会话经治理 MCP 网关使用 11 个工具（读取、提议、求解数据集、授权内执行）；工作台 `integrations/agentforge` 是唯一来源，底座用一个摘要安装 | [integrations/agentforge](integrations/agentforge/README.md) |
 
+## 制品库与流程编排
+
+PAI 交付的是可独立核验的**制品**：算法和模型按不可变版本登记，经自身基准验收、人工发布后，才能被 JSON 配置的业务流程引用；每次运行逐节点留下产物、证据和用量（原生计算与模型 Token 分开记录，量不出来记 `unknown`），签名包可以在另一个环境核验并复现。第一个制品是**场外物流规划**（OR-Tools 取送货车辆路径：载重、先取后送、时间窗、班次），由只用标准库的独立核验器裁决：
+
+- 验收基准（24 单 / 5 车）：OR-Tools 3 辆车 698 km，全部分配；顺序启发式基线用 5 辆车 1538 km，还漏掉 2 单；
+- 流程运行（40 单 / 8 车）：5 辆车 1381 km，独立核验 7 项通过，调度员确认后完成；
+- 超重订单 → 不可行 → 流程拒绝；限时过短 → 超时 → 拒绝；流程结构错误、篡改包、外来代码或声明、未固定的签名者、越权访问都被拒绝；
+- 新环境（新存储、新密钥、按哈希锁另装 OR-Tools）只拿包文件，重新验收后复现出相同路线。
+
+```bash
+npm run setup:logistics && npm run test:artifacts   # 界面：#/artifacts
+```
+
+合成数据，不派车、不计费，不声称最优或生产收益。设计与选型见 [ADR 0001](docs/adr/0001-artifacts-and-workflows.md)，结果见 [VERIFICATION.md](docs/VERIFICATION.md#制品平台)。
+
 界面是响应式 Web/PWA 加 Electron 桌面版：三维视口实时显示构建阶段，每个失败检查旁都有"问 AI"，Ctrl+K 命令面板，深浅色主题，全部页面通过 WCAG 2.1 AA 检查。[31 个典型工业设计用例](docs/INDUSTRIAL_TEST_CASES.md)覆盖全部通道。
 
 范围外：认证级 FEA、疲劳、公差叠加、现场安全认证、自动发布。仿真不等于物理验证，所有记录都带 `physicalValidation: false`。
@@ -97,6 +112,7 @@ npm ci && npm run setup:demo
 npm run setup:native    # Blender 5.2.2 LTS（核对官方校验和）
 npm run setup:cad       # CadQuery 2.8 / OCCT 7.9（哈希锁定）
 npm run setup:physics   # Gmsh、CalculiX、Optuna、scikit-learn、MuJoCo、OpenUSD；加 -- --with-botorch 装 BoTorch
+npm run setup:logistics # OR-Tools（哈希锁定），场外物流规划制品
 npm run start           # http://127.0.0.1:4317
 ```
 
@@ -111,6 +127,7 @@ npm run test:aero       # 需要 PAI_OPENFOAM_IMAGE：35° 拒绝 → 12.5° 复
 npm run test:cad        # B-Rep 检查、DFM
 npm run test:cam        # 需要 npm run setup:cam：G-code + 独立切削仿真
 npm run test:package    # 签名发布包、篡改检测
+npm run test:artifacts  # 制品库 → 流程 → 签名包 → 新环境复现；不可行、超时、篡改、结构错误
 npm run test:suite      # 典型工业设计用例
 npm run test:browser
 ```
@@ -121,7 +138,7 @@ npm run test:browser
 
 - 使用：[API 与闭环操作](docs/API.md) · [典型测试用例](docs/INDUSTRIAL_TEST_CASES.md) · [AWS 部署与登录](docs/DEPLOYMENT.md)
 - 通道：[结构与机器人](docs/PHYSICS.md) · [CAM](docs/CAM.md) · [气动](docs/AERO.md) · [产线](docs/PLANT.md) · [生成代码](docs/CAD_CODE.md)
-- 设计：[整体架构（权威）](docs/SYSTEM_DESIGN.md) · [需求](docs/REQUIREMENTS.md) · [规划](docs/ROADMAP.md) · [实际验证记录](docs/VERIFICATION.md) · [Agent 运行时](docs/AGENT_RUNTIME.md)
+- 设计：[整体架构（权威）](docs/SYSTEM_DESIGN.md) · [ADR 0001 制品与流程](docs/adr/0001-artifacts-and-workflows.md) · [需求](docs/REQUIREMENTS.md) · [规划](docs/ROADMAP.md) · [实际验证记录](docs/VERIFICATION.md) · [Agent 运行时](docs/AGENT_RUNTIME.md)
 - 背景：[行业对标与开源复用](docs/INDUSTRY_BENCHMARK.md) · [界面对比](docs/UI_UX_BENCHMARK.md) · [各通道设计取舍](docs/ARCHITECTURE.md) · [多端策略](docs/MULTIPLATFORM.md) · [Robot Reel 接入](docs/ROBOT_REEL_INTEGRATION.md)
 
 本仓库新代码使用 MIT；Robot Reel 派生测试数据保留 Apache-2.0 与原始 NOTICE。见 [第三方说明](THIRD_PARTY_NOTICE.md)。

@@ -18,7 +18,7 @@ import type { Lifecycle, StageId, EvidenceKind } from "../src/lifecycle";
 import type { LiveSession, LiveTrack } from "./studio";
 
 export type RunKind = EvidenceKind;
-export type ViewId = "overview" | StageId;
+export type ViewId = "overview" | StageId | "artifacts";
 export type State = {
   projects: Project[]; reviews: Review[]; feedback: Feedback[]; campaigns: Campaign[]; proposals: Proposal[]; scenes: SceneReview[]; cads?: CadReview[]; aeros?: AeroReview[]; cadSweeps?: CadSweep[]; cadOptimizations?: CadOptimization[];
   factoryCriteria?: FactoryCriteria[]; factoryReviews?: FactoryReview[]; inspections?: Inspection[]; assistantPlans?: AssistantPlan[]; lifecycles?: Record<string, Lifecycle>; aiTrackRecords?: Record<string, TrackRecord>; autonomyGrants?: AutonomyGrant[]; autopilots?: Autopilot[];
@@ -38,6 +38,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; index?: number }
   { id: "evidence", label: "失败回放", short: "证据", index: 4 },
   { id: "feedback", label: "反馈复测", short: "反馈", index: 5 },
   { id: "deliver", label: "发布交付", short: "发布", index: 6 },
+  { id: "artifacts", label: "制品与编排", short: "制品" },
 ];
 export interface Route { view: ViewId; params: URLSearchParams }
 export interface Ctx {

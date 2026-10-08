@@ -12,7 +12,7 @@ case "$E2E" in *[!a-z0-9-]*) echo "bad E2E name" >&2; exit 2;; esac
 REL=$(readlink -f /opt/pai/current)
 NODE=$(systemctl show pai-workbench -p ExecStart | grep -oE 'path=[^ ;]+' | head -1 | cut -d= -f2)
 W=$(mktemp -d /tmp/pai-e2e.XXXXXX); chown pai "$W"
-sed -e "s#\.\./src/\([a-z-]*\)\.js#$REL/dist/src/\1.js#g" \
+sed -e "s#\.\./src/\([a-z/-]*\)\.js#$REL/dist/src/\1.js#g" \
     -e 's#createApp({ ...config, state })#createApp({ ...config, state, albAuth: undefined, publicOrigin: undefined })#' \
     "$REL/scripts/$E2E.ts" > "$W/$E2E.ts"
 chown pai "$W/$E2E.ts"
