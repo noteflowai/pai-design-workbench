@@ -64,6 +64,12 @@ python3 tools/aws_operator.py result --command-id <ID>
 
 `PAI_SEND_*` 环境变量会加引号后传给脚本。脚本直接用 Node 的类型擦除运行发布包里的 `dist/src`；成功时输出脚本写下的证据报告（每份一行 JSON），失败时输出日志末尾，退出码与脚本相同。
 
+### 登录回调返回 401
+
+`/oauth2/idpresponse` 由 ALB 自己处理。开始登录时 ALB 写入 `AWSALBAuthNonce` cookie（约 15 分钟有效），回调时核对它；cookie 过期、缺失或被另一次登录覆盖时，ALB 返回 `401 Authorization Required`，工作台收不到这个请求。常见原因：登录页停留超过 15 分钟；在另一个标签页或窗口又开始了一次登录；刷新或恢复了带 `code=` 的回调地址（授权码只能用一次）；在已安装的应用和浏览器之间切换。处理：直接打开 `https://pai.oneai.host/` 重新登录，不要重开回调地址。2026-10-08 用真实管理员账号复核，新开的登录流程 302 → Cognito → 回调 302 → 200，正常。
+
+界面在会话过期（1 小时）后的 API 请求会被 ALB 重定向到 Cognito；页面会自动整页重新加载并重新登录，被重定向的请求不会到达服务器，也不会重放。Service worker 不拦截 `/oauth2/*` 和 `/logout`。
+
 ## AI 引擎
 
 托管站点只启用 Kiro 主账号、备用账号和二备账号。Codex 依赖个人登录，Claude 需要额外的 Bedrock 授权，所以都不在托管端启用。
