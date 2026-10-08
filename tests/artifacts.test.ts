@@ -9,7 +9,7 @@ import { createApp } from "../src/server.js";
 import type { Adapters } from "../src/adapters.js";
 import { Store } from "../src/store.js";
 import { createArtifact, decideArtifact, exportArtifact, verifyArtifactPackage, type ArtifactVersion } from "../src/artifacts/registry.js";
-import { validateWorkflow } from "../src/artifacts/workflows.js";
+import { saveWorkflow, startRun, validateWorkflow } from "../src/artifacts/workflows.js";
 import { planning } from "./fixtures/workflows.js";
 
 const REF = "logistics-pdptw@1.0.0";
@@ -122,4 +122,60 @@ test("artifact APIs: anonymous hosted requests are refused, nothing is reachable
     assert.equal(invalid.json().valid, false);
     assert.equal(invalid.json().error, "WORKFLOW_SCHEMA");
   } finally { await local.app.close(); await rm(state, { recursive: true, force: true }); }
+});
+
+test("independent logistics verifier rejects plans that reuse a vehicle, omit or misstate totals, or invent orders", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { readFile, writeFile } = await import("node:fs/promises");
+  const dir = await mkdtemp(join(tmpdir(), "pai-verify-"));
+  try {
+    const problemFile = join(dir, "p.json");
+    execFileSync("python3", ["-I", "native/logistics_generate.py", "--seed", "3", "--orders", "4", "--vehicles", "1", "--output", problemFile]);
+    const p = JSON.parse(await readFile(problemFile, "utf8"));
+    const v = p.vehicles[0], T = p.matrix.timeMin, D = p.matrix.distanceKm;
+    // One route per order, all on the single vehicle V1, each individually consistent with the matrices.
+    const route = (o: { id: string; pickup: number; delivery: number; weightKg: number; serviceMin: number; pickupWindow: number[]; deliveryWindow: number[] }) => {
+      let t = v.shift[0]; const stops: unknown[] = [{ location: 0, kind: "depot", arrival: t, departure: t, loadKg: 0 }];
+      t = Math.max(t + T[0][o.pickup], o.pickupWindow[0]); stops.push({ location: o.pickup, order: o.id, kind: "pickup", arrival: t, departure: t + o.serviceMin, loadKg: o.weightKg }); t += o.serviceMin;
+      t = Math.max(t + T[o.pickup][o.delivery], o.deliveryWindow[0]); stops.push({ location: o.delivery, order: o.id, kind: "delivery", arrival: t, departure: t + o.serviceMin, loadKg: 0 }); t += o.serviceMin;
+      t += T[o.delivery][0]; stops.push({ location: 0, kind: "depot", arrival: t, departure: t, loadKg: 0 });
+      return { vehicle: v.id, stops, distanceKm: Math.round((D[0][o.pickup] + D[o.pickup][o.delivery] + D[o.delivery][0]) * 1000) / 1000 };
+    };
+    const verify = async (plan: unknown) => {
+      const planFile = join(dir, "plan.json"), out = join(dir, "v.json");
+      await writeFile(planFile, JSON.stringify(plan));
+      execFileSync("python3", ["-I", "native/logistics_verify.py", "--problem", problemFile, "--plan", planFile, "--output", out]);
+      const r = JSON.parse(await readFile(out, "utf8"));
+      return { verdict: r.verdict as string, failed: (r.checks as { id: string; passed: boolean }[]).filter(c => !c.passed).map(c => c.id) };
+    };
+    const reused = await verify({ schema: "pai-logistics-plan-1", status: "feasible", routes: p.orders.map(route), unassigned: [], totalCost: -1, vehiclesUsed: 0 });
+    assert.equal(reused.verdict, "rejected");
+    assert.ok(reused.failed.includes("routes-continuous") && reused.failed.includes("reported-figures"), JSON.stringify(reused));
+    const one = route(p.orders[0]);
+    const honest = { schema: "pai-logistics-plan-1", status: "partial", routes: [one], unassigned: p.orders.slice(1).map((o: { id: string }) => o.id),
+      totalDistanceKm: one.distanceKm, totalCost: Math.round((one.distanceKm * v.costPerKm + v.fixedCost) * 1000) / 1000, vehiclesUsed: 1 };
+    assert.equal((await verify(honest)).verdict, "partial-plan");
+    assert.equal((await verify({ ...honest, totalCost: honest.totalCost - 1 })).verdict, "rejected");
+    assert.equal((await verify({ ...honest, totalDistanceKm: undefined })).verdict, "rejected");
+    assert.equal((await verify({ ...honest, unassigned: [...honest.unassigned, "O999"] })).verdict, "rejected");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("a run whose runtime is missing ends failed with the reason; nothing is left running or retried", async () => {
+  const r = await registry();
+  try {
+    markValidated(r.store, r.a);
+    const w = saveWorkflow(r.store, planning(), "tester");
+    const { execFileSync } = await import("node:child_process");
+    const { readFile } = await import("node:fs/promises");
+    const f = join(r.dir, "p.json");
+    execFileSync("python3", ["-I", "native/logistics_generate.py", "--seed", "1", "--orders", "3", "--vehicles", "1", "--output", f]);
+    const problem = JSON.parse(await readFile(f, "utf8"));
+    const run = await startRun({ store: r.store, config: { ...r.config, logisticsPython: undefined } }, { requestId: randomUUID(), workflow: w.id, inputs: { problem } }, "tester");
+    assert.equal(run.state, "failed");
+    assert.match(run.error ?? "", /RUNTIME_NOT_READY/);
+    assert.equal(run.nodes.solve.state, "failed");
+    assert.equal(run.nodes.verify.state, "pending");
+    assert.equal(run.artifacts[REF], r.store.get<ArtifactVersion>("artifact", REF)!.digest, "the run pins the artifact digest");
+  } finally { await r.cleanup(); }
 });

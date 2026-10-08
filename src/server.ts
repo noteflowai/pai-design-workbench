@@ -145,7 +145,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   // The auth hook has already verified the ALB-signed token and that its subject equals this header.
   const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
     ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
-  artifactRoutes(app, { store, config, actor, executeNative });
+  artifactRoutes(app, { store, config, actor, executeNative, track: job => { const t = job.catch(() => undefined); activeJobs.add(t); void t.finally(() => activeJobs.delete(t)); } });
   app.get("/api/projects/:id/ai-track-record", async request => trackRecord(store, workbench.project(paramId(request.params)).id));
   app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));
   app.get("/api/projects/:id/admission", async request => {

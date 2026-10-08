@@ -51,6 +51,8 @@ export interface NodeRun {
 export interface WorkflowRun {
   id: string; revision: number; tenant: string; requestId: string; workflowId: string; workflowDigest: string; inputDigest: string;
   state: "running" | "waiting-approval" | "succeeded" | "rejected" | "failed" | "interrupted"; nodes: Record<string, NodeRun>;
+  /** Digest of every artifact version pinned at start; a node runs only if its version still has this digest. */
+  artifacts: Record<string, string>;
   outputs?: Record<string, { sha256: string; file: string }>; createdAt: string; finishedAt?: string; createdBy: string; error?: string;
 }
 
@@ -60,7 +62,7 @@ const deps = (n: Node) => [...new Set([...(n.after ?? []), ...(n.type === "artif
   ...(n.type === "condition" ? [n.status.slice(1)] : [])])];
 
 /** Validate a definition against the registry; returns the nodes in execution order. Throws with every problem found. */
-export function validateWorkflow(store: Store, input: unknown): { definition: WorkflowDefinition; order: string[]; artifacts: Record<string, ArtifactVersion> } {
+export function validateWorkflow(store: Store, input: unknown, opts: { started?: boolean } = {}): { definition: WorkflowDefinition; order: string[]; artifacts: Record<string, ArtifactVersion> } {
   const parsed = WorkflowDefinition.safeParse(input);
   if (!parsed.success) throw new DomainError("WORKFLOW_SCHEMA", parsed.error.issues.slice(0, 8).map(i => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; "), 422);
   const def = parsed.data, problems: string[] = [];
@@ -78,7 +80,8 @@ export function validateWorkflow(store: Store, input: unknown): { definition: Wo
   for (const n of def.nodes) if (n.type === "artifact" && !artifacts[n.artifact]) {
     const a = store.get<ArtifactVersion>("artifact", n.artifact);
     if (!a) problems.push(`${n.id}: artifact ${n.artifact} not found`);
-    else if (a.state !== "validated" && a.state !== "released") problems.push(`${n.id}: artifact ${n.artifact} is ${a.state}; only validated or released versions can be used`);
+    // A started run keeps its pinned versions (checked by digest per node); new runs need validated or released ones.
+    else if (!opts.started && a.state !== "validated" && a.state !== "released") problems.push(`${n.id}: artifact ${n.artifact} is ${a.state}; only validated or released versions can be used`);
     else artifacts[n.artifact] = a;
   }
   for (const n of def.nodes) {
@@ -138,6 +141,7 @@ export async function startRun(d: Deps, input: unknown, actor: string): Promise<
   for (const extra of Object.keys(req.inputs)) if (!w.definition.inputs[extra]) throw new DomainError("INVALID_INPUT", `Workflow ${w.id} has no input ${extra}`, 422);
   const run: WorkflowRun = { id: randomUUID(), revision: 1, tenant: w.tenant, requestId: req.requestId, workflowId: w.id, workflowDigest: w.digest,
     inputDigest: sha256(JSON.stringify(req.inputs)), state: "running", nodes: Object.fromEntries(order.map(id => [id, { state: "pending" as NodeState }])),
+    artifacts: Object.fromEntries(Object.values(artifacts).map(a => [a.id, a.digest])),
     createdAt: new Date().toISOString(), createdBy: actor };
   const claimed = d.store.claim(req.requestId, sha256(canonical({ kind: "workflow-run", workflow: w.id, inputs: req.inputs })), run, "workflow-run");
   if (claimed !== run.id) return d.store.get<WorkflowRun>("workflow-run", claimed)!;
@@ -158,11 +162,24 @@ async function readData(config: Config, runId: string, file: string, digest: str
   return JSON.parse(text);
 }
 
-/** Execute every node that can run now; stops at an approval, a failure or the end. Never re-runs a finished node. */
+/** Any unexpected error ends the run as failed with its reason (never left "running"); nothing is retried. */
 async function advance(d: Deps, runId: string): Promise<WorkflowRun> {
+  try { return await step(d, runId); } catch (e) {
+    const run = d.store.get<WorkflowRun>("workflow-run", runId)!;
+    if (run.state !== "running") return run;
+    const error = e instanceof DomainError ? `${e.code}: ${e.message}` : String(e);
+    const nodes = Object.fromEntries(Object.entries(run.nodes).map(([k, n]) => [k, n.state === "running" ? { ...n, state: "failed" as NodeState, error } : n]));
+    const failed: WorkflowRun = { ...run, revision: run.revision + 1, state: "failed", error, nodes, finishedAt: new Date().toISOString() };
+    d.store.put("workflow-run", failed, run.revision);
+    return failed;
+  }
+}
+
+/** Execute every node that can run now; stops at an approval, a failure or the end. Never re-runs a finished node. */
+async function step(d: Deps, runId: string): Promise<WorkflowRun> {
   let run = d.store.get<WorkflowRun>("workflow-run", runId)!;
   const w = d.store.get<Workflow>("workflow", run.workflowId)!;
-  const { order } = validateWorkflow(d.store, w.definition);
+  const { order } = validateWorkflow(d.store, w.definition, { started: true });
   const inputs = await readData(d.config, run.id, "input.json", run.inputDigest);
   const save = (next: WorkflowRun) => { next.revision = run.revision + 1; d.store.put("workflow-run", next, run.revision); run = next; };
   for (const id of order) {
@@ -189,6 +206,7 @@ async function advance(d: Deps, runId: string): Promise<WorkflowRun> {
     if (n.type === "approval") { save({ ...run, state: "waiting-approval", nodes: { ...run.nodes, [id]: { state: "waiting-approval", status: "awaiting decision" } } }); return run; }
     // artifact node
     const a = getArtifact(d.store, n.artifact);
+    if (run.artifacts?.[a.id] !== a.digest) throw new DomainError("ARTIFACT_CHANGED", `${a.id} no longer has the digest pinned when the run started`, 409);
     const op = a.manifest.operations.find(o => o.id === n.operation)!;
     if (state.state === "running" && op.effects !== "none") {
       save({ ...run, state: "interrupted", error: `${id} was interrupted and its operation may have external effects; reconcile before resuming` });

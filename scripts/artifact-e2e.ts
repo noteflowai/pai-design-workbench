@@ -22,9 +22,12 @@ import { planning } from "../tests/fixtures/workflows.js";
 
 const base = configuration();
 assert.ok(base.logisticsPython, "Run python3 tools/setup_logistics.py (sets PAI_LOGISTICS_PYTHON in .state/demo.env)");
-const root = join(base.state, "artifact-e2e", randomUUID());
+// `--clean <dir>`: the clean side, run as a separate process (own signer, own store, optionally own OR-Tools venv).
+const cleanArg = process.argv.indexOf("--clean");
+const root = cleanArg > 0 ? process.argv[cleanArg + 1] : join(base.state, "artifact-e2e", randomUUID());
 const REF = "logistics-pdptw@1.0.0";
 const evidence: Record<string, unknown> = { schema: "pai-artifact-e2e-1", startedAt: new Date().toISOString(), synthetic: true };
+let originKey = "";
 
 async function environment(name: string, logisticsPython = base.logisticsPython) {
   const state = join(root, name);
@@ -48,6 +51,7 @@ const instance = async (scenario: string, seed: number, orders: number, vehicles
 const summary = (run: WorkflowRun) => ({ id: run.id, state: run.state, error: run.error ?? null,
   nodes: Object.fromEntries(Object.entries(run.nodes).map(([k, n]) => [k, { state: n.state, status: n.status ?? null, usage: n.usage?.native ?? null, model: n.usage?.model.status ?? null }])) });
 
+if (cleanArg > 0) { await clean(); process.exit(0); }
 await mkdir(root, { recursive: true, mode: 0o700 });
 const A = await environment("origin");
 try {
@@ -103,6 +107,7 @@ try {
   // 5. Signed package; offline verification; tampering.
   const pkg = await A.ok<ArtifactPackage>("GET", `/api/v1/artifacts/${REF}/package`);
   const key = await A.ok<{ publicKeyPem: string }>("GET", "/api/signing/public-key");
+  originKey = key.publicKeyPem;
   const verified = await A.ok<{ valid: boolean; signer: { trusted: boolean } }>("POST", "/api/v1/artifact-packages/verification", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
   assert.equal(verified.valid, true); assert.equal(verified.signer.trusted, true);
   const tampered = JSON.parse(JSON.stringify(pkg)) as ArtifactPackage;
@@ -115,15 +120,28 @@ try {
     tampered: tamperResult.error };
 } finally { await A.app.close(); }
 
-// 6. Clean environment: a fresh state directory with its own store and signing key; only the package file crosses.
+// 6. Clean environment in a separate process: fresh state directory, store and signing key; only the package file,
+// the origin's public key (pinned out of band) and the expected digests cross.
 // PAI_ARTIFACT_CLEAN_VENV=<empty dir>: the clean side also installs its own OR-Tools from the hash lock (no shared venv).
-let cleanPython = base.logisticsPython, cleanVenv: string | null = null;
+let cleanPython = base.logisticsPython!, cleanVenv: string | null = null;
 if (process.env.PAI_ARTIFACT_CLEAN_VENV) {
   cleanVenv = process.env.PAI_ARTIFACT_CLEAN_VENV;
   execFileSync("python3.12", ["tools/setup_logistics.py"], { env: { ...process.env, PAI_TOOLS_DIR: cleanVenv, PAI_ENV_FILE: join(root, "clean.env") }, stdio: "ignore" });
   cleanPython = join(cleanVenv, "logistics-1", "bin", "python");
 }
-const B = await environment("clean", cleanPython);
+await writeFile(join(root, "handoff.json"), JSON.stringify({ originKey, routesSha256: (evidence.run as { plan: { routesSha256: string } }).plan.routesSha256,
+  digest: (evidence.artifact as { digest: string }).digest }), { mode: 0o600 });
+execFileSync(process.execPath, ["--import", "tsx", "scripts/artifact-e2e.ts", "--clean", root],
+  { env: { ...process.env, PAI_LOGISTICS_PYTHON: cleanPython, PAI_STATE: join(root, "clean-process") }, stdio: ["ignore", "ignore", "inherit"] });
+const reproduction = JSON.parse(await readFile(join(root, "reproduction.json"), "utf8"));
+const originSigner = (evidence.package as { signer: { keyId: string } }).signer.keyId;
+assert.notEqual(reproduction.signerKeyId, originSigner, "the clean side signs with its own key");
+evidence.reproduction = { ...reproduction, environment: `separate process; fresh state directory, store and signing key${cleanVenv ? "; own OR-Tools venv installed from the hash lock" : "; shared OR-Tools venv"}; only the package file and the pinned origin key crossed` };
+
+async function clean() {
+const handoff = JSON.parse(await readFile(join(root, "handoff.json"), "utf8")) as { originKey: string; routesSha256: string; digest: string };
+const originKey = handoff.originKey;
+const B = await environment("clean");
 try {
   const pkg = JSON.parse(await readFile(join(root, "logistics-pdptw-1.0.0.package.json"), "utf8")) as ArtifactPackage;
   // Foreign code, correctly re-signed by this environment's own key: verifies, but is not imported.
@@ -133,9 +151,19 @@ try {
   foreign.manifest.files["logistics_solve.py"] = sha256(evil);
   const { manifestSha256: _m, signature: _s, ...body } = foreign;
   Object.assign(foreign, await signManifest(B.config, packageManifest(body)));
-  const foreignImport = await B.call("POST", "/api/v1/artifact-packages", foreign);
+  const foreignImport = await B.call("POST", "/api/v1/artifact-packages", { package: foreign });
   assert.equal(foreignImport.status, 422); assert.equal(foreignImport.body.error, "UNTRUSTED_CODE");
-  const imported = await B.ok<{ artifact: ArtifactVersion; verified: { valid: boolean } }>("POST", "/api/v1/artifact-packages", pkg);
+  // Same code, but a manifest claim widened (limits) and re-signed: refused as well.
+  const claims = JSON.parse(JSON.stringify(pkg)) as ArtifactPackage;
+  claims.manifest.limits.maxOrders = 100_000;
+  const { manifestSha256: _m2, signature: _s2, ...claimsBody } = claims;
+  Object.assign(claims, await signManifest(B.config, packageManifest(claimsBody)));
+  const claimsImport = await B.call("POST", "/api/v1/artifact-packages", { package: claims });
+  assert.equal(claimsImport.status, 422); assert.equal(claimsImport.body.error, "UNTRUSTED_CLAIMS");
+  // The genuine package from another deployment needs its signer pinned explicitly.
+  const unpinned = await B.call("POST", "/api/v1/artifact-packages", { package: pkg });
+  assert.equal(unpinned.status, 422); assert.equal(unpinned.body.error, "UNTRUSTED_SIGNER");
+  const imported = await B.ok<{ artifact: ArtifactVersion; verified: { valid: boolean } }>("POST", "/api/v1/artifact-packages", { package: pkg, trustedPublicKeyPem: originKey });
   assert.equal(imported.artifact.state, "draft"); assert.equal(imported.artifact.origin, "imported");
   const v = await B.ok<ArtifactVersion>("POST", `/api/v1/artifacts/${REF}/validation`);
   assert.equal(v.state, "validated");
@@ -145,12 +173,14 @@ try {
   const done = await B.ok<WorkflowRun>("POST", `/api/v1/workflow-runs/${run.id}/decisions`, { node: "dispatcher", approve: true, reason: "复现核对（合成实例）" });
   assert.equal(done.state, "succeeded");
   const plan = await B.ok<{ routes: unknown[] }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=plan`);
-  const original = (evidence.run as { plan: { routesSha256: string } }).plan.routesSha256;
-  assert.equal(sha256(JSON.stringify(plan.routes)), original, "the clean environment reproduces the same plan");
-  assert.equal(v.digest, (evidence.artifact as { digest: string }).digest, "same artifact digest");
-  evidence.reproduction = { environment: `fresh state directory, own store and signing key${cleanVenv ? ", own OR-Tools venv installed from the hash lock" : ", shared OR-Tools venv"}; only the package file crossed`, foreignCode: foreignImport.body.error,
-    importedDigest: v.digest, routesSha256: sha256(JSON.stringify(plan.routes)), identical: true, run: summary(done) };
+  assert.equal(sha256(JSON.stringify(plan.routes)), handoff.routesSha256, "the clean environment reproduces the same plan");
+  assert.equal(v.digest, handoff.digest, "same artifact digest");
+  const own = await B.ok<{ keyId: string }>("GET", "/api/signing/public-key");
+  await writeFile(join(root, "reproduction.json"), JSON.stringify({ foreignCode: foreignImport.body.error, widenedClaims: claimsImport.body.error, unpinnedSigner: unpinned.body.error,
+    signerKeyId: own.keyId, ortools: (v.validation?.evidence as { comparison?: { ortools?: { solver?: { version?: string } } } })?.comparison?.ortools?.solver?.version ?? null,
+    importedDigest: v.digest, routesSha256: sha256(JSON.stringify(plan.routes)), identical: true, run: summary(done) }), { mode: 0o600 });
 } finally { await B.app.close(); }
+}
 
 evidence.finishedAt = new Date().toISOString();
 evidence.scope = "Synthetic, labelled instances; native compute measured per node, model tokens not involved (status none). No dispatch, no billing.";
@@ -158,4 +188,4 @@ await mkdir(join(base.state, "evidence"), { recursive: true, mode: 0o700 });
 await writeFile(join(base.state, "evidence", "artifact-e2e.json"), JSON.stringify(evidence, null, 1) + "\n", { mode: 0o600 });
 await rm(root, { recursive: true, force: true });
 console.log(JSON.stringify({ ok: true, artifact: evidence.artifact && (evidence.artifact as { digest: string }).digest, run: (evidence.run as { plan: unknown }).plan,
-  negatives: { schema: "WORKFLOW_SCHEMA", infeasible: "rejected", timeout: "rejected", tamper: "PACKAGE_FILE", foreign: "UNTRUSTED_CODE" }, reproduction: "identical" }));
+  negatives: { schema: "WORKFLOW_SCHEMA", infeasible: "rejected", timeout: "rejected", tamper: "PACKAGE_FILE", foreign: "UNTRUSTED_CODE", claims: "UNTRUSTED_CLAIMS", signer: "UNTRUSTED_SIGNER" }, reproduction: "identical" }));

@@ -39,7 +39,7 @@ export function Artifacts() {
   const [version, setVersion] = useState("1.0.0");
   const [definition, setDefinition] = useState("");
   const [check, setCheck] = useState<{ valid: boolean; message?: string; order?: string[] }>();
-  const [verified, setVerified] = useState<{ valid: boolean; artifact?: string; error?: string; message?: string }>();
+  const [verified, setVerified] = useState<{ valid: boolean; artifact?: string; error?: string; message?: string; signer?: { trusted: boolean } }>();
   const [workflowId, setWorkflowId] = useState("");
   const [scenario, setScenario] = useState("normal");
   const [seed, setSeed] = useState(11);
@@ -77,11 +77,13 @@ export function Artifacts() {
           </div></li>)}</ul>}
       <label className="file">核验或导入签名制品包<input type="file" accept="application/json,.json" onChange={e => { const file = e.target.files?.[0]; if (file) void c.perform(async () => {
         const pkg = JSON.parse(await file.text());
-        const r = await api<{ valid: boolean; artifact?: string; error?: string; message?: string }>("/v1/artifact-packages/verification", { package: pkg });
+        const key = await api<{ publicKeyPem: string }>("/signing/public-key");
+        const r = await api<NonNullable<typeof verified>>("/v1/artifact-packages/verification", { package: pkg, trustedPublicKeyPem: key.publicKeyPem });
         setVerified(r);
-        if (r.valid && confirm(`签名与 ${r.artifact} 的全部文件摘要一致。导入为草稿？（代码须与本版本可信源逐字节一致）`)) { await api("/v1/artifact-packages", pkg); await load(); }
+        // Only packages signed by this deployment are imported here; another deployment's key is pinned through the API.
+        if (r.valid && r.signer?.trusted && confirm(`签名与 ${r.artifact} 的全部文件摘要一致。导入为草稿？（代码和清单须与本版本可信源一致）`)) { await api("/v1/artifact-packages", { package: pkg }); await load(); }
       }, "制品包核验完成。"); e.target.value = ""; }} /></label>
-      {verified && <p role="status" className={verified.valid ? "ok-text" : "bad-text"}>{verified.valid ? `签名有效：${verified.artifact}` : `已拒绝（${verified.error}）：${verified.message}`}</p>}
+      {verified && <p role="status" className={verified.valid ? "ok-text" : "bad-text"}>{!verified.valid ? `已拒绝（${verified.error}）：${verified.message}` : verified.signer?.trusted ? `签名有效，签名者是本部署：${verified.artifact}` : `签名有效，但签名者不是本部署的密钥（未固定信任）：${verified.artifact}，不在此导入`}</p>}
     </Card>
 
     <Card title="流程配置" aside={<small>pai-workflow-1 · 节点引用精确版本 · 保存后不可改</small>} label="流程配置">

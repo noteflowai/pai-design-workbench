@@ -39,7 +39,7 @@ export const Problem = z.object({
   if (new Set(nodes).size !== nodes.length || nodes.some(i => i >= n)) ctx.addIssue({ code: "custom", path: ["orders"], message: "each order needs its own pickup and delivery location inside the matrix" });
   if (new Set(p.orders.map(o => o.id)).size !== p.orders.length) ctx.addIssue({ code: "custom", path: ["orders"], message: "order ids must be unique" });
 });
-const Plan = z.object({ schema: z.literal("pai-logistics-plan-1"), status: z.enum(["feasible", "partial", "infeasible", "timeout", "error"]),
+const Plan = z.object({ schema: z.literal("pai-logistics-plan-1"), status: z.enum(["feasible", "partial", "infeasible", "timeout", "unknown", "error"]),
   routes: z.array(z.unknown()), unassigned: z.array(z.string()) }).passthrough();
 const Verification = z.object({ schema: z.literal("pai-logistics-verification-1"), verdict: z.enum(["feasible-plan", "partial-plan", "no-plan", "rejected"]),
   checks: z.array(z.object({ id: z.string(), passed: z.boolean() }).passthrough()) }).passthrough();
@@ -106,7 +106,7 @@ export const logisticsAdapter: ArtifactAdapter = {
           inputs: { problem: "pai-logistics-problem-1", plan: "pai-logistics-plan-1" }, outputs: { verification: "pai-logistics-verification-1" }, effects: "none" },
       ],
       capabilities: ["pickup-and-delivery pairs on the same vehicle", "vehicle capacity (kg)", "pickup and delivery time windows with waiting", "service time per stop",
-        "vehicle shifts", "fixed cost per used vehicle", "optional unassigned orders (partial plans)", "explicit infeasible / timeout statuses"],
+        "vehicle shifts", "per-vehicle cost rate and fixed cost", "optional unassigned orders (partial plans)", "explicit infeasible / timeout / unknown statuses"],
       limits: LIMITS,
       runtime: { python: "3.12", lock: "logistics-requirements.txt", entrypoints: { solve: "logistics_solve.py", verify: "logistics_verify.py", generate: "logistics_generate.py" } },
       dependencies: Object.entries(pins).map(([name, v]) => ({ name, version: v, license: LICENSES[name] ?? "unknown", source: `https://pypi.org/project/${name}/${v}/`,

@@ -18,7 +18,8 @@ const summary = (a: ArtifactVersion) => ({ id: a.id, name: a.manifest.name, vers
   operations: a.manifest.operations.map(o => o.id) });
 
 type Execute = <T extends { id: string; state: string }>(reply: FastifyReply, input: unknown, kind: string, route: string, execute: () => Promise<T>) => Promise<T>;
-export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: Config; actor: (h: Record<string, unknown>) => string; executeNative: Execute }) {
+type Track = (job: Promise<unknown>) => void;
+export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: Config; actor: (h: Record<string, unknown>) => string; executeNative: Execute; track: Track }) {
   const { store, config } = d;
   const param = (p: unknown, schema: z.ZodType<string>, field = "id") => schema.parse((p as Record<string, unknown>)[field]);
   const soft = <T>(f: () => T) => {
@@ -41,6 +42,7 @@ export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: 
     const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).strict().parse(request.body);
     return soft(() => verifyArtifactPackage(body.package, body.trustedPublicKeyPem));
   });
+  /** Body `{package, trustedPublicKeyPem?}`; without a pinned key only packages signed by this deployment are accepted. */
   app.post("/api/v1/artifact-packages", async request => importArtifact(store, config, request.body, d.actor(request.headers)));
 
   app.get("/api/v1/workflows", async () => store.list<Workflow>("workflow"));
@@ -65,6 +67,21 @@ export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: 
   });
   app.post("/api/v1/workflow-runs", async (request, reply) =>
     d.executeNative(reply, request.body, "workflow-run", "v1/workflow-runs", () => startRun({ store, config }, request.body, d.actor(request.headers))));
-  app.post("/api/v1/workflow-runs/:id/decisions", async request => decideRun({ store, config }, getRun(request.params).id, request.body, d.actor(request.headers)));
-  app.post("/api/v1/workflow-runs/:id/resume", async request => resumeRun({ store, config }, getRun(request.params).id));
+  // Continuing a run executes native nodes: hosted, answer 202 + Location while it runs (tracked for shutdown).
+  const continued = async (reply: FastifyReply, id: string, job: Promise<WorkflowRun>) => {
+    d.track(job);
+    if (!config.publicOrigin) return job;
+    const done = await Promise.race([job, new Promise<undefined>(r => setTimeout(r, 2000))]);
+    if (done) return done;
+    reply.code(202).header("Location", `/api/v1/workflow-runs/${id}`).header("Retry-After", "2");
+    return store.get<WorkflowRun>("workflow-run", id);
+  };
+  app.post("/api/v1/workflow-runs/:id/decisions", async (request, reply) => {
+    const id = getRun(request.params).id;
+    return continued(reply, id, decideRun({ store, config }, id, request.body, d.actor(request.headers)));
+  });
+  app.post("/api/v1/workflow-runs/:id/resume", async (request, reply) => {
+    const id = getRun(request.params).id;
+    return continued(reply, id, resumeRun({ store, config }, id));
+  });
 }

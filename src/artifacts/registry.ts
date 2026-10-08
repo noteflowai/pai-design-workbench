@@ -16,7 +16,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { canonical, DomainError, sha256 } from "../domain.js";
 import type { Store } from "../store.js";
-import { FileEntry, signManifest, verifyManifestSignature } from "../signing.js";
+import { FileEntry, signer, signManifest, verifyManifestSignature } from "../signing.js";
 import { ArtifactManifest, NO_MODEL, TRANSITIONS, Usage, type ArtifactAdapter, type Lifecycle, type OperationResult } from "./contract.js";
 import { logisticsAdapter } from "./logistics.js";
 
@@ -195,16 +195,27 @@ export function verifyArtifactPackage(input: unknown, trustedPublicKeyPem?: stri
     signer: { keyId: signature.keyId, algorithm: signature.algorithm, trusted: pinned ?? false, pinned: pinned !== undefined }, physicalValidated: false as const };
 }
 
+/** Everything an artifact claims except who built it, when, and from which commit (that is attested by the signer). */
+const claims = (m: ArtifactManifest) => canonical({ ...m, provenance: null });
+
+/**
+ * Import a package. The signer must be trusted: this deployment's own key, or a key the operator pins for this import
+ * (obtained out of band). No remote code and no foreign claims: the package's files and every manifest claim
+ * (operations, effects, schemas, limits, dependency pins, scope) must equal what this release's adapter builds.
+ */
 export async function importArtifact(store: Store, config: Config, input: unknown, actor: string) {
-  const verified = verifyArtifactPackage(input);
-  const p = input as ArtifactPackage;
-  // No remote code: the package's code must be byte-identical to what this release's adapter builds.
+  const req = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).strict().parse(input);
+  const own = (await signer(config)).publicKeyPem;
+  const verified = verifyArtifactPackage(req.package, req.trustedPublicKeyPem ?? own);
+  if (!verified.signer.trusted) throw new DomainError("UNTRUSTED_SIGNER", "The package is signed by a key this deployment does not trust; pin the expected public key", 422);
+  const p = req.package as ArtifactPackage;
   const adapter = adapterOf(p.manifest.adapter);
   const local = await adapter.build(config, p.manifest.version, actor);
   const foreign = Object.entries(p.manifest.files).filter(([name, digest]) => local.manifest.files[name] !== digest).map(([name]) => name);
   if (foreign.length || Object.keys(local.manifest.files).length !== Object.keys(p.manifest.files).length) {
     throw new DomainError("UNTRUSTED_CODE", `Package code differs from the trusted ${adapter.id} sources (${foreign.join(", ") || "file set"}); not imported`, 422);
   }
+  if (claims(local.manifest) !== claims(p.manifest)) throw new DomainError("UNTRUSTED_CLAIMS", `Package manifest claims differ from the trusted ${adapter.id} build; not imported`, 422);
   const files = Object.fromEntries(Object.entries(p.files).map(([k, f]) => [k, Buffer.from(f.contentBase64, "base64")]));
   return { verified, artifact: register(store, ArtifactManifest.parse(p.manifest), files, actor, "imported") };
 }

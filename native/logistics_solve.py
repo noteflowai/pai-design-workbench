@@ -15,8 +15,9 @@ Strategies:
   used only as a comparison point; it never uses the optimiser.
 
 Statuses: feasible (every order planned) | partial (some orders unassigned; only with --allow-unassigned) |
-infeasible (the solver proved no plan, or the input cannot be planned) | timeout (no plan within the time limit) |
-error. Unknown solver states are reported as error with the raw status, never as success.
+infeasible (the solver proved no plan, or an order is heavier than every vehicle) | timeout (no plan within the time
+limit) | unknown (the search ended without a plan and without a proof) | error. Other solver states are reported as
+error with the raw status, never as success.
 """
 import argparse
 import json
@@ -138,10 +139,12 @@ from ortools.constraint_solver import pywrapcp, routing_enums_pb2  # noqa: E402
 
 manager = pywrapcp.RoutingIndexManager(n, len(vehicles), 0)
 routing = pywrapcp.RoutingModel(manager)
-dist_cb = routing.RegisterTransitCallback(lambda i, j: int(round(D[manager.IndexToNode(i)][manager.IndexToNode(j)] * 1000)))
+# Objective in milli cost units: distance x the vehicle's own rate, plus its fixed cost when used.
 for v, veh in enumerate(vehicles):
-    routing.SetArcCostEvaluatorOfVehicle(dist_cb, v)
-    routing.SetFixedCostOfVehicle(int(veh["fixedCost"] * 1000 / max(veh["costPerKm"], 1e-9)), v)
+    rate = veh["costPerKm"]
+    cb = routing.RegisterTransitCallback(lambda i, j, rate=rate: int(round(D[manager.IndexToNode(i)][manager.IndexToNode(j)] * rate * 1000)))
+    routing.SetArcCostEvaluatorOfVehicle(cb, v)
+    routing.SetFixedCostOfVehicle(int(round(veh["fixedCost"] * 1000)), v)
 time_cb = routing.RegisterTransitCallback(lambda i, j: T[manager.IndexToNode(i)][manager.IndexToNode(j)] + service.get(manager.IndexToNode(i), 0))
 horizon = max([v["shift"][1] for v in vehicles] + [w[1] for w in window.values()])
 routing.AddDimension(time_cb, horizon, horizon, False, "Time")
@@ -175,9 +178,12 @@ solution = routing.SolveWithParameters(params)
 raw = routing_enums_pb2.RoutingSearchStatus.Value.Name(routing.status())
 solver = {"name": "ortools", "version": ortools.__version__, "strategy": a.strategy, "timeLimitSeconds": a.time_limit,
           "rawStatus": raw, "objective": solution.ObjectiveValue() if solution else None,
-          "optimality": "not proven" if raw != "ROUTING_OPTIMAL" else "proven by the solver"}
+          "optimality": "not proven" if raw != "ROUTING_OPTIMAL" else "proven by the solver",
+          # Replayable only when the deterministic search ended at its local optimum, not at the time limit.
+          "replayable": a.strategy == "deterministic" and raw in ("ROUTING_SUCCESS", "ROUTING_OPTIMAL")}
 if solution is None:
-    status = {"ROUTING_FAIL_TIMEOUT": "timeout", "ROUTING_INFEASIBLE": "infeasible", "ROUTING_FAIL": "infeasible"}.get(raw, "error")
+    # Only a proof is "infeasible"; "no solution found" without one is "unknown".
+    status = {"ROUTING_FAIL_TIMEOUT": "timeout", "ROUTING_INFEASIBLE": "infeasible", "ROUTING_FAIL": "unknown"}.get(raw, "error")
     emit({"status": status, "reason": f"solver returned {raw} without a plan", "routes": [], "unassigned": [o["id"] for o in orders], "solver": solver})
 by_node = {}
 for o in orders:
