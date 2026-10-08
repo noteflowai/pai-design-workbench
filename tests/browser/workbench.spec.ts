@@ -100,12 +100,12 @@ test("full lifecycle: requirement, native review, replay, feedback recheck, hand
   expect(errors).toEqual([]);
   const manifest = await (await page.request.get("/manifest.webmanifest")).json();
   expect(manifest.display).toBe("standalone");
-  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  // A worker left by an older release (it broke the hosted sign-in) is removed with its caches on the next load.
+  await page.evaluate(async () => { await navigator.serviceWorker.register("/sw.js"); await caches.open("pai-shell-0.3.1"); });
   await page.reload();
   await expect(page.getByRole("navigation", { name: "生命周期" })).toBeVisible();
-  const cached = await page.evaluate(async () => (await Promise.all((await caches.keys()).map(async key =>
-    (await (await caches.open(key)).keys()).map(request => new URL(request.url).pathname)))).flat());
-  expect(cached.some(path => path.startsWith("/api/"))).toBe(false);
+  await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
+  await expect.poll(() => page.evaluate(async () => (await caches.keys()).filter(k => k.startsWith("pai-shell-")).length)).toBe(0);
 });
 
 test("visual review: recorded inspection views go to the AI with the question, pinned by digest", async ({ page }, testInfo) => {
