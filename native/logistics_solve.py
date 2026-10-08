@@ -174,7 +174,9 @@ params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLE
 params.time_limit.FromMilliseconds(int(a.time_limit * 1000))
 if a.strategy == "guided":
     params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+t_solve = time.monotonic()
 solution = routing.SolveWithParameters(params)
+t_solve = time.monotonic() - t_solve
 raw = routing_enums_pb2.RoutingSearchStatus.Value.Name(routing.status())
 solver = {"name": "ortools", "version": ortools.__version__, "strategy": a.strategy, "timeLimitSeconds": a.time_limit,
           "rawStatus": raw, "objective": solution.ObjectiveValue() if solution else None,
@@ -182,8 +184,11 @@ solver = {"name": "ortools", "version": ortools.__version__, "strategy": a.strat
           # Replayable only when the deterministic search ended at its local optimum, not at the time limit.
           "replayable": a.strategy == "deterministic" and raw in ("ROUTING_SUCCESS", "ROUTING_OPTIMAL")}
 if solution is None:
-    # Only a proof is "infeasible"; "no solution found" without one is "unknown".
-    status = {"ROUTING_FAIL_TIMEOUT": "timeout", "ROUTING_INFEASIBLE": "infeasible", "ROUTING_FAIL": "unknown"}.get(raw, "error")
+    # Only a proof is "infeasible". "No solution found" is "timeout" when the search used up its time limit (OR-Tools
+    # reports ROUTING_FAIL or ROUTING_FAIL_TIMEOUT depending on where the limit hit), otherwise "unknown".
+    hit_limit = raw == "ROUTING_FAIL_TIMEOUT" or (raw == "ROUTING_FAIL" and t_solve >= 0.95 * a.time_limit)
+    status = "timeout" if hit_limit else {"ROUTING_INFEASIBLE": "infeasible", "ROUTING_FAIL": "unknown"}.get(raw, "error")
+    solver["searchSeconds"] = round(t_solve, 3)
     emit({"status": status, "reason": f"solver returned {raw} without a plan", "routes": [], "unassigned": [o["id"] for o in orders], "solver": solver})
 by_node = {}
 for o in orders:
