@@ -761,3 +761,26 @@ h1 { font-size: 22px; }
 .artifact-list .button-row button { white-space: nowrap; }
 .data-table.nodes th, .data-table.nodes td { white-space: nowrap; }
 .run-detail { margin-top: 10px; }
+
+/* Project switcher (topbar): trigger shows the current task; popover with search, recent and all tasks. */
+.switcher { position: relative; min-width: 0; flex: 1 1 auto; max-width: 420px; }
+button.switcher-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 10px; font-weight: 600;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); text-align: left; }
+button.switcher-trigger:hover:not(:disabled) { background: var(--sunken); border-color: var(--brand); }
+.switcher-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switcher-rev { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.switcher-caret { color: var(--ink-3); font-size: 11px; }
+.switcher-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: min(520px, calc(100vw - 24px)); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 20px 44px #0d1a2033; overflow: hidden; }
+.switcher-pop input { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; min-height: 44px; padding: 0 14px; font-size: 14px; outline: none; }
+.switcher-pop ul { list-style: none; margin: 0; padding: 6px; max-height: min(60vh, 460px); overflow: auto; }
+.switcher-pop li[role="option"] { display: grid; gap: 2px; padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.switcher-pop li[aria-selected="true"] { background: var(--brand-soft); }
+.switcher-pop li[aria-current="true"] .sw-title::after { content: " ✓"; color: var(--brand); }
+.switcher-pop .sw-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: .4px; color: var(--ink-3); }
+.switcher-pop .none { padding: 12px 10px; color: var(--ink-3); }
+.sw-title { font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-meta { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-meta code { font-size: 11px; }
+.sw-state.s-released { color: var(--ok); font-weight: 600; } .sw-state.s-in-review { color: var(--warn); font-weight: 600; }
+@media (max-width: 760px) { .switcher { max-width: none; } .switcher-pop { position: fixed; left: 12px; right: 12px; top: 96px; width: auto; } }

@@ -7,6 +7,7 @@ import { api } from "./api";
 import { AppContext, VIEWS, type Ctx, type Route, type State, type ViewId, type Attachment } from "./context";
 import { revealInScroller, Toasts } from "./ui";
 import { Assistant, useLiveSession } from "./studio";
+import { ProjectSwitcher, rememberProject } from "./project-switcher";
 import { Palette, type Command } from "./palette";
 import { Overview } from "./views/overview";
 import { Requirements } from "./views/requirements";
@@ -105,7 +106,7 @@ function App() {
     catch (e) { toast(e instanceof Error ? e.message : String(e), "bad"); await refresh().catch(() => undefined); return false; }
     finally { setBusy(false); }
   }, [refresh, toast]);
-  const selectProject = useCallback((id: string) => { setProjectId(id); localStorage.setItem("pai-project", id); }, []);
+  const selectProject = useCallback((id: string) => { setProjectId(id); localStorage.setItem("pai-project", id); rememberProject(id); }, []);
 
   const project = data?.projects.find(p => p.id === projectId) ?? data?.projects.at(-1);
   const lifecycle = project ? data?.lifecycles?.[project.id] : undefined;
@@ -119,6 +120,9 @@ function App() {
     { id: "assistant", label: "打开 AI 助手", hint: "/", run: () => { setAssistant(true); setTimeout(() => dispatchEvent(new Event("pai-focus-chat")), 50); } },
     ...VIEWS.map(v => ({ id: `go-${v.id}`, label: `前往：${v.index ? `${v.index} ` : ""}${v.label}`, run: () => navigate(v.id) })),
     { id: "new", label: "新建评审任务", run: () => navigate("requirements", { new: "1" }) },
+    // Every task is reachable from Ctrl K too (search by title or id), newest first.
+    ...[...(data?.projects ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(p => ({ id: `project-${p.id}`, label: `切换任务：${p.title} · v${p.revision}`, hint: p.id.slice(0, 6),
+      run: () => { selectProject(p.id); navigate("overview"); } })),
     { id: "release", label: "发布：创建或审批发布候选", run: () => navigate("deliver") },
     { id: "versions", label: "需求版本历史与比较", run: () => navigate("requirements") },
     { id: "scene", label: "生成并检查 Blender 场景（默认参数）", run: () => { if (ctx?.project && data?.capabilities.blender) void runScene(ctx, "occluded", { maxFootprintArea: 12, targetEnvelopeRadius: 1.4, requireTargetVisible: true }); else navigate("design", { lane: "scene" }); } },
@@ -129,7 +133,7 @@ function App() {
       hint: { persp: "5", top: "7", front: "1", right: "3", camera: "0" }[v], run: () => dispatchEvent(new CustomEvent("pai-view", { detail: v })) })),
     { id: "wire", label: "切换线框显示", hint: "Z", run: () => dispatchEvent(new CustomEvent("pai-view", { detail: "wire" })) },
     { id: "xray", label: "切换 X 光透视", hint: "Alt Z", run: () => dispatchEvent(new CustomEvent("pai-view", { detail: "xray" })) },
-  ], [navigate, ctx, data?.capabilities.blender, theme, railCollapsed]);
+  ], [navigate, ctx, data?.capabilities.blender, data?.projects, selectProject, theme, railCollapsed]);
 
   if (!ctx) return <div className="boot" role="status">{loadError ? `无法加载工作区：${loadError}` : "正在加载工作区…"}</div>;
   const view = { overview: <Overview />, requirements: <Requirements />, design: <Design />, validate: <Validate />, evidence: <Evidence />, feedback: <FeedbackView />, deliver: <Deliver />, artifacts: <Artifacts /> }[route.view];
@@ -140,8 +144,8 @@ function App() {
         <div className="brand-wrap"><a className="brand" href="#/overview" aria-label="PAI Design Workbench 总览"><span className="brand-mark">P</span><span>PAI<small>DESIGN WORKBENCH</small></span></a>
           {ctx.data.build && <BuildBadge build={ctx.data.build} />}</div>
         <div className="project-switch">
-          {ctx.data.projects.length > 0 && <select aria-label="选择已有任务" value={project?.id ?? ""} onChange={e => { selectProject(e.target.value); navigate("overview"); }}>
-            {[...ctx.data.projects].reverse().map(p => <option key={p.id} value={p.id}>{p.title} · v{p.revision}</option>)}</select>}
+          {ctx.data.projects.length > 0 && <ProjectSwitcher projects={ctx.data.projects} lifecycles={ctx.data.lifecycles} current={project}
+            onSelect={id => { selectProject(id); navigate("overview"); }} />}
           <button type="button" className="secondary compact" onClick={() => navigate("requirements", { new: "1" })}>新建</button>
           {lifecycle && <button type="button" className={`maturity-chip m-${lifecycle.maturity.state}`} onClick={() => navigate("deliver")}
             aria-label={`成熟度：${lifecycle.maturity.state === "released" ? `${lifecycle.maturity.number} 已发布` : lifecycle.maturity.state === "in-review" ? `${lifecycle.maturity.number} 待审批` : "设计中"}`}>

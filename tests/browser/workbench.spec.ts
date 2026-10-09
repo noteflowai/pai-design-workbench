@@ -82,7 +82,7 @@ test("full lifecycle: requirement, native review, replay, feedback recheck, hand
   await page.getByRole("combobox", { name: "样本最低成功率" }).selectOption("0.7");
   await page.getByRole("button", { name: "保存为 v2" }).click();
   await expect(page.getByText(/需求已修订为 v2/)).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "选择已有任务" })).toContainText("v2");
+  await expect(page.getByRole("button", { name: /^选择已有任务：/ })).toContainText("v2");
   for (const width of [1024, 1280, 1440]) {
     // The docked assistant must sit beside the work area, never on top of it.
     await page.setViewportSize({ width, height: 800 });
@@ -258,7 +258,8 @@ test("first-article inspection: measured values against the frozen tolerances, n
   expect(errors).toEqual([]);
 });
 
-test("CAM from the CAD form: G-code per setup, independent simulation, programs downloadable at phone width", async ({ page }, testInfo) => {
+// Tagged @cam: about 7 min of FreeCAD CAM, so CI runs it in its own job beside the other shards.
+test("CAM from the CAD form: G-code per setup, independent simulation, programs downloadable at phone width", { tag: "@cam" }, async ({ page }, testInfo) => {
   test.setTimeout(1_500_000);
   const state = await (await page.request.get("/api/state")).json();
   test.skip(!state.capabilities.cad?.cam, "CAM toolchain not installed (npm run setup:cam)");
