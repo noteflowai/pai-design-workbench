@@ -188,4 +188,6 @@ function App() {
   document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
 }
 createRoot(document.getElementById("root")!).render(<App />);
-if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => { /* Installability is optional; never queue API commands offline. */ });
+// No service worker: a registered one broke the hosted sign-in (see web/public/sw.js). Remove any left from older releases.
+if ("serviceWorker" in navigator) void navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).catch(() => undefined);
+if ("caches" in self) void caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("pai-shell-")).map(k => caches.delete(k)))).catch(() => undefined);
