@@ -4,6 +4,8 @@ if (remote && remote !== "https://pai.oneai.host") throw new Error("Remote workf
 export default defineConfig({
   // One worker (the native tools are heavy); fullyParallel lets CI shard per test. Every test creates its own project.
   testDir: "./tests/browser", workers: 1, fullyParallel: true, timeout: 120_000,
+  // CI: per-test durations in the log (for shard balancing) and failures as annotations on the PR.
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
   use: { baseURL: remote ?? "http://127.0.0.1:4318", browserName: "chromium",
     storageState: remote ? process.env.PAI_AUTH_STATE : undefined,
     // Software WebGL so the three.js viewport renders in headless CI; production browsers use the GPU.
