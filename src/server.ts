@@ -1,5 +1,7 @@
 import Fastify, { type FastifyReply } from "fastify";
 import staticPlugin from "@fastify/static";
+import compress from "@fastify/compress";
+import { constants as zlib } from "node:zlib";
 import { readFile, access, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -46,6 +48,11 @@ import { agentAuthentication, agentRoute, rewriteAgentUrl, type AgentPrincipal }
 
 export async function createApp(config: Config, adapters: Adapters = new NativeAdapters(config)) {
   const app = Fastify({ logger: false, bodyLimit: 4_000_000, requestTimeout: 120_000, rewriteUrl: rewriteAgentUrl });
+  // Compress JSON and the app shell (the signed-in /api/state is ~2.4 MB of JSON: ~0.1 MB as brotli). Brotli at quality 5
+  // keeps a dynamic response cheap to encode; images, video and already-compressed files are left alone. Hijacked
+  // live streams (text/event-stream) are not touched.
+  await app.register(compress, { global: true, threshold: 1024, encodings: ["br", "gzip"],
+    brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } }, zlibOptions: { level: 6 } });
   const release = await acquireRuntime(config.state);
   let store: Store;
   try { store = new Store(join(config.state, "workbench.sqlite")); } catch (error) { await release(); throw error; }
