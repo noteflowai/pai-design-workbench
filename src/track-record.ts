@@ -44,7 +44,7 @@ export const agentOf = (p: AssistantPlan) => p.source === "external" ? `${p.exte
   : p.ai?.engine ? `${p.ai.engine.model && p.ai.engine.model !== "default" ? p.ai.engine.model : PROVIDER[p.ai.engine.provider] ?? p.ai.engine.provider} · ${p.ai.engine.profile}` : "model";
 const PROVIDER: Record<string, string> = { claude: "Claude", codex: "Codex", kiro: "Kiro" };
 
-export function trackRecord(store: Store, projectId: string): TrackRecord {
+export function trackRecord(store: Pick<Store, "list" | "get">, projectId: string): TrackRecord {
   const plans = store.list<AssistantPlan>("assistant-plan").filter(p => p.projectId === projectId && (p.source === "model" || p.source === "external"));
   const agents = new Map<string, AgentRecord>(), errors = new Map<string, number[]>();
   const recent: TrackRecord["recent"] = [];
