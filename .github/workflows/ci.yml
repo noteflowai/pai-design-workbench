@@ -1,10 +1,11 @@
 name: Workbench checks
+# Runs on every PR and push to main so the "Workbench checks result" job always reports (it is the required check).
+# A first job decides whether source changed; docs-only changes skip the native and browser jobs, and the result job
+# still passes. Native lanes and browser shards run as parallel jobs, each with only the toolchains it needs.
 on:
   push:
     branches: [main]
-    paths: &source_paths [".gitattributes", "src/**", "native/**", "data/**", "desktop/**", "scripts/**", "tests/**", "tools/**", "web/**", "infra/**", "agentcore/**", "Dockerfile*", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
   pull_request:
-    paths: *source_paths
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +13,48 @@ concurrency:
   group: workbench-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      source: ${{ steps.filter.outputs.source }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Same paths the workflow used to filter on; anything unknown counts as source.
+          if [ "$EVENT" = pull_request ]; then
+            gh api --paginate "repos/$REPO/pulls/$PR/files" -q '.[].filename' > files.txt
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            gh api "repos/$REPO/compare/$BEFORE...$SHA" -q '.files[].filename' > files.txt
+            # The compare API lists at most 300 files; a larger push is treated as source.
+            [ "$(wc -l < files.txt)" -lt 300 ] || echo ".github/forced" > files.txt
+          else
+            echo ".github/forced" > files.txt
+          fi
+          source=$(python3 - <<'PY'
+          from fnmatch import fnmatch
+          patterns = [".gitattributes", "src/**", "native/**", "data/**", "desktop/**", "scripts/**", "tests/**", "tools/**", "web/**",
+                      "infra/**", "agentcore/**", "Dockerfile*", "package*.json", "tsconfig*.json", "vite.config.ts", "playwright.config.ts", ".github/**"]
+          files = [f for f in open("files.txt").read().splitlines() if f]
+          print("true" if not files or any(fnmatch(f, p) for f in files for p in patterns) else "false")
+          PY
+          )
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "Source changed: $source ($(wc -l < files.txt) files)"
   infrastructure:
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -29,18 +71,16 @@ jobs:
         working-directory: infra
       - run: bash scripts/check_cpu.sh infra
   check:
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
     runs-on: ubuntu-24.04
-    # Native lanes run for real (Blender, CadQuery, CalculiX, MuJoCo, FreeCAD CAM); CAM adds ~20 min (test:cam + suite D2).
-    timeout-minutes: 75
+    timeout-minutes: 15
     strategy:
       matrix:
         node: ["24.21.0", "26.10.0"]
-    env:
-      PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          # Public repository: do not leave the job token in .git/config for later steps.
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -55,64 +95,138 @@ jobs:
         run: npm run setup:demo
       - name: Native recording, feedback and independent handoff
         run: npm run test:native
-      - name: Current native Blender and generated editable geometry
-        if: matrix.node == '24.21.0'
-        run: npm run setup:native && npm run test:blender
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        id: py312
-        if: matrix.node == '24.21.0'
-        with:
-          python-version: "3.12"
-          update-environment: false
-      - name: Bubblewrap OS sandbox for generated CAD code
-        if: matrix.node == '24.21.0'
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
-          # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; the sandbox needs them.
-          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
-      - name: Hash-locked CadQuery 2.8 / OCCT 7.9 and native parametric CAD loop
-        if: matrix.node == '24.21.0'
-        run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py && npm run test:cad && npm run test:pillow'
-      - name: Pinned physics toolchain (Gmsh, CalculiX, Optuna, scikit-learn, MuJoCo) and the native structural loop
-        if: matrix.node == '24.21.0'
-        run: |
-          sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
-          "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py --with-newton && npm run test:fea && npm run test:robot && npm run test:optimize && npm run test:optimize-pillow && npm run test:package
-      - name: Hash-locked OR-Tools and the artifact platform loop (registry, workflow, signed package, clean reproduction)
-        if: matrix.node == '24.21.0'
-        run: '"${{ steps.py312.outputs.python-path }}" tools/setup_logistics.py && npm run test:artifacts'
-      - name: Pinned FreeCAD 1.1 CAM toolchain and the CAM loop (G-code + independent dexel simulation)
-        if: matrix.node == '24.21.0'
-        run: python3 tools/setup_cam.py && npm run test:cam
-      - name: Slim CadQuery runtime lock is current and the AgentCore entrypoint contract holds
-        if: matrix.node == '24.21.0'
-        run: python3 tools/slim_cadquery_lock.py --python .state/tools/cadquery-2.8.0/bin/python --check && python3 -m pip install -q botocore==1.43.82 && python3 -m unittest discover -s tests/agentcore -p 'test_*.py'
-      - name: Generated CadQuery code in the OS sandbox (layers, template equivalence, recheck, limits)
-        if: matrix.node == '24.21.0'
-        run: npm run test:cad-code
-      - name: Native design-space sweep (preset equivalence, lightest feasible point, provenance)
-        if: matrix.node == '24.21.0'
-        run: npm run test:cad-sweep
-      - name: Representative industrial design test cases across all native lanes
-        if: matrix.node == '24.21.0'
-        run: npm run test:suite
-      - run: npx playwright install --with-deps chromium
-        if: matrix.node == '24.21.0'
-      - name: Desktop, mobile and real video decoding
-        if: matrix.node == '24.21.0'
-        run: npm run test:browser
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: workbench-verification-node-${{ matrix.node }}
+          path: .state/evidence/native-e2e.json
+          retention-days: 14
+  native:
+    # Native lanes run for real (Blender, CadQuery, CalculiX, MuJoCo, OR-Tools, FreeCAD CAM), one lane per job.
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: cad
+            tools: { blender: "true", sandbox: "true", cadquery: "true", logistics: "true" }
+            run: |
+              npm run test:blender && npm run test:cad && npm run test:pillow && npm run test:artifacts
+              python3 tools/slim_cadquery_lock.py --python .state/tools/cadquery-2.8.0/bin/python --check
+              python3 -m pip install -q botocore==1.43.82 && python3 -m unittest discover -s tests/agentcore -p 'test_*.py'
+              npm run test:cad-code
+          - lane: physics
+            tools: { blender: "true", sandbox: "true", cadquery: "true", physics: "true" }
+            run: npm run test:fea && npm run test:robot && npm run test:optimize && npm run test:optimize-pillow && npm run test:package && npm run test:cad-sweep
+          - lane: cam
+            tools: { cadquery: "true", cam: "true" }
+            run: npm run test:cam
+          # Representative industrial cases: the 5-minute CAM case D2 runs beside the rest.
+          - lane: suite
+            tools: { blender: "true", sandbox: "true", cadquery: "true", physics: "true", logistics: "true", cam: "true" }
+            run: PAI_SUITE_SKIP=D2 npm run test:suite
+          - lane: suite-cam
+            tools: { blender: "true", sandbox: "true", cadquery: "true", physics: "true", logistics: "true", cam: "true" }
+            run: PAI_SUITE_ONLY=D2 npm run test:suite
+    env:
+      PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+      - run: npm ci
+      - name: Fetch pinned native tools and original recording
+        run: npm run setup:demo && npm run build
+      - uses: ./.github/actions/native-toolchains
+        with:
+          blender: ${{ matrix.tools.blender || 'false' }}
+          sandbox: ${{ matrix.tools.sandbox || 'false' }}
+          cadquery: ${{ matrix.tools.cadquery || 'false' }}
+          physics: ${{ matrix.tools.physics || 'false' }}
+          logistics: ${{ matrix.tools.logistics || 'false' }}
+          cam: ${{ matrix.tools.cam || 'false' }}
+      - name: Native ${{ matrix.lane }} lane
+        run: ${{ matrix.run }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: workbench-native-${{ matrix.lane }}
+          if-no-files-found: ignore
           path: |
-            .state/evidence/native-e2e.json
-            .state/evidence/blender-e2e.json
-            .state/evidence/cad-e2e.json
-            .state/evidence/cad-code-e2e.json
-            .state/evidence/cad-sweep-e2e.json
-            .state/evidence/industrial-suite.json
+            .state/evidence/*.json
+            .state/browser/cad/*/*/cam-verify.json
+            .state/browser/cad/*/*/cam.json
+          retention-days: 14
+  browser:
+    # Desktop, mobile and real video decoding; test-level shards, each with its own server and state.
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+      - run: npm ci
+      - run: npm run setup:demo && npm run build
+      - uses: ./.github/actions/native-toolchains
+        with: { blender: "true", sandbox: "true", cadquery: "true", physics: "true", logistics: "true", cam: "true", browser: "true" }
+      - name: Browser shard ${{ matrix.shard }}/3
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: workbench-browser-${{ matrix.shard }}
+          if-no-files-found: ignore
+          path: |
             test-results/
             .state/browser/cad/*/*/cam-verify.json
             .state/browser/cad/*/*/cam.json
           retention-days: 14
+  result:
+    # The single required check: passes only if every job that had to run succeeded.
+    name: Workbench checks result
+    if: always()
+    needs: [changes, infrastructure, check, native, browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          needs = json.loads(os.environ["NEEDS"])
+          source = needs["changes"]["result"] == "success" and needs["changes"]["outputs"].get("source") == "true"
+          if needs["changes"]["result"] != "success":
+              raise SystemExit(f"change detection {needs['changes']['result']}")
+          for name, job in needs.items():
+              print(f"{name}: {job['result']}")
+          bad = [n for n, j in needs.items() if j["result"] in ("failure", "cancelled") or (source and j["result"] != "success")]
+          if bad:
+              raise SystemExit(f"not successful: {', '.join(bad)}")
+          print("source changed: all checks passed" if source else "no source change: native and browser checks not needed")
+          PY
