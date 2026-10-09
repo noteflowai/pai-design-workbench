@@ -34,11 +34,22 @@ runs:
       if: inputs.cadquery == 'true'
       shell: bash
       run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py'
+    # The runner's Ubuntu mirror is sometimes slow (30 MB at 135 kB/s, 3m46s, measured): keep the downloaded .deb files
+    # (~31 MB). apt still verifies them against the signed archive indices, so a stale cache only means a new download.
+    - name: Cached system packages for the physics toolchain
+      if: inputs.physics == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/pai-apt
+        key: pai-apt-${{ runner.os }}-${{ runner.arch }}-noble-physics-1
     - name: Physics
       if: inputs.physics == 'true'
       shell: bash
       run: |
-        sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
+        mkdir -p ~/.cache/pai-apt/partial
+        sudo apt-get install -y -q -o Dir::Cache::Archives="$HOME/.cache/pai-apt" -o APT::Keep-Downloaded-Packages=true \
+          libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
+        sudo chown -R "$(id -u):$(id -g)" ~/.cache/pai-apt && rm -f ~/.cache/pai-apt/lock
         "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py --with-newton
     - name: OR-Tools
       if: inputs.logistics == 'true'
