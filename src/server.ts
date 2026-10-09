@@ -141,14 +141,19 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     reply.header("Set-Cookie", names.map(name => `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`));
     return reply.redirect(config.authLogoutUrl);
   });
-  const lifecycle = (project: Project) => {
-    const mine = <T extends { projectId?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id);
+  /** Reads each record kind once per call (read-only); /api/state used to parse every kind again for every project. */
+  const snapshotReader = (): Pick<Store, "list" | "get"> => {
+    const memo = new Map<string, unknown[]>();
+    return { list: <T>(kind: string) => { if (!memo.has(kind)) memo.set(kind, store.list(kind)); return memo.get(kind) as T[]; }, get: (kind, id) => store.get(kind, id) };
+  };
+  const lifecycle = (project: Project, from: Pick<Store, "list"> = store) => {
+    const mine = <T extends { projectId?: string }>(kind: string) => from.list<T>(kind).filter(x => x.projectId === project.id);
     const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
     const releases = mine<Release>("release");
     const snapshot: LifecycleSnapshot = { project, releases, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"), aeros: mine<AeroReview>("aero-review"),
       factoryCriteria: mine<FactoryCriteria>("factory-criteria"), factoryReviews: mine<FactoryReview>("factory-review"),
       feedback: mine<Feedback>("feedback"), campaigns,
-      events: store.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
+      events: from.list<LifecycleSnapshot["events"][number]>("event").filter(e => ids.has(e.campaignId)),
       plans: mine<AssistantPlan>("assistant-plan"), proposals: mine<Proposal>("proposal") };
     return computeLifecycle(snapshot);
   };
@@ -239,15 +244,15 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     const data = d.data.filter(r => r.domain === domain);
     return { ...d, rows: data.length, data, sha256: sha256(JSON.stringify(data)), domain };
   });
-  app.get("/api/state", async () => ({
+  app.get("/api/state", async () => { const r = snapshotReader(); return {
     build,
-    releases: store.list("release"), autonomyGrants: store.list("autonomy-grant"), autopilots: store.list("autopilot"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
-    lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
-    aiTrackRecords: Object.fromEntries(store.list<Project>("project").map(p => [p.id, trackRecord(store, p.id)])),
-    projects: store.list("project"), reviews: store.list("review"), feedback: store.list("feedback"),
-    campaigns: store.list("campaign"), proposals: store.list("proposal"), scenes: store.list("scene-review"), cads: store.list("cad-review"), aeros: store.list("aero-review"), cadSweeps: store.list("cad-sweep"), cadOptimizations: store.list("cad-optimize"),
-    factoryCriteria: store.list("factory-criteria"), factoryReviews: store.list("factory-review"), inspections: store.list("cad-inspection"),
-    assistantPlans: store.list("assistant-plan"), metrics: workbench.metrics(),
+    releases: r.list("release"), autonomyGrants: r.list("autonomy-grant"), autopilots: r.list("autopilot"), releaseSeals: r.list("release-seal"), projectVersions: r.list("project-version"),
+    lifecycles: Object.fromEntries(r.list<Project>("project").map(p => [p.id, lifecycle(p, r)])),
+    aiTrackRecords: Object.fromEntries(r.list<Project>("project").map(p => [p.id, trackRecord(r, p.id)])),
+    projects: r.list("project"), reviews: r.list("review"), feedback: r.list("feedback"),
+    campaigns: r.list("campaign"), proposals: r.list("proposal"), scenes: r.list("scene-review"), cads: r.list("cad-review"), aeros: r.list("aero-review"), cadSweeps: r.list("cad-sweep"), cadOptimizations: r.list("cad-optimize"),
+    factoryCriteria: r.list("factory-criteria"), factoryReviews: r.list("factory-review"), inspections: r.list("cad-inspection"),
+    assistantPlans: r.list("assistant-plan"), metrics: workbench.metrics(),
     tools: toolCatalog, capabilities: { recordingVerification: true, physicalValidation: false, automaticPublication: false,
       modelProposal: Boolean(config.controllerEntrypoint && config.controllerDatabase),
       authenticatedWorkspace: Boolean(config.albAuth && config.authLogoutUrl),
@@ -268,7 +273,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
         images: controllerConfigured(config) && process.env.PAI_EXECUTOR_IMAGES === "1" },
       liveStream: "server-sent events; presentation only",
       controllerMode: "native text proposal only when configured; otherwise read-only accounting" },
-  }));
+  }; });
   app.get("/api/tools", async () => toolCatalog);
   app.post("/api/projects", async request => workbench.createProject(request.body));
   app.patch("/api/projects/:id", async request => {
