@@ -168,7 +168,8 @@ jobs:
             .state/browser/cad/*/*/cam.json
           retention-days: 14
   browser:
-    # Desktop, mobile and real video decoding; test-level shards, each with its own server and state.
+    # Desktop, mobile and real video decoding. Playwright shards by test count, so the ~7 min CAM test (@cam) gets its
+    # own job with only the tools it needs; the rest split into three shards. Each job has its own server and state.
     needs: changes
     if: needs.changes.outputs.source == 'true'
     runs-on: ubuntu-24.04
@@ -176,9 +177,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        include:
+          - { shard: "1/3", args: "--grep-invert @cam --shard=1/3", blender: "true", sandbox: "true", physics: "true", logistics: "true", cam: "false" }
+          - { shard: "2/3", args: "--grep-invert @cam --shard=2/3", blender: "true", sandbox: "true", physics: "true", logistics: "true", cam: "false" }
+          - { shard: "3/3", args: "--grep-invert @cam --shard=3/3", blender: "true", sandbox: "true", physics: "true", logistics: "true", cam: "false" }
+          - { shard: cam, args: "--grep @cam", blender: "false", sandbox: "false", physics: "false", logistics: "false", cam: "true" }
+    name: browser (${{ matrix.shard }})
     env:
-      PAI_BLENDER: ${{ github.workspace }}/.state/tools/blender-5.2.2-linux-x64/blender
+      PAI_BLENDER: ${{ matrix.blender == 'true' && format('{0}/.state/tools/blender-5.2.2-linux-x64/blender', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -193,13 +199,20 @@ jobs:
       - run: npm ci
       - run: npm run setup:demo && npm run build
       - uses: ./.github/actions/native-toolchains
-        with: { blender: "true", sandbox: "true", cadquery: "true", physics: "true", logistics: "true", cam: "true", browser: "true" }
-      - name: Browser shard ${{ matrix.shard }}/3
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+        with:
+          blender: ${{ matrix.blender }}
+          sandbox: ${{ matrix.sandbox }}
+          cadquery: "true"
+          physics: ${{ matrix.physics }}
+          logistics: ${{ matrix.logistics }}
+          cam: ${{ matrix.cam }}
+          browser: "true"
+      - name: Browser ${{ matrix.shard }}
+        run: npx playwright test ${{ matrix.args }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: workbench-browser-${{ matrix.shard }}
+          name: workbench-browser-${{ strategy.job-index }}
           if-no-files-found: ignore
           path: |
             test-results/

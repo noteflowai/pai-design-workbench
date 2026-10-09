@@ -207,3 +207,39 @@ test("classic cases G1 and S1 by mouse: code editor and sweep in a few clicks, n
   await expect(panel.getByRole("button", { name: "以此参数生成正式候选" })).toBeVisible();
   await record("casesG1S1", { g1Seconds: g1, s1Seconds: s1, g1Steps: ["选择生成代码", "改一行", "运行"], s1Steps: ["填 3 个轴", "运行扫描"], phoneOverflow: false });
 });
+
+test("project switcher: same-titled tasks told apart, search, keyboard, recent first, accessible, phone width", async ({ page }) => {
+  const make = async (title: string) => (await (await page.request.post("/api/projects", { data: { title, intendedDecision: "Switcher usability check",
+    requirements: { minSuccessRate: 0.5, preserveBaselineSuccess: true, requireSignificantImprovement: false, alpha: 0.05 } } })).json()) as { id: string };
+  const tag = `切换器 ${Date.now() % 100000}`;
+  const a = await make(`${tag} 同名任务`), b = await make(`${tag} 同名任务`), c = await make(`${tag} 轴承座`);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.goto("/#/overview");
+    const trigger = page.getByRole("button", { name: /^选择已有任务：/ });
+    await trigger.click();
+    const search = page.getByRole("combobox", { name: /搜索任务/ });
+    await expect(search).toBeFocused();
+    await search.fill(tag);
+    const options = page.getByRole("listbox", { name: "任务" }).getByRole("option");
+    await expect(options).toHaveCount(3);
+    // Same title, different rows: each shows its own short id.
+    await expect(options.filter({ hasText: a.id.slice(0, 6) })).toHaveCount(1);
+    await expect(options.filter({ hasText: b.id.slice(0, 6) })).toHaveCount(1);
+    expect((await new AxeBuilder({ page }).include(".switcher-pop").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations
+      .filter(v => ["serious", "critical"].includes(v.impact ?? ""))).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await search.fill(`${tag} 轴承`);
+    await expect(options).toHaveCount(1);
+    await search.press("Enter");
+    await expect(page.getByRole("dialog", { name: "切换任务" })).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toContainText(`${tag} 轴承座`);
+    // Reopened: the task just chosen leads the recent group; Escape closes and returns focus.
+    await trigger.click();
+    await expect(page.locator(".sw-group").first()).toHaveText("最近打开");
+    await expect(page.getByRole("listbox", { name: "任务" }).getByRole("option").first()).toContainText(c.id.slice(0, 6));
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+  }
+});
