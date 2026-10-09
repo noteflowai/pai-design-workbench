@@ -9,6 +9,7 @@ import { NativeAdapters, type Adapters } from "./adapters.js";
 import { configuration, type Config } from "./config.js";
 import { Candidate, CreateProject, Id } from "./contracts.js";
 import { DomainError, sha256 } from "./domain.js";
+import { buildInfo } from "./build-info.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
@@ -124,6 +125,9 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(store.get<T>(kind, id)!, reply, route);
   };
   app.get("/healthz", async () => ({ status: "ok" }));
+  // Running version for the signed-in UI and operators; /healthz stays state-free.
+  const build = buildInfo(config.repository);
+  app.get("/api/version", async () => build);
   app.get("/logout", async (_request, reply) => {
     if (!config.authLogoutUrl) return reply.code(404).send({ error: "NOT_FOUND" });
     const names = ["PAIAuthSession", ...Array.from({ length: 4 }, (_, i) => `PAIAuthSession-${i}`)];
@@ -229,6 +233,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return { ...d, rows: data.length, data, sha256: sha256(JSON.stringify(data)), domain };
   });
   app.get("/api/state", async () => ({
+    build,
     releases: store.list("release"), autonomyGrants: store.list("autonomy-grant"), autopilots: store.list("autopilot"), releaseSeals: store.list("release-seal"), projectVersions: store.list("project-version"),
     lifecycles: Object.fromEntries(store.list<Project>("project").map(p => [p.id, lifecycle(p)])),
     aiTrackRecords: Object.fromEntries(store.list<Project>("project").map(p => [p.id, trackRecord(store, p.id)])),
