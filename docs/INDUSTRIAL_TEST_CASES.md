@@ -2,7 +2,7 @@
 
 `npm run test:suite` 在同一个工作台里，用原生工具依次执行有代表性的工业设计用例。每个用例的预期在执行前就写在脚本里。“通过”表示原生结果与预期一致，不表示设计被采用，有些用例的预期本来就是拒绝。
 
-默认运行 31 个用例（Y1、Y2、K1 需要 `npm run setup:physics`，D2 需要 `npm run setup:cam`），CI 跑的就是这一组，分两个并行作业：耗时约 5 分钟的 D2 单独一个（`PAI_SUITE_ONLY=D2`），其余一个（`PAI_SUITE_SKIP=D2`）；指定当前环境里不存在的用例会直接报错，不会悄悄什么都不跑。2026-10-05 新增的 D1、D2 与相关的 C1、C4、M1 单独运行（`PAI_SUITE_ONLY=C1,C4,D1,D2,M1`），5/5 通过。另有两个用例需要显式开启：
+默认运行 31 个用例（Y1、Y2、K1 需要 `npm run setup:physics`，D2 需要 `npm run setup:cam`），CI 跑的就是这一组，分两个并行作业：耗时约 5 分钟的 D2 单独一个（`PAI_SUITE_ONLY=D2`），其余一个（`PAI_SUITE_SKIP=D2`）；指定当前环境里不存在的用例会直接报错；选择结果为空（例如 `PAI_SUITE_ONLY=D2` 同时 `PAI_SUITE_SKIP=D2`，或跳过全部用例）也在任何用例运行前报错，0 个用例永远不算通过。2026-10-05 新增的 D1、D2 与相关的 C1、C4、M1 单独运行（`PAI_SUITE_ONLY=C1,C4,D1,D2,M1`），5/5 通过。另有两个用例需要显式开启：
 - A3：设置 `PAI_SUITE_LIVE_AI=1`，调用真实模型，消耗 1 次真实尝试。
 - X1：设置 `PAI_AGENTCORE_SANDBOX_ARN`，使用 AgentCore 云端沙箱。
 

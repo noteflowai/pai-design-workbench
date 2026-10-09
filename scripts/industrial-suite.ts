@@ -15,6 +15,7 @@ import type { CadSweep } from "../src/sweep.js";
 import type { Release } from "../src/release.js";
 import type { Feedback } from "../src/contracts.js";
 import { createServer } from "node:net";
+import { selectCases, suiteResult } from "./suite-selection.js";
 import { dirname } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -406,14 +407,9 @@ const cases: Case[] = [
 
 const results = [];
 try {
-  // PAI_SUITE_ONLY=X1,P1 reruns selected cases (e.g. after fixing an environment problem); the report lists exactly what ran.
-  // PAI_SUITE_SKIP=D2 runs every other case (CI runs the long CAM case in a parallel job). Naming a case that is not
-  // available here (e.g. D2 without the CAM toolchain) fails instead of silently running nothing.
-  const ids = (name: string) => process.env[name]?.split(",").map(x => x.trim()).filter(Boolean);
-  const only = ids("PAI_SUITE_ONLY"), skip = ids("PAI_SUITE_SKIP");
-  const unknown = [...(only ?? []), ...(skip ?? [])].filter(id => !cases.some(c => c.id === id));
-  if (unknown.length) throw new Error(`Suite cases not available in this environment: ${unknown.join(", ")}`);
-  for (const c of cases.filter(x => (!only || only.includes(x.id)) && !skip?.includes(x.id))) {
+  // Selection is checked before any case runs; unknown ids and an empty selection fail (scripts/suite-selection.ts).
+  const { selected, selection } = selectCases(cases, process.env);
+  for (const c of selected) {
     const started = Date.now();
     process.stderr.write(`${c.id} ${c.title} … `);
     try {
@@ -425,9 +421,9 @@ try {
     process.stderr.write(`${results.at(-1)!.passed ? "PASS" : "FAIL"} (${results.at(-1)!.durationMs} ms)\n`);
   }
   const lock = JSON.parse(await readFile(join(config.state, "tools/cadquery-install-receipt.json"), "utf8").catch(() => "{}"));
-  const report = { schema: "pai-industrial-suite-1", checkedAt: new Date().toISOString(), result: results.every(r => r.passed) ? "passed" : "failed",
+  const report = { schema: "pai-industrial-suite-1", checkedAt: new Date().toISOString(), result: suiteResult(results),
     environment: { node: process.version, blender: "5.2.2 LTS", cadquery: lock.cadquery, ocp: lock.ocp, robotReel: "6124cee3cba5", factoryTwin: REVIEWED_SAMPLE.sourceCommit.slice(0, 12) },
-    selection: { only: only ?? null, skip: skip ?? null, available: cases.length },
+    selection,
     cases: results, totals: { cases: results.length, passed: results.filter(r => r.passed).length },
     scope: "Recorded simulation, synthetic static geometry, nominal parametric CAD, linear static FEA, RANS CFD, CAM simulation and illustrative factory simulation. No physical validation, certification-grade FEA, tolerance stack-up or site measurement." };
   await mkdir(join(config.state, "evidence"), { recursive: true });
