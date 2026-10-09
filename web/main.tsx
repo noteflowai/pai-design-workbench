@@ -137,7 +137,8 @@ function App() {
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); (document.querySelector("main h1") as HTMLElement | null)?.focus(); }}>跳到主要内容</a>
     <div className={`app ${assistant ? "with-assistant" : ""} ${railCollapsed ? "rail-collapsed" : ""}`}>
       <header className="topbar">
-        <a className="brand" href="#/overview" aria-label="PAI Design Workbench 总览"><span className="brand-mark">P</span><span>PAI<small>DESIGN WORKBENCH</small></span></a>
+        <div className="brand-wrap"><a className="brand" href="#/overview" aria-label="PAI Design Workbench 总览"><span className="brand-mark">P</span><span>PAI<small>DESIGN WORKBENCH</small></span></a>
+          {ctx.data.build && <BuildBadge build={ctx.data.build} />}</div>
         <div className="project-switch">
           {ctx.data.projects.length > 0 && <select aria-label="选择已有任务" value={project?.id ?? ""} onChange={e => { selectProject(e.target.value); navigate("overview"); }}>
             {[...ctx.data.projects].reverse().map(p => <option key={p.id} value={p.id}>{p.title} · v{p.revision}</option>)}</select>}
@@ -181,6 +182,15 @@ function App() {
     <Toasts items={toasts} dismiss={dismiss} />
     <Palette commands={commands} onAsk={q => ctx.askAI(q)} />
   </AppContext.Provider>;
+}
+/** Running version: package version + short source commit, so a deploy can be matched to main at a glance. */
+function BuildBadge({ build }: { build: NonNullable<State["build"]> }) {
+  const short = build.commit?.slice(0, 7) ?? "未知提交";
+  const detail = [`版本 v${build.version}`, `提交 ${build.commit ?? "未知"}${build.dirty ? "（有未提交修改）" : ""}`,
+    build.packagedAt ? `打包于 ${new Date(build.packagedAt).toLocaleString()}` : build.source === "checkout" ? "本地工作区" : "",
+    build.releaseDigest ? `发布包 ${build.releaseDigest.slice(0, 12)}` : ""].filter(Boolean).join("\n");
+  return <span className="build-badge" title={detail} aria-label={detail.replace(/\n/g, "，")}>
+    v{build.version} · <code>{short}{build.dirty ? "*" : ""}</code></span>;
 }
 // Apply the stored theme before the first render (no light flash, and correct even while the workspace loads).
 {

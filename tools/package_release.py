@@ -5,6 +5,7 @@ import io
 import json
 import subprocess
 import tarfile
+from datetime import datetime, timezone
 
 root = Path(__file__).resolve().parents[1]
 output = root / ".state/deploy/release.tgz"
@@ -22,12 +23,17 @@ def git(*args):
 commit = git("rev-parse", "HEAD")
 dirty = git("status", "--porcelain", "--", "src", "scripts", "native", "tools", "data", *files)
 source_commit = commit if len(commit) == 40 and not dirty else None
+version = json.loads((root / "package.json").read_text())["version"]
+packaged_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 with tarfile.open(output, "w:gz") as archive:
     for path in sorted(set(paths)):
         archive.add(path, arcname=str(path.relative_to(root)), recursive=False)
-    if source_commit:
-        data = (source_commit + "\n").encode()
-        info = tarfile.TarInfo(".source-commit"); info.size = len(data); info.mode = 0o644
+    def add(name, data):
+        info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o644
         archive.addfile(info, io.BytesIO(data))
-print(json.dumps({"artifact": str(output), "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+    if source_commit:
+        add(".source-commit", (source_commit + "\n").encode())
+    # Shown in the signed-in UI (status bar) and by update_release.sh, so a deploy can be matched to main.
+    add(".build-info.json", (json.dumps({"version": version, "sourceCommit": source_commit, "packagedAt": packaged_at}) + "\n").encode())
+print(json.dumps({"artifact": str(output), "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "version": version,
                   "files": len(set(paths)), "sourceCommit": source_commit, "privateStateIncluded": False}))

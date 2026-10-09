@@ -91,6 +91,11 @@ label.inline input, label.check input { width: 16px; min-height: 16px; height: 1
   background: var(--surface); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 800; font-size: 16px; width: calc(var(--rail) - 32px); flex: none; }
 .brand small { display: block; font-size: 8px; letter-spacing: 1.6px; font-weight: 600; color: var(--ink-3); }
+/* Running version beside the brand: package version + short source commit, readable on every page. */
+.brand-wrap { display: flex; align-items: center; gap: 8px; min-width: calc(var(--rail) - 32px); flex: none; }
+.brand-wrap .brand { width: auto; }
+.build-badge { font-size: 11px; font-weight: 600; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.build-badge code { font-size: 11px; color: inherit; }
 .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; font-size: 17px; }
 .project-switch { display: flex; gap: 8px; align-items: center; min-width: 0; flex: 1; max-width: 560px; }
 .project-switch select { min-height: 34px; font-weight: 600; }
@@ -414,7 +419,7 @@ fieldset.field-grid legend { grid-column: 1 / -1; font-size: 12px; font-weight: 
   .app.with-assistant .rail-text, .app.with-assistant .rail-dot, .app.with-assistant .rail-foot { display: none; }
   .app.with-assistant .rail a { grid-template-columns: 1fr; justify-items: center; padding: 9px 4px; }
   .app.with-assistant .brand > span:last-child { display: none; }
-  .app.with-assistant .brand { width: auto; }
+  .app.with-assistant .brand { width: auto; } .app.with-assistant .brand-wrap { min-width: 0; }
 }
 /* Below 1024 the assistant is a modal sheet over the work area, with a backdrop that closes it. */
 @media (max-width: 1023px) { .app.with-assistant { grid-template-columns: var(--rail) minmax(0, 1fr); }
@@ -426,7 +431,7 @@ fieldset.field-grid legend { grid-column: 1 / -1; font-size: 12px; font-weight: 
   :root { --top: 52px; }
   .app, .app.with-assistant { display: block; }
   .topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
-  .brand { width: auto; } .brand small { display: none; }
+  .brand, .brand-wrap { width: auto; min-width: 0; } .brand small { display: none; }
   .top-actions { gap: 4px; } .command { display: none; }
   .project-switch { order: 3; flex-basis: 100%; max-width: none; }
   .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 8px; overflow-x: auto; }

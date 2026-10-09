@@ -75,7 +75,8 @@ mv -Tf /opt/pai/current.next /opt/pai/current
 systemctl start pai-workbench.service
 for attempt in $(seq 1 30); do
   if curl -fsS --max-time 2 http://127.0.0.1:4317/healthz >/dev/null; then
-    echo "Verified new release $PAI_RELEASE_HASH; previous $PREVIOUS retained; no native replay."
+    BUILD=$(python3 -c "import json,sys;b=json.load(open(sys.argv[1]));print('v%s commit %s' % (b['version'], b.get('sourceCommit') or 'unknown'))" "$RELEASE/.build-info.json" 2>/dev/null || echo "build info not recorded")
+    echo "Verified new release $PAI_RELEASE_HASH ($BUILD); previous $PREVIOUS retained; no native replay."
     exit 0
   fi
   sleep 1

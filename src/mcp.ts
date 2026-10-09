@@ -16,7 +16,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const VERSION = "0.8.0";
+const VERSION = "0.9.0";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /**

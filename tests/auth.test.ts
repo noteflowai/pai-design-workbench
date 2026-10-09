@@ -28,7 +28,7 @@ test("cloud health reveals no state; anonymous artifacts, APIs and writes fail c
     const health = await app.inject({ url: "/healthz", headers: host });
     assert.equal(health.statusCode, 200);
     assert.deepEqual(health.json(), { status: "ok" });
-    for (const url of ["/", "/api/state", "/api/tools", "/manifest.webmanifest"]) {
+    for (const url of ["/", "/api/state", "/api/version", "/api/tools", "/manifest.webmanifest"]) {
       const response = await app.inject({ url, headers: host });
       assert.equal(response.statusCode, 401);
       assert.equal(response.headers["cache-control"], "no-store");
