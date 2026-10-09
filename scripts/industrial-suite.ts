@@ -407,8 +407,13 @@ const cases: Case[] = [
 const results = [];
 try {
   // PAI_SUITE_ONLY=X1,P1 reruns selected cases (e.g. after fixing an environment problem); the report lists exactly what ran.
-  const only = process.env.PAI_SUITE_ONLY?.split(",").map(x => x.trim()).filter(Boolean);
-  for (const c of only ? cases.filter(x => only.includes(x.id)) : cases) {
+  // PAI_SUITE_SKIP=D2 runs every other case (CI runs the long CAM case in a parallel job). Naming a case that is not
+  // available here (e.g. D2 without the CAM toolchain) fails instead of silently running nothing.
+  const ids = (name: string) => process.env[name]?.split(",").map(x => x.trim()).filter(Boolean);
+  const only = ids("PAI_SUITE_ONLY"), skip = ids("PAI_SUITE_SKIP");
+  const unknown = [...(only ?? []), ...(skip ?? [])].filter(id => !cases.some(c => c.id === id));
+  if (unknown.length) throw new Error(`Suite cases not available in this environment: ${unknown.join(", ")}`);
+  for (const c of cases.filter(x => (!only || only.includes(x.id)) && !skip?.includes(x.id))) {
     const started = Date.now();
     process.stderr.write(`${c.id} ${c.title} … `);
     try {
@@ -422,6 +427,7 @@ try {
   const lock = JSON.parse(await readFile(join(config.state, "tools/cadquery-install-receipt.json"), "utf8").catch(() => "{}"));
   const report = { schema: "pai-industrial-suite-1", checkedAt: new Date().toISOString(), result: results.every(r => r.passed) ? "passed" : "failed",
     environment: { node: process.version, blender: "5.2.2 LTS", cadquery: lock.cadquery, ocp: lock.ocp, robotReel: "6124cee3cba5", factoryTwin: REVIEWED_SAMPLE.sourceCommit.slice(0, 12) },
+    selection: { only: only ?? null, skip: skip ?? null, available: cases.length },
     cases: results, totals: { cases: results.length, passed: results.filter(r => r.passed).length },
     scope: "Recorded simulation, synthetic static geometry, nominal parametric CAD, linear static FEA, RANS CFD, CAM simulation and illustrative factory simulation. No physical validation, certification-grade FEA, tolerance stack-up or site measurement." };
   await mkdir(join(config.state, "evidence"), { recursive: true });

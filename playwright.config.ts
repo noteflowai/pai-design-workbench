@@ -2,7 +2,8 @@ import { defineConfig } from "@playwright/test";
 const remote = process.env.PAI_REMOTE_URL;
 if (remote && remote !== "https://pai.oneai.host") throw new Error("Remote workflow verification is restricted to the authorized deployment");
 export default defineConfig({
-  testDir: "./tests/browser", workers: 1, timeout: 120_000,
+  // One worker (the native tools are heavy); fullyParallel lets CI shard per test. Every test creates its own project.
+  testDir: "./tests/browser", workers: 1, fullyParallel: true, timeout: 120_000,
   use: { baseURL: remote ?? "http://127.0.0.1:4318", browserName: "chromium",
     storageState: remote ? process.env.PAI_AUTH_STATE : undefined,
     // Software WebGL so the three.js viewport renders in headless CI; production browsers use the GPU.
