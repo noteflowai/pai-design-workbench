@@ -14,6 +14,23 @@ inputs:
 runs:
   using: composite
   steps:
+    # The runner's Ubuntu mirror is sometimes very slow (measured: 30 MB in 3m46s; 21.5 MB in 8m35s). Every apt install
+    # below (bubblewrap, physics libraries, Playwright's browser libraries) keeps its .deb files in one directory that is
+    # cached per tool set (tens of MB). apt still checks them against the signed archive indices; a stale cache only
+    # means a fresh download.
+    - name: Cached apt downloads
+      if: inputs.sandbox == 'true' || inputs.physics == 'true' || inputs.browser == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/pai-apt
+        key: pai-apt-${{ runner.os }}-${{ runner.arch }}-noble-s${{ inputs.sandbox }}-p${{ inputs.physics }}-b${{ inputs.browser }}-1
+    - name: Keep apt downloads
+      if: inputs.sandbox == 'true' || inputs.physics == 'true' || inputs.browser == 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.cache/pai-apt/partial
+        printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\nBinary::apt::APT::Keep-Downloaded-Packages "true";\n' "$HOME/.cache/pai-apt" \
+          | sudo tee /etc/apt/apt.conf.d/99pai-download-cache >/dev/null
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       id: py312
       with:
@@ -34,22 +51,11 @@ runs:
       if: inputs.cadquery == 'true'
       shell: bash
       run: '"${{ steps.py312.outputs.python-path }}" tools/setup_cadquery.py'
-    # The runner's Ubuntu mirror is sometimes slow (30 MB at 135 kB/s, 3m46s, measured): keep the downloaded .deb files
-    # (~31 MB). apt still verifies them against the signed archive indices, so a stale cache only means a new download.
-    - name: Cached system packages for the physics toolchain
-      if: inputs.physics == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/pai-apt
-        key: pai-apt-${{ runner.os }}-${{ runner.arch }}-noble-physics-1
     - name: Physics
       if: inputs.physics == 'true'
       shell: bash
       run: |
-        mkdir -p ~/.cache/pai-apt/partial
-        sudo apt-get install -y -q -o Dir::Cache::Archives="$HOME/.cache/pai-apt" -o APT::Keep-Downloaded-Packages=true \
-          libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
-        sudo chown -R "$(id -u):$(id -g)" ~/.cache/pai-apt && rm -f ~/.cache/pai-apt/lock
+        sudo apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64
         "${{ steps.py312.outputs.python-path }}" tools/setup_physics.py --with-newton
     - name: OR-Tools
       if: inputs.logistics == 'true'
@@ -63,3 +69,7 @@ runs:
       if: inputs.browser == 'true'
       shell: bash
       run: npx playwright install --with-deps chromium
+    - name: Hand the downloaded packages to the cache
+      if: inputs.sandbox == 'true' || inputs.physics == 'true' || inputs.browser == 'true'
+      shell: bash
+      run: sudo chown -R "$(id -u):$(id -g)" ~/.cache/pai-apt && rm -f ~/.cache/pai-apt/lock
