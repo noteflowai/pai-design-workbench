@@ -73,6 +73,10 @@ if [ -n "${PAI_AGENT_USER_POOL_ID:-}" ] && [ -n "${PAI_AGENT_CLIENT_ID:-}" ]; th
   sed -i '/^PAI_AGENT_USER_POOL_ID=/d;/^PAI_AGENT_CLIENT_IDS=/d' /etc/pai/runtime.env
   printf 'PAI_AGENT_USER_POOL_ID=%s\nPAI_AGENT_CLIENT_IDS=%s\n' "$PAI_AGENT_USER_POOL_ID" "$PAI_AGENT_CLIENT_ID" >> /etc/pai/runtime.env
 fi
+# The service must not start node from inside a release directory (they are pruned below).
+if systemctl cat pai-workbench.service | grep -E '^ExecStart=/opt/pai/releases/' >/dev/null && [ ! -f /etc/systemd/system/pai-workbench.service.d/10-node-path.conf ]; then
+  echo "pai-workbench.service starts node from a release directory; add the node-path drop-in before pruning" >&2; exit 1
+fi
 PREVIOUS=$(readlink -f /opt/pai/current)
 systemctl stop pai-workbench.service
 ln -sfn "$RELEASE" /opt/pai/current.next
