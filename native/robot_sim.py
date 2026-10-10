@@ -96,25 +96,28 @@ def mjcf():
     place = (0.0, cell["placeDistance"], cell["placeHeight"])
     # Guard panels stand guardClearance beyond the farther station, measured from the robot axis.
     g = max(cell["pickDistance"], cell["placeDistance"]) + gc
+    # Link masses: the UR5e values the official MuJoCo Menagerie model uses (kg; total 16.99). The shapes only set
+    # collision and inertia distribution; without explicit masses aluminium density gave 29.0 kg (Strands Robots
+    # cross-check, 2026-10-10).
     links = f"""
       <body name="shoulder" pos="0 0 {D1}">
         <joint name="j1" axis="0 0 1" range="{LIMITS[0][0]} {LIMITS[0][1]}" armature="0.1" damping="2"/>
-        <geom class="link" type="cylinder" size="0.06 0.07"/>
+        <geom class="link" type="cylinder" size="0.06 0.07" mass="3.7"/>
         <body name="upper" pos="0 0.138 0" euler="0 1.5708 0">
           <joint name="j2" axis="0 1 0" range="{LIMITS[1][0]} {LIMITS[1][1]}" armature="0.1" damping="2"/>
-          <geom class="link" type="capsule" fromto="0 0 0 0 0 {A2}" size="0.055"/>
+          <geom class="link" type="capsule" fromto="0 0 0 0 0 {A2}" size="0.055" mass="8.393"/>
           <body name="fore" pos="0 -0.131 {A2}">
             <joint name="j3" axis="0 1 0" range="{-math.pi} {math.pi}" armature="0.05" damping="1"/>
-            <geom class="link" type="capsule" fromto="0 0 0 0 0 {A3}" size="0.045"/>
+            <geom class="link" type="capsule" fromto="0 0 0 0 0 {A3}" size="0.045" mass="2.275"/>
             <body name="w1" pos="0 0 {A3}" euler="0 1.5708 0">
               <joint name="j4" axis="0 1 0" range="{LIMITS[3][0]} {LIMITS[3][1]}" armature="0.02" damping="0.5"/>
-              <geom class="link" type="cylinder" pos="0 {D4/2} 0" euler="1.5708 0 0" size="0.04 {D4/2}"/>
+              <geom class="link" type="cylinder" pos="0 {D4/2} 0" euler="1.5708 0 0" size="0.04 {D4/2}" mass="1.219"/>
               <body name="w2" pos="0 {D4} 0">
                 <joint name="j5" axis="0 0 1" range="{LIMITS[4][0]} {LIMITS[4][1]}" armature="0.02" damping="0.5"/>
-                <geom class="link" type="cylinder" pos="0 0 {D5/2}" size="0.04 {D5/2}"/>
+                <geom class="link" type="cylinder" pos="0 0 {D5/2}" size="0.04 {D5/2}" mass="1.219"/>
                 <body name="w3" pos="0 0 {D5}">
                   <joint name="j6" axis="0 1 0" range="{LIMITS[5][0]} {LIMITS[5][1]}" armature="0.01" damping="0.3"/>
-                  <geom class="link" type="cylinder" pos="0 {D6/2} 0" euler="1.5708 0 0" size="0.035 {D6/2}"/>
+                  <geom class="link" type="cylinder" pos="0 {D6/2} 0" euler="1.5708 0 0" size="0.035 {D6/2}" mass="0.1889"/>
                   <body name="gripper" pos="0 {D6 + 0.06} 0">
                     <geom name="gripper" class="tool" type="box" size="0.04 0.06 0.025"/>
                     <site name="tcp" pos="0 0.07 0" size="0.01"/>{tool_bodies()}
