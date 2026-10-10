@@ -5,6 +5,9 @@ set -euo pipefail
 : "${PAI_ASSET_BUCKET:?}"
 : "${PAI_ASSET_KEY:?}"
 RELEASE="/opt/pai/releases/$PAI_RELEASE_HASH"
+# Package builds unpack into TMPDIR; keep them on the data volume, not the small root disk.
+PAI_TMP=/var/lib/pai/data/tmp
+install -d -m 0700 -o pai -g pai "$PAI_TMP"
 export PAI_RELEASE="$RELEASE"
 python3 - <<'PY'
 import boto3, hashlib, os, re, tarfile
@@ -34,15 +37,15 @@ runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm prune --omit=dev
 if ! python3 -c "import ensurepip" 2>/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3.12-venv >/dev/null
 fi
-runuser -u pai -- python3 tools/setup_cadquery.py
+runuser -u pai -- env TMPDIR="$PAI_TMP" python3 tools/setup_cadquery.py
 # Physics lane (Gmsh, CalculiX from the signed Ubuntu archive, Optuna, scikit-learn, MuJoCo); idempotent, no root needed.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q libglu1-mesa libgl1 libopengl0 libxcursor1 libxft2 libxinerama1 libfontconfig1 libgomp1 libopenmpi3t64 >/dev/null
 # BoTorch strategy (CPU PyTorch, hash-locked) and Newton USD conformance (CPU Warp) only when the operator opts in.
-runuser -u pai -- env PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" PAI_PHYSICS_NEWTON="${PAI_PHYSICS_NEWTON:-}" python3 tools/setup_physics.py
+runuser -u pai -- env TMPDIR="$PAI_TMP" PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" PAI_PHYSICS_NEWTON="${PAI_PHYSICS_NEWTON:-}" python3 tools/setup_physics.py
 # Logistics planning artifact: hash-locked OR-Tools (wheels only); idempotent, no root needed.
-runuser -u pai -- python3 tools/setup_logistics.py
+runuser -u pai -- env TMPDIR="$PAI_TMP" python3 tools/setup_logistics.py
 # Strands Robots cross-check (hash-locked, pinned Menagerie, simulation only) only when the operator opts in.
-if [ "${PAI_ROBOTS:-}" = "1" ]; then runuser -u pai -- python3 tools/setup_robots.py; fi
+if [ "${PAI_ROBOTS:-}" = "1" ]; then runuser -u pai -- env TMPDIR="$PAI_TMP" python3 tools/setup_robots.py; fi
 # OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
 if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
 # Ubuntu 24.04 restricts unprivileged user namespaces; grant them to bwrap only (per-application AppArmor profile).
@@ -78,6 +81,11 @@ systemctl start pai-workbench.service
 for attempt in $(seq 1 30); do
   if curl -fsS --max-time 2 http://127.0.0.1:4317/healthz >/dev/null; then
     BUILD=$(python3 -c "import json,sys;b=json.load(open(sys.argv[1]));print('v%s commit %s' % (b['version'], b.get('sourceCommit') or 'unknown'))" "$RELEASE/.build-info.json" 2>/dev/null || echo "build info not recorded")
+    # Keep the new release, the previous one and the 3 newest others; older copies only fill the root disk.
+    KEEP="$(basename "$RELEASE") $(basename "$PREVIOUS") $(ls -1t /opt/pai/releases | head -5 | tr '\n' ' ')"
+    for r in $(ls -1 /opt/pai/releases); do
+      case " $KEEP " in *" $r "*) ;; *) [[ "$r" =~ ^[a-f0-9]{64}$ ]] && rm -rf -- "/opt/pai/releases/$r" ;; esac
+    done
     echo "Verified new release $PAI_RELEASE_HASH ($BUILD); previous $PREVIOUS retained; no native replay."
     exit 0
   fi
