@@ -2,6 +2,7 @@
  * HTTP surface of the artifact platform (v1). Every route sits behind the workbench's existing authentication (ALB +
  * Cognito hosted, loopback locally); none is exposed under /api/agent. Writes require a same-origin browser session.
  */
+import type { RecordKind } from "../ontology/kinds.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
@@ -18,7 +19,7 @@ const summary = (a: ArtifactVersion) => ({ id: a.id, name: a.manifest.name, vers
   title: a.manifest.title, state: a.state, digest: a.digest, origin: a.origin, validated: a.validation ? { at: a.validation.at, passed: a.validation.passed } : null,
   operations: a.manifest.operations.map(o => o.id) });
 
-type Execute = <T extends { id: string; state: string }>(reply: FastifyReply, input: unknown, kind: string, route: string, execute: () => Promise<T>) => Promise<T>;
+type Execute = <T extends { id: string; state: string }>(reply: FastifyReply, input: unknown, kind: RecordKind, route: string, execute: () => Promise<T>) => Promise<T>;
 type Track = (job: Promise<unknown>) => void;
 export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: Config; actor: (h: Record<string, unknown>) => string; executeNative: Execute; track: Track }) {
   const { store, config } = d;

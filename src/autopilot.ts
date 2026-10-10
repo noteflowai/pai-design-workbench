@@ -7,6 +7,7 @@
  * the round budget or the grant is used up, when the model returns no runnable plan, or when an AI run needs a human
  * reconciliation. It never changes requirements, approves, releases or moves feedback.
  */
+import type { RecordKind } from "./ontology/kinds.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { PROFILES } from "./controller.js";
@@ -24,7 +25,7 @@ export const AutopilotRequest = z.object({
   /** Engines for the planner, in the executor's order (same contract as /api/assistant/ai); deployment default when absent. */
   profiles: z.array(z.enum(PROFILES)).min(1).max(5).optional(),
 }).strict();
-export interface AutopilotRound { round: number; planId?: string; tool?: string; recordKind?: string; recordId?: string; verdict?: string; failing?: { id: string; observed: unknown; required: unknown }[]; note?: string }
+export interface AutopilotRound { round: number; planId?: string; tool?: string; recordKind?: RecordKind; recordId?: string; verdict?: string; failing?: { id: string; observed: unknown; required: unknown }[]; note?: string }
 export interface Autopilot {
   id: string; projectId: string; requestId: string; grantId: string; goal: string; maxRounds: number; rounds: AutopilotRound[];
   state: "running" | "completed" | "failed" | "interrupted"; outcome?: "goal-met" | "rounds-exhausted" | "grant-exhausted" | "no-runnable-plan" | "needs-human";

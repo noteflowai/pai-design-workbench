@@ -12,6 +12,7 @@
  * in Turtle (/api/v1/ontology.ttl).
  */
 import { z } from "zod";
+import type { RecordKind } from "./kinds.js";
 import { CadCodeCheck, CreateCampaign, CreateFeedback, CreateProject, ReviewRequest, ReviseProject, TrackEvent, TransitionFeedback } from "../contracts.js";
 import { SceneRequest } from "../scenes.js";
 import { CadRequest } from "../cad.js";
@@ -40,7 +41,7 @@ const PROV = "http://www.w3.org/ns/prov#";
 type Prov = "Entity" | "Activity" | "Plan" | "Agent" | "Collection";
 export interface ObjectType {
   /** PascalCase API name. */ id: string;
-  /** Store kind backing the type; `runtime` types are computed from configuration, not stored. */ kind: string | null;
+  /** Store kind backing the type; `runtime` types are computed from configuration, not stored. */ kind: RecordKind | null;
   label: string; description: string; prov: Prov;
   /** Property shown as the object's title in lists. */ title: string;
   /** Properties every record of this type carries (checked against records in tests). */ properties: string[];
@@ -63,7 +64,7 @@ export interface ActionType {
   /** Parameters: the route's own input schema. */ parameters?: z.ZodType;
 }
 
-const T = (id: string, kind: string | null, label: string, prov: Prov, title: string, description: string, properties: string[], immutable = false): ObjectType =>
+const T = (id: string, kind: RecordKind | null, label: string, prov: Prov, title: string, description: string, properties: string[], immutable = false): ObjectType =>
   ({ id, kind, label, prov, title, description, properties: ["id", ...properties], ...(immutable ? { immutable } : {}) });
 
 export const OBJECT_TYPES: ObjectType[] = [

@@ -23,7 +23,7 @@ test("every stored record kind is exactly one object type, and every stored obje
   const kinds = new Set([...text.matchAll(/\b(?:store|from|r)\.(?:insert|put|list|get)(?:<[^>]*>)?\(\s*"([a-z][a-z-]+)"/g)].map(m => m[1]));
   for (const m of text.matchAll(/const FILE_KIND = "([a-z-]+)"/g)) kinds.add(m[1]);
   for (const m of text.matchAll(/store\.claim\([^;]*?"([a-z][a-z-]+)"\s*\)/g)) kinds.add(m[1]);
-  const modelled = OBJECT_TYPES.filter(t => t.kind).map(t => t.kind!);
+  const modelled: string[] = OBJECT_TYPES.filter(t => t.kind).map(t => t.kind!);
   assert.equal(new Set(modelled).size, modelled.length, "two object types share a kind");
   assert.deepEqual([...kinds].filter(k => !modelled.includes(k)).sort(), [], "stored kinds without an object type");
   assert.deepEqual(modelled.filter(k => !kinds.has(k)).sort(), [], "object types whose kind is never stored");
@@ -171,4 +171,14 @@ test("over HTTP an agent cannot read hidden types and never sees links from them
     assert.equal((await app.inject({ url: "/api/v1/objects/TrialEvent", headers: host })).statusCode, 200, "the maintainer still reads it");
     assert.equal((await app.inject({ url: "/api/v1/objects/ArtifactFile", headers: host })).statusCode, 404, "file bytes are never objects");
   } finally { await app.close(); await rm(state, { recursive: true, force: true }); }
+});
+
+test("record kinds are defined once: the type, the object types and the store agree (ADR 0003 step 1)", async () => {
+  const { RECORD_KINDS } = await import("../src/ontology/kinds.js");
+  const modelled = OBJECT_TYPES.filter(t => t.kind).map(t => t.kind!).sort();
+  assert.deepEqual([...RECORD_KINDS].sort(), modelled, "every record kind is one object type and vice versa");
+  assert.equal(new Set(RECORD_KINDS).size, RECORD_KINDS.length);
+  // Store methods accept only RecordKind: a misspelt kind no longer type-checks.
+  const store = await readFile("src/store.ts", "utf8");
+  for (const m of ["get<T>(kind: RecordKind", "list<T>(kind: RecordKind)", "count(kind: RecordKind)", "insert(kind: RecordKind", "put(kind: RecordKind", "kind: RecordKind = "]) assert.ok(store.includes(m), m);
 });

@@ -1,4 +1,5 @@
 import type { AssistantPlan } from "./assistant.js";
+import type { RecordKind } from "./ontology/kinds.js";
 import type { Store } from "./store.js";
 
 /**
@@ -20,7 +21,7 @@ export interface AgentRecord {
 }
 export interface TrackRecord {
   agents: AgentRecord[];
-  recent: { agent: string; tool: string; recordKind: string; recordId: string; outcome: Outcome; at: string; failed?: string[] }[];
+  recent: { agent: string; tool: string; recordKind: RecordKind; recordId: string; outcome: Outcome; at: string; failed?: string[] }[];
   scope: "native solver verdicts on executed AI proposals; simulation, not physical validation";
 }
 

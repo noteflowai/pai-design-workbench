@@ -1,4 +1,5 @@
 import { AeroParameters, AeroRequest, AeroRequirements, DEFAULT_AERO_REQUIREMENTS, type AeroReview } from "./aero.js";
+import type { RecordKind } from "./ontology/kinds.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -126,7 +127,7 @@ const ModelOutput = z.object({
   })).max(4).default([]),
 }).passthrough();
 
-type Handle = { kind: string; id: string; label: string };
+type Handle = { kind: RecordKind; id: string; label: string };
 export interface AiContext { project?: Project; handles: Map<string, Handle>; workspace: unknown; lastScene?: WorkcellScene; lastPlant?: PlantScene;
   /** Tools offered to the planner (autopilot: its grant); all tools when absent. */
   offered?: readonly string[];
@@ -138,8 +139,8 @@ export interface ContextOptions { cadCode?: { template: string; templates?: Reco
 export function buildContext(store: Store, project: Project | undefined, lifecycle?: Lifecycle, options: ContextOptions = {}): AiContext {
   const handles = new Map<string, Handle>();
   if (!project) return { handles, cadCode: options.cadCode, workspace: { project: null, note: "没有任务；只能使用 create-project 或回答通用问题" } };
-  const mine = <T extends { projectId?: string; createdAt?: string }>(kind: string) => store.list<T>(kind).filter(x => x.projectId === project.id).slice(-12);
-  const add = (prefix: string, n: number, kind: string, id: string, label: string) => { const h = `${prefix}-${n}`; handles.set(h, { kind, id, label }); return h; };
+  const mine = <T extends { projectId?: string; createdAt?: string }>(kind: RecordKind) => store.list<T>(kind).filter(x => x.projectId === project.id).slice(-12);
+  const add = (prefix: string, n: number, kind: RecordKind, id: string, label: string) => { const h = `${prefix}-${n}`; handles.set(h, { kind, id, label }); return h; };
   handles.set("project", { kind: "project", id: project.id, label: project.title });
   const handleOf = new Map<string, string>();
   const versions = store.list<{ id: string; projectId: string; revision: number; requirements: unknown; requirementDigest: string; frozenAt: string }>("project-version")

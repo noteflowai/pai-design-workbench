@@ -27,7 +27,7 @@ test("long prose is clipped, structure stays strict, and schema errors name the 
 });
 
 test("null on an optional property means absent (the hosted Kiro reply wrote dependsOn: null)", () => {
-  const ctx = { handles: new Map([["cad-1", { kind: "cad-part", id: "x", label: "cad-1" }]]), workspace: {} } as Parameters<typeof interpretOutput>[1];
+  const ctx = { handles: new Map([["cad-1", { kind: "cad-review" as const, id: "x", label: "cad-1" }]]), workspace: {} } as Parameters<typeof interpretOutput>[1];
   const out = interpretOutput(JSON.stringify({ kind: "answer", interpretation: ["x"], answer: { text: "t", citations: ["cad-1"] },
     plans: [{ ref: "p1", tool: "unknown-tool", title: null, rationale: null, dependsOn: null, payload: { seeds: [{ rationale: null }] } }] }), ctx);
   assert.equal(out.answer?.citations[0].handle, "cad-1");

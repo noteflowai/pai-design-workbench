@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { configuration } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import { Store } from "../src/store.js";
+import type { RecordKind } from "../src/ontology/kinds.js";
 
 test("/api/state reads each record kind once and returns the same lifecycles and track records as the per-project routes", async () => {
   const state = await mkdtemp(join(tmpdir(), "pai-state-"));
@@ -25,7 +26,7 @@ test("/api/state reads each record kind once and returns the same lifecycles and
     }
     // Count how often /api/state parses each kind: once, however many projects there are.
     const reads = new Map<string, number>(), list = Store.prototype.list;
-    Store.prototype.list = function <T>(this: Store, kind: string): T[] { reads.set(kind, (reads.get(kind) ?? 0) + 1); return list.call(this, kind) as T[]; };
+    Store.prototype.list = function <T>(this: Store, kind: RecordKind): T[] { reads.set(kind, (reads.get(kind) ?? 0) + 1); return list.call(this, kind) as T[]; };
     let body;
     try { body = (await app.inject({ url: "/api/state", headers: { host } })).json(); } finally { Store.prototype.list = list; }
     for (const [kind, n] of reads) if (kind !== "event") assert.equal(n, 1, `${kind} parsed ${n} times`);
