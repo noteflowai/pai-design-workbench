@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { DomainError } from "../domain.js";
 import type { Store } from "../store.js";
+import { PackageSubmission } from "../signing.js";
 import { ADAPTERS, createArtifact, decideArtifact, exportArtifact, getArtifact, importArtifact, sampleInput, verifyArtifactPackage, validateArtifact, type ArtifactVersion } from "./registry.js";
 import { decideRun, resumeRun, runData, saveWorkflow, startRun, validateWorkflow, type Workflow, type WorkflowRun } from "./workflows.js";
 
@@ -39,7 +40,7 @@ export function artifactRoutes(app: FastifyInstance, d: { store: Store; config: 
   });
   /** Offline-equivalent verification; pin the expected signer with `trustedPublicKeyPem` (GET /api/signing/public-key). */
   app.post("/api/v1/artifact-packages/verification", async request => {
-    const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).strict().parse(request.body);
+    const body = PackageSubmission.parse(request.body);
     return soft(() => verifyArtifactPackage(body.package, body.trustedPublicKeyPem));
   });
   /** Body `{package, trustedPublicKeyPem?}`; without a pinned key only packages signed by this deployment are accepted. */

@@ -216,6 +216,7 @@ export function Assistant({ onClose }: { onClose: () => void }) {
         <div className="bubble reply">
           <EngineMeta plan={plan} />
           {plan.interpretation.map((line, i) => <p key={i} className={line.startsWith("已拒绝") ? "rejected-line" : ""}>{line}</p>)}
+          {plan.suggestion && <DeciderNote suggestion={plan.suggestion} />}
           {plan.answer && <div className="ai-answer"><p>{plan.answer.text}</p>
             {plan.answer.citations.length > 0 ? <div className="citations" role="group" aria-label="引用的记录">{plan.answer.citations.map(x =>
               <button key={x.handle} type="button" className="cite" title={x.label} onClick={() => openCitation(c, x)}>{x.label}</button>)}</div>
@@ -281,4 +282,18 @@ export function Assistant({ onClose }: { onClose: () => void }) {
         <button type="submit" disabled={thinking || !message.trim()}>生成计划 ↵</button></div>
     </form>
   </div>;
+}
+
+const LANE_LABEL: Record<string, string> = { "cad-review": "CAD 零件评审", "cad-code": "生成 CadQuery 代码", "cad-sweep": "设计空间扫描", "cad-optimize": "物理寻优",
+  "scene-review": "Blender 工作单元", "plant-layout": "产线布局", "robot-cell": "MuJoCo 机器人工作单元", factory: "工厂维护与能源评审", "aero-body": "气动评审",
+  "robot-review": "机器人记录评审", "create-project": "新建任务", "update-requirements": "修改需求", "out-of-scope": "不属于工作台的请求" };
+/** Strands Decider: shown only as a hint; the person rephrases or picks the lane. Nothing runs from here. */
+function DeciderNote({ suggestion: s }: { suggestion: NonNullable<AssistantPlan["suggestion"]> }) {
+  return <p className="decider-note" role="note">
+    {s.lane === "out-of-scope" ? <>决策模型判断这不是工作台能处理的设计请求（置信 {s.confidence.toFixed(2)}）。</>
+      : s.lane ? <>决策模型建议：<strong>{LANE_LABEL[s.lane] ?? s.lane}</strong>（置信 {s.confidence.toFixed(2)}）。只是建议，不会执行；请按这个方向补充描述。</>
+      : s.withheld === "unknown-option" ? <>决策模型的回答不在可选通道内，已忽略。请补充具体零件、场景或指标。</>
+      : <>决策模型也无法判断（置信 {s.confidence.toFixed(2)} &lt; {s.threshold}），请补充具体零件、场景或指标。</>}
+    {s.relaxesProbability >= 0.5 && <> 注意：请求可能在放宽要求（{s.relaxesProbability.toFixed(2)}）。</>}
+    <small> · {s.model} · {s.latencyMs} ms</small></p>;
 }

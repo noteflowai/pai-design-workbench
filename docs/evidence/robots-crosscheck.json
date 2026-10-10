@@ -1,0 +1,112 @@
+{
+ "schema": "pai-robots-crosscheck-evidence-1",
+ "measuredAt": "2026-10-10",
+ "source": "npm run test:robot (robot cell candidate MJCF vs official UR5e loaded by Strands Robots)",
+ "strandsRobots": "0.5.3",
+ "menagerieCommit": "bf756430b615819654b640f321c71ba5c3ebeef8",
+ "checks": [
+  {
+   "id": "joints",
+   "passed": true,
+   "observed": [
+    6,
+    6
+   ]
+  },
+  {
+   "id": "joint-limits",
+   "passed": true,
+   "observed": {
+    "cell": [
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -3.1416,
+      3.1416
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ]
+    ],
+    "official": [
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -3.1415,
+      3.1415
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ],
+     [
+      -6.2832,
+      6.2832
+     ]
+    ]
+   }
+  },
+  {
+   "id": "fk-flange",
+   "passed": true,
+   "observed": 0.00638
+  },
+  {
+   "id": "reach",
+   "passed": true,
+   "observed": [
+    1.0807,
+    1.0804
+   ]
+  },
+  {
+   "id": "link-mass",
+   "passed": false,
+   "observed": [
+    29.03,
+    16.99
+   ]
+  }
+ ],
+ "configurations": 200,
+ "seed": 20261010,
+ "finding": "cell arm link mass 29.03 kg vs official 16.99 kg; kinematics agree within 6.4 mm",
+ "verdictChanged": false,
+ "isolation": "bwrap-unshare-all",
+ "receipt": {
+  "exitCode": 0,
+  "startedAt": "2026-10-10T12:21:19.905Z",
+  "finishedAt": "2026-10-10T12:21:21.101Z",
+  "sourceDigests": {
+   "script": "4a6303433636c908dee6c201e7e3d286645c06467713d581acec40fe7688a5a0",
+   "lock": "33123402ee8b47ad5e8874fa83696cfb5aece281702163be27743a871548117a",
+   "menagerie": "bf756430b615819654b640f321c71ba5c3ebeef8"
+  }
+ },
+ "sceneFileSha256": "f26a2ebeca68b0f2c4b202fd68d9a1f7a2b8936c98d64be6edc75a1e8476675a"
+}

@@ -29,6 +29,11 @@ const ROUTES: { method: "GET" | "POST"; pattern: RegExp; scope: Scope }[] = [
   { method: "POST", pattern: /^\/assistant\/external-plans$/, scope: "propose" },
   { method: "POST", pattern: /^\/assistant\/plans\/[0-9a-f-]{36}\/autonomous-runs$/, scope: "run" },
   { method: "GET", pattern: /^\/autonomy-grants\?projectId=[0-9a-f-]{36}$/, scope: "read" },
+  // Ontology: the semantic model, engine catalogue and object reads (read scope only; writes stay behind actions).
+  { method: "GET", pattern: /^\/v1\/ontology(\.ttl)?$/, scope: "read" },
+  { method: "GET", pattern: /^\/v1\/engines$/, scope: "read" },
+  // Object reads: the server further limits agents to the kinds /state already returns (ontology/model.ts AGENT_STATE_KINDS).
+  { method: "GET", pattern: /^\/v1\/objects(\/[A-Z][A-Za-z]{1,40}(\/[A-Za-z0-9@._-]{1,160})?)?(\?(limit=\d{1,3})?(&?after=[A-Za-z0-9@._-]{1,160})?)?$/, scope: "read" },
 ];
 
 export interface AgentPrincipal { clientId: string; verified: boolean; session?: string }

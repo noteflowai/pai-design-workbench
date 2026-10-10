@@ -111,7 +111,22 @@ export function RobotDetail({ scene, Receipts }: { scene?: RobotScene; Receipts:
         {scene.usd?.newton && ("passed" in scene.usd.newton
           ? <> Newton {scene.usd.newton.version} 交叉校验{scene.usd.newton.passed ? "通过" : "未通过"}：导入为一个关节树，质量一致，{scene.usd.newton.configurations} 个构型的正运动学与 MJCF 相差 {(scene.usd.newton.fkPositionM * 1000).toFixed(4)} mm / {scene.usd.newton.fkOrientationDeg.toFixed(4)}°（<a href={`/api/scenes/${scene.id}/files/candidate/newton.json`}>newton.json</a>）。只校验运动学和质量，不代表动力学一致。</>
           : <span className="warning"> Newton 无法导入该 USD：{scene.usd.newton.error}</span>)}</p>}
+      {scene.robots && <StrandsRobotsCheck value={scene.robots} sceneId={scene.id} />}
       <Receipts value={{ request: scene.request, requirementDigest: scene.requirementDigest, receipts: scene.receipts, files: scene.files }} />
     </>}
   </>;
+}
+
+const ROBOT_CHECK: Record<string, string> = { joints: "关节数", "joint-limits": "关节限位", "fk-flange": "法兰正运动学", reach: "最大可达", "link-mass": "连杆质量" };
+/** Strands Robots: the simulated arm against the official model it loads (conformance record, not part of the verdict). */
+function StrandsRobotsCheck({ value, sceneId }: { value: NonNullable<SceneReview["robots"]>; sceneId: string }) {
+  if (!("passed" in value)) return <p className="warning">Strands Robots 交叉校验没有完成：{value.error}</p>;
+  const shown = (c: (typeof value.checks)[number]) => Array.isArray(c.observed) ? `本单元 ${c.observed[0]} / 官方 ${c.observed[1]}${c.unit ? ` ${c.unit}` : ""}`
+    : typeof c.observed === "number" ? `${c.unit === "m" ? `${(c.observed * 1000).toFixed(1)} mm` : c.observed}` : c.passed ? "一致" : "不一致（见交叉校验记录）";
+  return <section className="crosscheck" aria-label="Strands Robots 交叉校验">
+    <h4>Strands Robots {value.strandsRobots} 对照官方 {value.robot.toUpperCase()} 模型{value.passed ? "：一致" : "：发现差异"}</h4>
+    <p className="muted">官方模型来自 MuJoCo Menagerie（固定提交 <code>{value.menagerieCommit.slice(0, 10)}</code>，离线读取，只用仿真）。{value.configurations} 个随机构型。这是模型一致性记录，不参与本次结论。</p>
+    <ul>{value.checks.map(c => <li key={c.id} className={c.passed ? "ok" : "bad"}>{c.passed ? "✓" : "×"} {ROBOT_CHECK[c.id] ?? c.id}：{shown(c)}</li>)}</ul>
+    <a className="button secondary" href={`/api/scenes/${sceneId}/files/candidate/robots.json`}>下载交叉校验记录</a>
+  </section>;
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { command, NativeAdapters, writePrivate } from "./adapters.js";
 import type { Config } from "./config.js";
@@ -10,6 +10,7 @@ import { canonical, DomainError, sha256 } from "./domain.js";
 import { Store } from "./store.js";
 import type { LiveBus } from "./live.js";
 import { familyOf, type CadReview } from "./cad.js";
+import { sandboxArgs } from "./sandbox.js";
 
 export interface SceneStage { index: number; id: string; label: string; file: string; sha256: string; objects: string[] }
 export interface SceneRay { origin: number[]; target: number[]; hit: number[] | null; firstHit: string | null; visible: boolean; frame: "gltf-y-up" }
@@ -96,6 +97,9 @@ export interface SceneReview {
   usd?: { usdVersion: string; rigidBodies: number; joints: string[]; validators: number;
     /** Cross-engine conformance of the exported USD: Newton imports it and matches the MJCF kinematics and masses. */
     newton?: { version: string; passed: boolean; configurations: number; fkPositionM: number; fkOrientationDeg: number; checks: { id: string; passed: boolean }[] } | { error: string } };
+  /** Conformance of the simulated arm with the official model Strands Robots loads (pinned Menagerie, offline, sim only). */
+  robots?: { robot: string; strandsRobots: string; menagerieCommit: string; passed: boolean; configurations: number; isolation: "bwrap-unshare-all";
+    checks: { id: string; passed: boolean; observed: unknown; limit?: number; unit?: string }[] } | { error: string };
 }
 export type PlantLayoutValue = z.infer<typeof PlantLayout>;
 export type PlantRequirementsValue = z.infer<typeof PlantRequirements>;
@@ -248,9 +252,11 @@ export async function reviewScene(store: Store, config: Config, project: Project
         if (toolInput && name === "candidate") record.tool = { ...record.tool!, mujocoMassG: m.tool!.mujocoMassG };
         if (m.usd) record.usd = { usdVersion: m.usd.usdVersion, rigidBodies: m.usd.rigidBodies, joints: m.usd.joints, validators: m.usd.validators };
         if (name === "candidate" && config.newtonPython && record.usd) record.usd.newton = await newtonCheck(config, record, target, request.requestId, publish);
+        if (name === "candidate" && config.robotsPython && config.robotsAssets) record.robots = await robotsCheck(config, record, target, request.requestId, publish);
       }
       for (const file of robot ? ["robot.json", "scene.xml", "scene.usda", "robot.glb", "checks.json", ...(toolInput ? ["tool.stl"] : []),
-          ...(name === "candidate" && record.usd?.newton && "passed" in record.usd.newton ? ["newton.json"] : [])] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
+          ...(name === "candidate" && record.usd?.newton && "passed" in record.usd.newton ? ["newton.json"] : []),
+          ...(name === "candidate" && record.robots && "passed" in record.robots ? ["robots.json"] : [])] : ["scene.blend", "scene.glb", "preview.png", "checks.json", ...(plant ? ["inspection.png"] : [])]) {
         record.files[`${name}/${file}`] = sha256(await readFile(join(target, file)));
       }
       store.put("scene-review", record);
@@ -270,6 +276,48 @@ export async function reviewScene(store: Store, config: Config, project: Project
   record.finishedAt = new Date().toISOString(); store.put("scene-review", record);
   publish(request.requestId, { kind: "done", state: record.state, recordId: record.id, verdict: record.verdict, detail: record.error });
   return record;
+}
+
+/**
+ * Model conformance, not a design check: Strands Robots resolves the arm by name and loads the official MuJoCo
+ * Menagerie model (pinned commit, offline); the script compares joints, limits, flange kinematics, reach and link mass
+ * with the MJCF PAI simulated. It runs without network (bubblewrap) when available, never in hardware mode, and never
+ * changes the verdict; a failing comparison is shown as a finding.
+ */
+async function robotsCheck(config: Config, record: SceneReview, target: string, requestId: string, publish: LiveBus["publish"]): Promise<NonNullable<SceneReview["robots"]>> {
+  const label = "Strands Robots 对照官方 UR5e 模型（关节、限位、正运动学、可达范围、质量）";
+  const fail = (code: string, detail: string) => {
+    publish(requestId, { kind: "step", id: "strands-robots", label, status: "failed", which: "candidate", detail: code });
+    return { error: `${code}: ${detail}` };
+  };
+  publish(requestId, { kind: "step", id: "strands-robots", label, status: "running", which: "candidate" });
+  // A conformance record must never decide the review: every failure here becomes a finding, not an exception.
+  try {
+    const script = join(config.repository, "native/robots_crosscheck.py"), scratch = join(target, ".robots"), output = join(scratch, "robots.json");
+    await mkdir(scratch, { mode: 0o700 });
+    const pins = JSON.parse(await readFile(join(config.repository, "tools/runtime-pins.json"), "utf8")).strandsRobots as { version: string; menagerie: { commit: string } };
+    const python = config.robotsPython!, venv = dirname(dirname(python));
+    // Same isolation as generated CAD code: no network, clean environment, private state hidden; only target is writable.
+    const argv = ["/usr/bin/env", "MUJOCO_GL=disable", "STRANDS_MESH=false", `ROBOT_DESCRIPTIONS_CACHE=${config.robotsAssets}`,
+      python, "-I", script, "--mjcf", join(target, "scene.xml"), "--robot", "ur5e", "--assets", config.robotsAssets!, "--commit", pins.menagerie.commit, "--output", output];
+    const bwrap = config.bwrap ?? "bwrap";
+    const r = await command(bwrap, sandboxArgs(config, { python, venv, native: join(config.repository, "native") },
+      { readOnly: [config.robotsAssets!, target], writable: [scratch] }, argv), "/", undefined, 300_000);
+    record.receipts.push({ adapter: "strands-robots", command: ["bwrap", "--unshare-all", "python", "robots_crosscheck.py", "--robot", "ur5e"], startedAt: r.startedAt, finishedAt: r.finishedAt,
+      exitCode: r.exitCode, stdoutSha256: sha256(r.stdout),
+      sourceDigests: { script: sha256(await readFile(script)), lock: sha256(await readFile(join(config.repository, "native/robots-requirements.txt"))), menagerie: pins.menagerie.commit } });
+    if (r.exitCode !== 0) return fail("ROBOTS_CROSSCHECK_FAILED", `isolated run exited ${r.exitCode}; see the retained receipt`);
+    const j = JSON.parse(await readFile(output, "utf8")) as { robot: string; strandsRobots: string; menagerieCommit: string; passed: boolean; configurations: number; mode: string;
+      checks: { id: string; passed: boolean; observed: unknown; limit?: number; unit?: string }[] };
+    if (j.strandsRobots !== pins.version || j.menagerieCommit !== pins.menagerie.commit || j.mode !== "sim") return fail("ROBOTS_PIN_MISMATCH", "Strands Robots, Menagerie or mode differs from the pins");
+    // Copied by this (trusted) process: the sandbox could never touch the files the review hashes.
+    await writeFile(join(target, "robots.json"), JSON.stringify(j, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    const failed = j.checks.filter(c => !c.passed).map(c => c.id);
+    publish(requestId, { kind: "step", id: "strands-robots", label, status: j.passed ? "done" : "failed", which: "candidate",
+      detail: j.passed ? `${j.configurations} 个构型一致` : `不一致：${failed.join("、")}` });
+    return { robot: j.robot, strandsRobots: j.strandsRobots, menagerieCommit: j.menagerieCommit, passed: j.passed, configurations: j.configurations,
+      isolation: "bwrap-unshare-all", checks: j.checks };
+  } catch { return fail("ROBOTS_CROSSCHECK_ERROR", "the cross-check could not complete; see the retained receipt"); }
 }
 
 /**

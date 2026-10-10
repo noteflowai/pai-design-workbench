@@ -112,6 +112,13 @@ routes.ts（/api/v1，沿用 ALB/Cognito 鉴权，不进 /api/agent）
 - 运行数据在 `.state/workflow-runs/<id>/`，读取时按记录的摘要复核；制品文件随版本存进 SQLite，运行时从这些字节物化，不从仓库读。
 - 选型与备选方案（OCI/ORAS、MLflow、Temporal/Argo）见 [ADR 0001](adr/0001-artifacts-and-workflows.md)。
 
+### 3.2 本体与引擎平台（ADR 0002）
+
+- **本体 `pai-ontology-1`**（`src/ontology/`）：对象类型 = 存储种类，链接类型 = 记录的引用字段，动作类型 = 写路由（参数即该路由的 Zod schema）。契约测试保证三者与代码一一对应；导出 JSON、OWL 2 + SHACL（Turtle），映射 PROV-O、QUDT。
+- **引擎目录** `/api/v1/engines`：每个引擎声明权限——`verdict`（原生求解器）、`conformance`（Newton、Strands Robots 交叉校验）、`suggestion`（Strands Decider）。只有 `verdict` 能决定结论。
+- **Strands Robots**：固定版本 + 固定提交的 MuJoCo Menagerie，离线、无网络命名空间内运行，只用仿真；对照官方模型校验工作单元机械臂。
+- **Strands Decider**：规则解析不出工具时给出带置信度的路由建议（≥ 0.9 才显示），不执行、不验收；通过 `PAI_DECIDER_URL` 连接其自带服务，托管站点暂未部署。
+
 ## 4. 复用矩阵（不重造轮子）
 
 下一阶段的开源复用与行业对标见 [INDUSTRY_BENCHMARK.md](INDUSTRY_BENCHMARK.md)。

@@ -14,6 +14,10 @@ export interface Config {
   camPython?: string;
   /** Pinned OR-Tools venv (tools/setup_logistics.py) for the logistics planning artifact. */
   logisticsPython?: string;
+  /** Pinned strands-robots venv with an offline MuJoCo Menagerie (tools/setup_robots.py); simulation only. */
+  robotsPython?: string; robotsAssets?: string;
+  /** Strands Decider `/v1/systemone` endpoint (loopback or private network only); routing suggestions, never verdicts. */
+  deciderUrl?: string; deciderModel?: string;
   /** AWS KMS asymmetric key (ECC_NIST_P256) that signs release packages; local Ed25519 when unset. */
   signingKmsKeyId?: string;
   /** RFC 3161 time-stamping authority for release seals (only a SHA-256 digest is sent) and its CA bundle. */
@@ -37,6 +41,16 @@ export interface Config {
   /** Machine agents (OAuth client credentials) for `/api/agent/*`; see src/agent-api.ts. */
   agentAuth?: { userPoolId: string; clientIds: string[]; /** Pre-loaded JWKS (tests, air-gapped hosts); otherwise fetched from the pool. */ jwks?: unknown };
   authLogoutUrl?: string;
+}
+/** Only a loopback or private-network Decider: the request carries task text. */
+function deciderUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  const u = new URL(value);
+  const privateHost = /^(127\.\d+\.\d+\.\d+|localhost|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(u.hostname);
+  if (!["http:", "https:"].includes(u.protocol) || !privateHost || u.pathname !== "/v1/systemone" || u.username || u.password) {
+    throw new Error("PAI_DECIDER_URL must be http(s)://<loopback or private address>/v1/systemone");
+  }
+  return u.toString();
 }
 const ALL_PROFILES = ["kiro-primary", "kiro-backup", "kiro-backup2", "codex", "claude"];
 function aiProfiles(value?: string): string[] | undefined {
@@ -80,6 +94,8 @@ export function configuration(): Config {
     physicsPython: process.env.PAI_PHYSICS_PYTHON, ccx: process.env.PAI_CCX, newtonPython: process.env.PAI_NEWTON_PYTHON || undefined,
     camPython: process.env.PAI_CAM_PYTHON || undefined,
     logisticsPython: process.env.PAI_LOGISTICS_PYTHON || undefined,
+    robotsPython: process.env.PAI_ROBOTS_PYTHON || undefined, robotsAssets: process.env.PAI_ROBOTS_ASSETS || undefined,
+    deciderUrl: deciderUrl(process.env.PAI_DECIDER_URL), deciderModel: process.env.PAI_DECIDER_MODEL || undefined,
     signingKmsKeyId: process.env.PAI_SIGNING_KMS_KEY_ID || undefined,
     tsaUrl: process.env.PAI_TSA_URL || undefined, tsaCaFile: process.env.PAI_TSA_CA_FILE || undefined,
     openfoamImage: /^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$/.test(process.env.PAI_OPENFOAM_IMAGE ?? "") ? process.env.PAI_OPENFOAM_IMAGE : undefined,

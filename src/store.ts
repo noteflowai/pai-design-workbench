@@ -26,6 +26,9 @@ export class Store {
     return (this.db.prepare("SELECT body FROM documents WHERE kind=? ORDER BY rowid").all(kind) as { body: string }[])
       .map(row => JSON.parse(row.body) as T);
   }
+  count(kind: string): number {
+    return (this.db.prepare("SELECT count(*) AS n FROM documents WHERE kind=?").get(kind) as { n: number }).n;
+  }
   insert(kind: string, value: { id: string; revision?: number }): void {
     this.db.prepare("INSERT INTO documents VALUES(?,?,?,?)").run(kind, value.id, value.revision ?? 1, JSON.stringify(value));
   }

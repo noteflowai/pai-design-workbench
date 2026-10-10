@@ -80,6 +80,17 @@
 
 "PAI 做 80–90%"是目标：按每个交付记录平台复用部分与定制部分的工作量，样本足够后再统计，目前不作结论。
 
+## M10 · Physical AI 引擎平台（见 [ADR 0002](adr/0002-physical-ai-engine-platform.md)）
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| 10a 本体 | 对象 / 链接 / 动作类型、JSON 与 OWL/SHACL 导出、对象读取、契约测试 | ✓ |
+| 10b 引擎目录 | `/api/v1/engines`，权限分级（verdict / conformance / suggestion） | ✓ |
+| 10c Strands Robots | 官方 UR5e 交叉校验（固定 Menagerie、离线、仅仿真）；发现单元连杆质量偏重 29.0 vs 17.0 kg | ✓ 交叉校验；质量修正待单独评审 |
+| 10d Strands Decider | 路由建议 + 放宽风险，置信门限 0.9；本机 GPU 202 ms | ✓ 本机；托管需 GPU 服务（待批准成本） |
+| 10e 租户、配额、计量 | 每租户 Cognito 客户端与数据分区；并发/作业/成本上限；`pai-usage-1` 对账 | 计划；不上线收费 |
+| 10f 邀请制内测 | 封装好的制品与流程优先 | 等用户批准 |
+
 ## 风险与对策
 
 | 风险 | 对策 |

@@ -41,6 +41,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -q libglu1-mesa libgl1 libopen
 runuser -u pai -- env PAI_PHYSICS_BOTORCH="${PAI_PHYSICS_BOTORCH:-}" PAI_PHYSICS_NEWTON="${PAI_PHYSICS_NEWTON:-}" python3 tools/setup_physics.py
 # Logistics planning artifact: hash-locked OR-Tools (wheels only); idempotent, no root needed.
 runuser -u pai -- python3 tools/setup_logistics.py
+# Strands Robots cross-check (hash-locked, pinned Menagerie, simulation only) only when the operator opts in.
+if [ "${PAI_ROBOTS:-}" = "1" ]; then runuser -u pai -- python3 tools/setup_robots.py; fi
 # OS sandbox for generated CAD code; without it the lane stays disabled (fail closed).
 if ! command -v bwrap >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q bubblewrap >/dev/null; fi
 # Ubuntu 24.04 restricts unprivileged user namespaces; grant them to bwrap only (per-application AppArmor profile).

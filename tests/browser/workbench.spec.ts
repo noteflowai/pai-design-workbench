@@ -250,7 +250,9 @@ test("first-article inspection: measured values against the frozen tolerances, n
   await expect(fai.getByText("SN-002 · 不合格")).toBeVisible();
   await expect(fai).toContainText("轴承孔 Ø（H7） 35.031（35 – 35.025）");
   const st = await (await page.request.get("/api/state")).json();
-  expect(st.inspections.map((i: { verdict: string }) => i.verdict).sort()).toEqual(["conforming", "nonconforming"]);
+  // Only this test's task: the store is shared by the whole browser run (and kept between local runs).
+  const mine = st.projects.at(-1).id;
+  expect(st.inspections.filter((i: { projectId: string }) => i.projectId === mine).map((i: { verdict: string }) => i.verdict).sort()).toEqual(["conforming", "nonconforming"]);
   expect(st.inspections.every((i: { physicalMeasurement: boolean }) => i.physicalMeasurement)).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);

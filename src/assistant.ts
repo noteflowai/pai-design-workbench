@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { CreateProject, Id, ReviewRequest, type Project, type CandidateId } from "./contracts.js";
+import type { Suggestion } from "./decider.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
 import { DEFAULT_FACTORY_CRITERIA, FactoryCriteriaRequest, FactoryReviewRequest, REVIEWED_SAMPLE,
   type FactoryCriteria, type FactoryCriteriaValues } from "./factory.js";
@@ -32,6 +33,8 @@ export interface AssistantPlan {
   id: string; requestId: string; projectId?: string; projectRevision?: number; message: string; createdAt: string;
   interpretation: string[]; plans: ToolPlan[]; unmatched: boolean;
   authority: "none"; model: { used: boolean; reason: string };
+  /** Strands Decider routing suggestion when the rules found no tool (src/decider.ts); never executed. */
+  suggestion?: Suggestion;
   /** Model-sourced plans: executor outcome, engine receipts and any human reconciliation. */
   source?: "rules" | "model" | "external";
   external?: { agent: string; via: "mcp"; verified?: boolean; clientId?: string; session?: string };
@@ -47,6 +50,7 @@ export interface AssistantPlan {
   finishedAt?: string;
   confirmations: { planId: string; recordKind: string; recordId: string; at: string; match: "as-proposed" | "edited-before-execution" }[];
 }
+export const PreflightStep = z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict();
 export const ConfirmPlan = z.object({
   planId: z.string().regex(/^p[0-9]{1,2}$/), recordKind: z.enum(["project", "scene-review", "review", "factory-criteria", "factory-review", "proposal", "cad-review", "cad-sweep", "cad-optimize", "aero-review"]),
   recordId: Id,
@@ -290,7 +294,8 @@ export function planFromMessage(message: string, context: PlannerContext): Omit<
   };
 }
 
-export function createPlan(store: Store, input: unknown, modelConfigured: boolean): AssistantPlan {
+export async function createPlan(store: Store, input: unknown, modelConfigured: boolean,
+  suggest?: (message: string) => Promise<Suggestion | undefined>): Promise<AssistantPlan> {
   const request = AssistantInput.parse(input);
   const project = request.projectId ? store.get<Project>("project", request.projectId) : undefined;
   if (request.projectId && !project) throw new DomainError("NOT_FOUND", "Project not found", 404);
@@ -299,8 +304,14 @@ export function createPlan(store: Store, input: unknown, modelConfigured: boolea
   const lastCriteria = project ? store.list<FactoryCriteria>("factory-criteria").filter(c => c.projectId === project.id).at(-1) : undefined;
   const lastCad = project ? store.list<CadReview>("cad-review").filter(c => c.projectId === project.id).at(-1) : undefined;
   const plan = planFromMessage(request.message, { project, lastScene, lastPlant, lastCriteria, lastCad, modelConfigured });
-  const record: AssistantPlan = { ...plan, id: randomUUID(), requestId: request.requestId, createdAt: new Date().toISOString(), confirmations: [] };
-  const claimed = store.claim(request.requestId, sha256(canonical({ kind: "assistant-plan", request })), record, "assistant-plan");
+  // Same request again: return the recorded plan (or the identity conflict) without asking any model.
+  const digest = sha256(canonical({ kind: "assistant-plan", request }));
+  const prior = store.requestRun(request.requestId);
+  if (prior) return store.get<AssistantPlan>("assistant-plan", store.claim(request.requestId, digest, { id: prior }, "assistant-plan"))!;
+  // Only when the rules found no native tool: a suggestion for the person, recorded with its confidence.
+  const suggestion = plan.unmatched && suggest ? await suggest(request.message) : undefined;
+  const record: AssistantPlan = { ...plan, ...(suggestion ? { suggestion } : {}), id: randomUUID(), requestId: request.requestId, createdAt: new Date().toISOString(), confirmations: [] };
+  const claimed = store.claim(request.requestId, digest, record, "assistant-plan");
   return claimed === record.id ? record : store.get<AssistantPlan>("assistant-plan", claimed)!;
 }
 
