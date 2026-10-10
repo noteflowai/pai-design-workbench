@@ -1,4 +1,5 @@
 import { validRuntimeArn } from "./agentcore.js";
+import { parseTenants, type Tenant } from "./tenants.js";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +42,8 @@ export interface Config {
   /** Machine agents (OAuth client credentials) for `/api/agent/*`; see src/agent-api.ts. */
   agentAuth?: { userPoolId: string; clientIds: string[]; /** Pre-loaded JWKS (tests, air-gapped hosts); otherwise fetched from the pool. */ jwks?: unknown };
   authLogoutUrl?: string;
+  /** Invite-only tenants (src/tenants.ts): Cognito client id -> tenant id and quotas. */
+  tenants?: Tenant[];
 }
 /** Only a loopback or private-network Decider: the request carries task text. */
 function deciderUrl(value?: string): string | undefined {
@@ -75,7 +78,10 @@ export function configuration(): Config {
   if (Boolean(agentPool) !== Boolean(agentClients?.length)) throw new Error("PAI_AGENT_USER_POOL_ID and PAI_AGENT_CLIENT_IDS are required together");
   if (agentPool && !/^[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]{1,64}$/.test(agentPool)) throw new Error("PAI_AGENT_USER_POOL_ID must be a Cognito user pool id");
   if (agentClients?.some(c => !/^[a-z0-9]{1,128}$/.test(c))) throw new Error("PAI_AGENT_CLIENT_IDS must list Cognito app client ids");
-  const agentAuth = agentPool ? { userPoolId: agentPool, clientIds: agentClients! } : undefined;
+  const tenants = parseTenants(process.env.PAI_TENANTS);
+  if (tenants.length && !agentPool && publicOrigin) throw new Error("PAI_TENANTS on a hosted site requires the agent user pool");
+  // Tenant clients are verified by the same pool; their tokens carry only the tenant scope.
+  const agentAuth = agentPool ? { userPoolId: agentPool, clientIds: [...new Set([...agentClients!, ...tenants.map(t => t.clientId)])] } : undefined;
   const listenHost = process.env.PAI_LISTEN_HOST ?? "127.0.0.1";
   if (listenHost !== "127.0.0.1" && (!publicOrigin || !albAuth)) throw new Error("Network binding requires HTTPS origin and ALB authentication");
   return {
@@ -114,5 +120,6 @@ export function configuration(): Config {
     claudeBedrockRegion: /^[a-z]{2}(-[a-z]+)+-\d$/.test(process.env.PAI_CLAUDE_BEDROCK_REGION ?? "") ? process.env.PAI_CLAUDE_BEDROCK_REGION : undefined,
     listenHost, publicOrigin, albAuth, agentAuth,
     authLogoutUrl: process.env.PAI_AUTH_LOGOUT_URL,
+    tenants,
   };
 }

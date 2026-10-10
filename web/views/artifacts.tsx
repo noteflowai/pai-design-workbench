@@ -104,7 +104,43 @@ export function Artifacts() {
       </>}
       {runs.map(r => <RunCard key={r.id} run={r} onChange={load} reason={reason} />)}
     </Card>
+    <Tenants workflows={workflows} act={act} reason={reason} />
   </>;
+}
+
+type TenantRow = { id: string; maxConcurrentRuns: number; maxRunsPerDay: number; usage: { runs: number; native: { wallSeconds: number | null } } };
+type Offer = { id: string; workflowId: string; tenants: string[]; state: "active" | "revoked"; reason: string; createdAt: string };
+/** Invite-only tenants (ADR 0002 §5): offer a workflow whose artifacts are all released; revoke; usage only, nothing billed. */
+function Tenants({ workflows, act, reason }: { workflows: Workflow[]; act: (f: () => Promise<unknown>, m: string) => Promise<boolean>; reason: (l: string) => string | undefined }) {
+  const [tenants, setTenants] = useState<TenantRow[]>([]), [offers, setOffers] = useState<Offer[]>([]);
+  const [workflow, setWorkflow] = useState(""), [picked, setPicked] = useState<string[]>([]);
+  const load = useCallback(async () => {
+    const [t, o] = await Promise.all([api<{ tenants: TenantRow[] }>("/v1/tenants"), api<Offer[]>("/v1/offerings")]);
+    setTenants(t.tenants); setOffers(o);
+  }, []);
+  useEffect(() => { void load().catch(() => undefined); }, [load]);
+  const run = (f: () => Promise<unknown>, m: string) => act(async () => { await f(); await load(); }, m);
+  const chosen = workflow || workflows.at(-1)?.id || "";
+  return <Card title="邀请制租户" aside={<small>只提供制品全部已发布的流程 · 只记用量，不收费</small>} label="邀请制租户">
+    {tenants.length === 0 ? <Empty title="还没有配置租户">在部署 context 里加入租户后，这里可以把流程提供给它（见 DEPLOYMENT.md）。</Empty> : <>
+      <div className="table-wrap"><table className="data-table"><thead><tr><th scope="col">租户</th><th scope="col">并发 / 日上限</th><th scope="col">运行</th><th scope="col">原生计算</th></tr></thead>
+        <tbody>{tenants.map(t => <tr key={t.id}><td>{t.id}</td><td>{t.maxConcurrentRuns} / {t.maxRunsPerDay}</td><td>{t.usage.runs}</td>
+          <td>{t.usage.native.wallSeconds === null ? "未知" : `${t.usage.native.wallSeconds} s`}</td></tr>)}</tbody></table></div>
+      <div className="field-grid">
+        <label>流程<select value={chosen} onChange={e => setWorkflow(e.target.value)}>{workflows.map(w => <option key={w.id} value={w.id}>{w.id}</option>)}</select></label>
+        <fieldset><legend>提供给</legend>{tenants.map(t => <label key={t.id} className="inline"><input type="checkbox" checked={picked.includes(t.id)}
+          onChange={e => setPicked(p => e.target.checked ? [...p, t.id] : p.filter(x => x !== t.id))} />{t.id}</label>)}</fieldset>
+      </div>
+      <div className="button-row"><button type="button" disabled={!chosen || picked.length === 0} onClick={() => {
+        const r = reason("提供给租户的理由（至少 5 个字）"); if (r) void run(() => api("/v1/offerings", { workflow: chosen, tenants: picked, reason: r }), "已提供给租户。");
+      }}>提供流程</button></div>
+    </>}
+    {offers.length > 0 && <ul className="offers" aria-label="对外提供记录">{offers.map(o => <li key={o.id}>
+      <strong>{o.workflowId}</strong> → {o.tenants.join("、")} · {o.state === "active" ? "生效中" : "已撤销"} · {o.reason}
+      {o.state === "active" && <button type="button" className="secondary compact" onClick={() => {
+        const r = reason("撤销理由（至少 5 个字）"); if (r) void run(() => api(`/v1/offerings/${o.id}/revoke`, { reason: r }), "已撤销。");
+      }}>撤销</button>}</li>)}</ul>}
+  </Card>;
 }
 
 function RunCard({ run, onChange, reason }: { run: WorkflowRun; onChange: () => Promise<unknown>; reason: (l: string) => string | undefined }) {

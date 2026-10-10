@@ -79,3 +79,23 @@ test("loopback agent API needs no token and records the proposal as unverified",
     assert.equal((await s.call("POST", "/api/agent/feedback", {}, {})).statusCode, 404);
   } finally { await s.cleanup(); }
 });
+
+test("hosted tenant boundary: tenant tokens reach only tenant routes; workspace tokens never; the tenant header is ignored", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pai-tenant-hosted-"));
+  const TENANT_CLIENT = "tenantclient0001";
+  const config = { ...configuration(), state: dir, controllerEntrypoint: undefined, controllerDatabase: undefined, albAuth: undefined, publicOrigin: `https://${HOST}`,
+    agentAuth: { userPoolId: POOL, clientIds: [CLIENT, TENANT_CLIENT], jwks: { keys: [jwk] } },
+    tenants: [{ id: "acme", clientId: TENANT_CLIENT, maxConcurrentRuns: 1, maxRunsPerDay: 5 }] };
+  const made = await createApp(config, {} as Adapters);
+  const call = (url: string, headers: Record<string, string>) => made.app.inject({ method: "GET", url, headers: { host: HOST, ...headers } });
+  const bearer = (t: string) => ({ authorization: `Bearer ${t}` });
+  try {
+    const tenantTok = token({ sub: TENANT_CLIENT, client_id: TENANT_CLIENT, scope: "pai-agent/tenant" });
+    assert.equal((await call("/api/agent/v1/tenant/catalog", bearer(tenantTok))).statusCode, 200);
+    assert.equal((await call("/api/agent/state", bearer(token({ sub: TENANT_CLIENT, client_id: TENANT_CLIENT, scope: "pai-agent/read" })))).statusCode, 403, "a tenant client is never a workspace agent");
+    const workspaceTok = token({ scope: "pai-agent/read pai-agent/tenant" });
+    assert.equal((await call("/api/agent/v1/tenant/catalog", bearer(workspaceTok))).statusCode, 403, "the workspace client is not a tenant even with the scope");
+    assert.equal((await call("/api/agent/v1/tenant/catalog", { ...bearer(workspaceTok), "x-pai-tenant": "acme" })).statusCode, 403, "the header is ignored when hosted");
+    assert.equal((await call("/api/agent/v1/tenant/catalog", { "x-pai-tenant": "acme" })).statusCode, 401, "no token, no access");
+  } finally { await made.app.close(); await rm(dir, { recursive: true, force: true }); }
+});

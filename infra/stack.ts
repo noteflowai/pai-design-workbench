@@ -67,7 +67,8 @@ export class WorkbenchStack extends cdk.Stack {
     const agentApi = pool.addResourceServer("AgentApi", { identifier: "pai-agent", userPoolResourceServerName: "PAI agent API",
       scopes: [new cognito.ResourceServerScope({ scopeName: "read", scopeDescription: "Read the grounded workspace" }),
         new cognito.ResourceServerScope({ scopeName: "propose", scopeDescription: "Propose typed plans for human confirmation" }),
-        new cognito.ResourceServerScope({ scopeName: "run", scopeDescription: "Run a validated plan step within a maintainer's autonomy grant" })] });
+        new cognito.ResourceServerScope({ scopeName: "run", scopeDescription: "Run a validated plan step within a maintainer's autonomy grant" }),
+        new cognito.ResourceServerScope({ scopeName: "tenant", scopeDescription: "Invite-only tenant: run offered workflows, read own runs and usage" })] });
     const agentClient = pool.addClient("AgentClient", {
       generateSecret: true, authFlows: {}, accessTokenValidity: cdk.Duration.hours(1), enableTokenRevocation: true,
       oAuth: { flows: { clientCredentials: true }, scopes: ["read", "propose", "run"].map(s =>
@@ -75,6 +76,27 @@ export class WorkbenchStack extends cdk.Stack {
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
     agentClient.node.addDependency(agentApi);
+    // Invite-only tenants (ADR 0002 §5): one client each, only the tenant scope. Context `tenants`: JSON array of
+    // { id, maxConcurrentRuns?, maxRunsPerDay? }; none by default. Secrets are readable by the operator only.
+    const raw = this.node.tryGetContext("tenants") ?? "[]";
+    const tenantSpecs = (typeof raw === "string" ? JSON.parse(raw) : raw) as { id: string; maxConcurrentRuns?: number; maxRunsPerDay?: number }[];
+    const intIn = (v: unknown, lo: number, hi: number) => v === undefined || (Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi);
+    if (!Array.isArray(tenantSpecs) || tenantSpecs.some(t => !/^[a-z][a-z0-9]{1,39}$/.test(t.id) || t.id === "workspace"
+        || !intIn(t.maxConcurrentRuns, 1, 20) || !intIn(t.maxRunsPerDay, 1, 1000)) || new Set(tenantSpecs.map(t => t.id)).size !== tenantSpecs.length) {
+      throw new Error("context tenants: unique lower-case alphanumeric ids (not workspace), maxConcurrentRuns 1-20, maxRunsPerDay 1-1000");
+    }
+    // The ALB jwt-validation claim allows at most 10 values: the workspace agent client plus 9 tenants.
+    if (tenantSpecs.length > 9) throw new Error("at most 9 tenants per deployment (ALB claim limit)");
+    const tenantClients = tenantSpecs.map(t => {
+      const c = pool.addClient(`Tenant-${t.id}`, {
+        userPoolClientName: `pai-tenant-${t.id}`, generateSecret: true, authFlows: {}, accessTokenValidity: cdk.Duration.hours(1), enableTokenRevocation: true,
+        oAuth: { flows: { clientCredentials: true }, scopes: [cognito.OAuthScope.custom("pai-agent/tenant")] },
+        supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      });
+      c.node.addDependency(agentApi);
+      const secret = new secrets.Secret(this, `TenantSecret-${t.id}`, { description: `OAuth client secret of PAI tenant ${t.id}; read by the operator only`, secretStringValue: c.userPoolClientSecret });
+      return { spec: t, client: c, secret };
+    });
     const agentSecret = new secrets.Secret(this, "AgentClientSecret", {
       description: "OAuth client secret for PAI machine agents (client credentials); read by the operator only",
       secretStringValue: agentClient.userPoolClientSecret,
@@ -211,7 +233,7 @@ export class WorkbenchStack extends cdk.Stack {
       conditions: [{ field: "host-header", hostHeaderConfig: { values: [domain] } }, { field: "path-pattern", pathPatternConfig: { values: ["/api/agent/*"] } }],
       actions: [
         { type: "jwt-validation", order: 1, jwtValidationConfig: { jwksEndpoint: `${issuer}/.well-known/jwks.json`, issuer,
-          additionalClaims: [{ format: "single-string", name: "token_use", values: ["access"] }, { format: "single-string", name: "client_id", values: [agentClient.userPoolClientId] }] } },
+          additionalClaims: [{ format: "single-string", name: "token_use", values: ["access"] }, { format: "single-string", name: "client_id", values: [agentClient.userPoolClientId, ...tenantClients.map(t => t.client.userPoolClientId)] }] } },
         { type: "forward", order: 2, targetGroupArn: targetGroup.targetGroupArn },
       ],
     });
@@ -239,6 +261,7 @@ export class WorkbenchStack extends cdk.Stack {
     });
     secret.grantRead(operator);
     agentSecret.grantRead(operator);
+    for (const t of tenantClients) t.secret.grantRead(operator);
     operator.addToPolicy(new iam.PolicyStatement({ actions: ["secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"], resources: [aiKeys.secretArn] }));
     operator.addToPolicy(new iam.PolicyStatement({
       actions: ["ssm:SendCommand"], resources: [
@@ -261,6 +284,10 @@ export class WorkbenchStack extends cdk.Stack {
     new cdk.CfnOutput(this, "PackageArchiveBucket", { value: packages.bucketName });
     new cdk.CfnOutput(this, "PackageRetentionDays", { value: String(retentionDays) });
     new cdk.CfnOutput(this, "AgentClientId", { value: agentClient.userPoolClientId });
+    // Runtime mapping for PAI_TENANTS (client ids are not secrets); the operator writes it to /etc/pai/runtime.env.
+    new cdk.CfnOutput(this, "Tenants", { value: cdk.Stack.of(this).toJsonString(tenantClients.map(t => ({ id: t.spec.id, clientId: t.client.userPoolClientId,
+      maxConcurrentRuns: t.spec.maxConcurrentRuns ?? 2, maxRunsPerDay: t.spec.maxRunsPerDay ?? 50 }))) });
+    for (const t of tenantClients) new cdk.CfnOutput(this, `TenantSecretArn${t.spec.id}`, { value: t.secret.secretArn });
     new cdk.CfnOutput(this, "AgentClientSecretArn", { value: agentSecret.secretArn });
     new cdk.CfnOutput(this, "AgentTokenUrl", { value: `https://${authDomain.domainName}.auth.${this.region}.amazoncognito.com/oauth2/token` });
     new cdk.CfnOutput(this, "ReleaseHash", { value: createHash("sha256").update(readFileSync(releasePath)).digest("hex") });

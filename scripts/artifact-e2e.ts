@@ -33,7 +33,8 @@ let originKey = "";
 async function environment(name: string, logisticsPython = base.logisticsPython) {
   const state = join(root, name);
   // In-process app: no network, so no ALB/Cognito authentication and no public origin (the auth tests cover those).
-  const config = { ...base, state, logisticsPython, controllerEntrypoint: undefined, controllerDatabase: undefined, albAuth: undefined, agentAuth: undefined, publicOrigin: undefined };
+  const config = { ...base, state, logisticsPython, controllerEntrypoint: undefined, controllerDatabase: undefined, albAuth: undefined, agentAuth: undefined, publicOrigin: undefined,
+    tenants: [{ id: "pilot", clientId: "pilotclient", maxConcurrentRuns: 1, maxRunsPerDay: 5 }] };
   const { app } = await createApp(config, {} as never);
   const host = `127.0.0.1:${config.port}`;
   const call = async (method: "GET" | "POST", url: string, payload?: unknown) => {
@@ -43,7 +44,13 @@ async function environment(name: string, logisticsPython = base.logisticsPython)
   const ok = async <T>(method: "GET" | "POST", url: string, payload?: unknown) => {
     const r = await call(method, url, payload); assert.equal(r.status, 200, JSON.stringify(r.body)); return r.body as T;
   };
-  return { app, config, call, ok };
+  // A tenant over the agent API (loopback: the tenant is named in a header; hosted: its own client credentials).
+  const tenant = async (method: "GET" | "POST", url: string, payload?: unknown) => {
+    const r = await app.inject({ method, url: `/api/agent${url}`, payload: payload === undefined ? undefined : JSON.stringify(payload),
+      headers: { host, "x-pai-tenant": "pilot", ...(payload === undefined ? {} : { "content-type": "application/json" }) } });
+    return { status: r.statusCode, body: r.json() };
+  };
+  return { app, config, call, ok, tenant };
 }
 const instance = async (scenario: string, seed: number, orders: number, vehicles: number) => {
   const f = join(root, `${scenario}-${seed}-${orders}.json`);
@@ -93,6 +100,22 @@ try {
   const verification = await A.ok<{ verdict: string; checks: { id: string; passed: boolean }[] }>("GET", `/api/v1/workflow-runs/${done.id}/data?name=verification`);
   assert.equal(verification.verdict, "feasible-plan"); assert.ok(verification.checks.every(c => c.passed));
   const planDigest = sha256(JSON.stringify(plan.routes));
+  // 3b. The same released workflow as an invite-only tenant: offer, run with the real solver, approve, usage.
+  assert.equal((await A.tenant("GET", "/v1/tenant/catalog")).body.workflows.length, 0, "nothing is offered by default");
+  const offering = await A.ok<{ id: string }>("POST", "/api/v1/offerings", { workflow: workflow.id, tenants: ["pilot"], reason: "Invite-only pilot (synthetic)" });
+  const tStart = await A.tenant("POST", "/v1/tenant/runs", { requestId: randomUUID(), workflow: workflow.id, inputs: { problem } });
+  assert.equal(tStart.status, 200, JSON.stringify(tStart.body)); assert.equal(tStart.body.state, "waiting-approval");
+  const tBusy = await A.tenant("POST", "/v1/tenant/runs", { requestId: randomUUID(), workflow: workflow.id, inputs: { problem } });
+  assert.equal(tBusy.status, 429, "concurrency quota");
+  const tDone = await A.tenant("POST", `/v1/tenant/runs/${tStart.body.id}/decisions`, { node: "dispatcher", approve: true, reason: "租户调度员确认（合成实例）" });
+  assert.equal(tDone.body.state, "succeeded");
+  const tPlan = await A.tenant("GET", `/v1/tenant/runs/${tStart.body.id}/data?name=plan`);
+  assert.equal(sha256(JSON.stringify(tPlan.body.routes)), planDigest, "the tenant gets the same verified plan for the same input");
+  const tUsage = (await A.tenant("GET", "/v1/tenant/usage")).body;
+  assert.equal(tUsage.runs, 1); assert.equal(tUsage.billed, false); assert.ok(tUsage.native.wallSeconds > 0);
+  assert.equal((await A.tenant("GET", "/state")).status, 403, "a tenant cannot read the workspace");
+  await A.ok("POST", `/api/v1/offerings/${offering.id}/revoke`, { reason: "Pilot check finished" });
+  evidence.tenant = { run: tStart.body.id, state: tDone.body.state, samePlan: true, quotaRefused: tBusy.status, usage: tUsage };
   evidence.run = { ...summary(done), instance: { seed: 11, orders: 40, vehicles: 8 }, plan: { status: plan.status, distanceKm: plan.totalDistanceKm, routes: plan.routes.length, routesSha256: planDigest },
     checks: verification.checks.map(c => `${c.id}:${c.passed}`) };
 

@@ -13,8 +13,8 @@ import type { Config } from "./config.js";
 
 export const AGENT_PREFIX = "/api/agent";
 /** `run` executes an already-validated plan step only within a maintainer's autonomy grant (never approve/release). */
-export const AGENT_SCOPES = { read: "pai-agent/read", propose: "pai-agent/propose", run: "pai-agent/run" } as const;
-type Scope = keyof typeof AGENT_SCOPES;
+export const AGENT_SCOPES = { read: "pai-agent/read", propose: "pai-agent/propose", run: "pai-agent/run", tenant: "pai-agent/tenant" } as const;
+export type Scope = keyof typeof AGENT_SCOPES;
 
 /** The complete allowlist. Anything else under /api/agent is 404 before routing. */
 const ROUTES: { method: "GET" | "POST"; pattern: RegExp; scope: Scope }[] = [
@@ -34,9 +34,17 @@ const ROUTES: { method: "GET" | "POST"; pattern: RegExp; scope: Scope }[] = [
   { method: "GET", pattern: /^\/v1\/engines$/, scope: "read" },
   // Object reads: the server further limits agents to the kinds /state already returns (ontology/model.ts AGENT_STATE_KINDS).
   { method: "GET", pattern: /^\/v1\/objects(\/[A-Z][A-Za-z]{1,40}(\/[A-Za-z0-9@._-]{1,160})?)?(\?(limit=\d{1,3})?(&?after=[A-Za-z0-9@._-]{1,160})?)?$/, scope: "read" },
+  // Invite-only tenants (src/tenants.ts): their own catalogue, runs and usage; nothing of the workspace.
+  { method: "GET", pattern: /^\/v1\/tenant\/catalog$/, scope: "tenant" },
+  { method: "GET", pattern: /^\/v1\/tenant\/usage(\?since=\d{4}-\d\d-\d\d(T[0-9:.]{2,12}Z)?)?$/, scope: "tenant" },
+  { method: "GET", pattern: /^\/v1\/tenant\/runs$/, scope: "tenant" },
+  { method: "POST", pattern: /^\/v1\/tenant\/runs$/, scope: "tenant" },
+  { method: "GET", pattern: /^\/v1\/tenant\/runs\/[0-9a-f-]{36}$/, scope: "tenant" },
+  { method: "GET", pattern: /^\/v1\/tenant\/runs\/[0-9a-f-]{36}\/data\?(node=[a-z][a-z0-9-]{0,30}&)?name=[a-z][A-Za-z0-9]{0,30}$/, scope: "tenant" },
+  { method: "POST", pattern: /^\/v1\/tenant\/runs\/[0-9a-f-]{36}\/decisions$/, scope: "tenant" },
 ];
 
-export interface AgentPrincipal { clientId: string; verified: boolean; session?: string }
+export interface AgentPrincipal { clientId: string; verified: boolean; session?: string; scope?: Scope }
 const AGENT = Symbol("pai-agent");
 type Tagged = { [AGENT]?: { scope: Scope } };
 
