@@ -298,7 +298,7 @@ async function robotsCheck(config: Config, record: SceneReview, target: string, 
     const pins = JSON.parse(await readFile(join(config.repository, "tools/runtime-pins.json"), "utf8")).strandsRobots as { version: string; menagerie: { commit: string } };
     const python = config.robotsPython!, venv = dirname(dirname(python));
     // Same isolation as generated CAD code: no network, clean environment, private state hidden; only target is writable.
-    const argv = ["/usr/bin/env", "MUJOCO_GL=egl", "STRANDS_MESH=false", `ROBOT_DESCRIPTIONS_CACHE=${config.robotsAssets}`,
+    const argv = ["/usr/bin/env", "MUJOCO_GL=disable", "STRANDS_MESH=false", `ROBOT_DESCRIPTIONS_CACHE=${config.robotsAssets}`,
       python, "-I", script, "--mjcf", join(target, "scene.xml"), "--robot", "ur5e", "--assets", config.robotsAssets!, "--commit", pins.menagerie.commit, "--output", output];
     const bwrap = config.bwrap ?? "bwrap";
     const r = await command(bwrap, sandboxArgs(config, { python, venv, native: join(config.repository, "native") },

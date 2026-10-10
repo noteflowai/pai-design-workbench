@@ -1,0 +1,3 @@
+WARNING Sat Oct 10 20:20:29 2026: Attach conflict when attaching 'ur5e scene' to 'strands_sim', policy is 'warning'
+integrator: parent has 0 (default), child has 3, keeping parent value
+

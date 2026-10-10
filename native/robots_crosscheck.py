@@ -31,7 +31,7 @@ def main() -> int:
     if head() != a.commit:
         raise SystemExit("Menagerie cache is not at the pinned commit")
     os.environ["ROBOT_DESCRIPTIONS_CACHE"] = str(assets)
-    os.environ.setdefault("MUJOCO_GL", "egl")
+    os.environ["MUJOCO_GL"] = "disable"  # no rendering needed; works on hosts without EGL/GL
     # Never join the Zenoh mesh, whatever the caller's environment says.
     os.environ["STRANDS_MESH"] = "false"
     os.environ.pop("STRANDS_MESH_LOCAL_DEV", None)

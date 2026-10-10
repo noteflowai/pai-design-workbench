@@ -100,10 +100,10 @@
  "isolation": "bwrap-unshare-all",
  "receipt": {
   "exitCode": 0,
-  "startedAt": "2026-10-10T11:42:21.701Z",
-  "finishedAt": "2026-10-10T11:42:23.258Z",
+  "startedAt": "2026-10-10T12:21:19.905Z",
+  "finishedAt": "2026-10-10T12:21:21.101Z",
   "sourceDigests": {
-   "script": "77d82fb207f38828326902e8fed2ae6f65f611dc3d3ff5a680f8912666e2d98a",
+   "script": "4a6303433636c908dee6c201e7e3d286645c06467713d581acec40fe7688a5a0",
    "lock": "33123402ee8b47ad5e8874fa83696cfb5aece281702163be27743a871548117a",
    "menagerie": "bf756430b615819654b640f321c71ba5c3ebeef8"
   }

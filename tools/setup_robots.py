@@ -46,7 +46,7 @@ probe = subprocess.run([str(python), "-c", "import json, mujoco, strands_robots;
                         "from robot_descriptions._repositories import REPOSITORIES as R;"
                         "print(json.dumps({'strandsRobots': strands_robots.__version__, 'mujoco': mujoco.__version__, 'ur5e': bool(get_robot('ur5e')),"
                         "'descriptionsCommit': R['mujoco_menagerie'].commit}))"],
-                       capture_output=True, text=True, timeout=120, env={**os.environ, "ROBOT_DESCRIPTIONS_CACHE": str(assets), "MUJOCO_GL": "egl"})
+                       capture_output=True, text=True, timeout=120, env={**os.environ, "ROBOT_DESCRIPTIONS_CACHE": str(assets), "MUJOCO_GL": "disable"})
 if probe.returncode:
     print(probe.stderr[-1500:], file=sys.stderr)
     raise SystemExit("Strands Robots self-check failed")
