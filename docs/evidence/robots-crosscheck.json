@@ -95,7 +95,7 @@
  ],
  "configurations": 200,
  "seed": 20261010,
- "finding": "cell arm link mass 29.03 kg vs official 16.99 kg; kinematics agree within 6.4 mm",
+ "finding": "initially link mass 29.03 vs 16.99 kg; fixed by setting the official UR5e link masses (all five checks agree)",
  "verdictChanged": false,
  "isolation": "bwrap-unshare-all",
  "receipt": {
@@ -108,5 +108,103 @@
    "menagerie": "bf756430b615819654b640f321c71ba5c3ebeef8"
   }
  },
- "sceneFileSha256": "f26a2ebeca68b0f2c4b202fd68d9a1f7a2b8936c98d64be6edc75a1e8476675a"
+ "sceneFileSha256": "f26a2ebeca68b0f2c4b202fd68d9a1f7a2b8936c98d64be6edc75a1e8476675a",
+ "afterMassFix": {
+  "measuredAt": "2026-10-10T16:38Z",
+  "checks": [
+   {
+    "id": "joints",
+    "passed": true,
+    "observed": [
+     6,
+     6
+    ]
+   },
+   {
+    "id": "joint-limits",
+    "passed": true,
+    "observed": {
+     "cell": [
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -3.1416,
+       3.1416
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ]
+     ],
+     "official": [
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -3.1415,
+       3.1415
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ],
+      [
+       -6.2832,
+       6.2832
+      ]
+     ]
+    }
+   },
+   {
+    "id": "fk-flange",
+    "passed": true,
+    "observed": 0.00638
+   },
+   {
+    "id": "reach",
+    "passed": true,
+    "observed": [
+     1.0807,
+     1.0804
+    ]
+   },
+   {
+    "id": "link-mass",
+    "passed": true,
+    "observed": [
+     16.99,
+     16.99
+    ]
+   }
+  ],
+  "cycleSeconds": {
+   "baseline": 5.897,
+   "rejected": 4.598,
+   "fixed": 4.598
+  },
+  "verdictsChanged": false
+ }
 }
