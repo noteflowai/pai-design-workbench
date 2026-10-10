@@ -151,8 +151,8 @@ function buildMenu() {
       { type: "separator" }, { label: "重启本地服务", click: () => restartServer() },
     ] },
     { label: "帮助", submenu: [
-      { label: "使用说明", click: () => openExternal("https://github.com/noteflowai/pai-design-workbench#readme") },
-      { label: "工业设计典型用例", click: () => openExternal("https://github.com/noteflowai/pai-design-workbench/blob/main/docs/INDUSTRIAL_TEST_CASES.md") },
+      { label: "使用说明", click: () => openExternal("https://github.com/noteflowai/pai-engine#readme") },
+      { label: "工业设计典型用例", click: () => openExternal("https://github.com/noteflowai/pai-engine/blob/main/docs/INDUSTRIAL_TEST_CASES.md") },
       { label: `关于 ${PRODUCT}`, click: () => dialog.showMessageBox(win, { title: PRODUCT, message: `${PRODUCT} ${app.getVersion()}`,
         detail: `Electron ${process.versions.electron} · Node ${process.versions.node} · Chromium ${process.versions.chrome}\n数据目录：${userData}` }) },
     ] },

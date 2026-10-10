@@ -59,7 +59,7 @@ export function stageDesktop(root, { install = installProduction } = {}) {
       name: pkg.name, productName: "PAI Design Workbench", version: pkg.version,
       description: "PAI Design Workbench desktop", author: "NoteFlow AI <admin@noteflowai.com>",
       license: pkg.license ?? "MIT", type: "module", main: "desktop/main.mjs",
-      homepage: "https://github.com/noteflowai/pai-design-workbench", desktopName: "pai-workbench.desktop",
+      homepage: "https://github.com/noteflowai/pai-engine", desktopName: "pai-workbench.desktop",
       dependencies: pkg.dependencies,
     }, null, 2));
     cpSync(join(root, "package-lock.json"), join(app, "package-lock.json"));

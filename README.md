@@ -1,10 +1,12 @@
-# PAI Design Workbench
+# PAI Engine
+
+Physical AI 引擎平台（仓库原名 `pai-design-workbench`，2026-10-11 改名；旧地址自动跳转）。架构见 [ADR 0002](docs/adr/0002-physical-ai-engine-platform.md)：本体、引擎目录、Strands Robots、Strands Decider。设计工作台是平台上的第一个产品：
 
 Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方案，并可在维护者签发的授权内自主执行原生求解；结论只由原生求解器给出，修改需求、验收和发布只能由人来做：需求冻结 → 候选设计 → 原生验证 → 失败回放 → 反馈复测 → 准入与签名发布。每个被采用的设计都能追溯到冻结的需求版本、求解器实测和签名证据。
 
 [![机器人工作单元提速：MuJoCo 发现碰撞、AI 修正、CalculiX 否决几何最优、物理寻优、KMS 签名发布](docs/media/physics-demo.gif)](docs/media/physics-demo.mp4)
 
-**演示 A · 机器人工作单元提速，AI 设计、物理求解器裁决**：[docs/media/physics-demo.mp4](docs/media/physics-demo.mp4)（约 5.5 分钟，1280×800）。在 pai.oneai.host 上实时录制，也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-physics-2026-10-03) 下载。
+**演示 A · 机器人工作单元提速，AI 设计、物理求解器裁决**：[docs/media/physics-demo.mp4](docs/media/physics-demo.mp4)（约 5.5 分钟，1280×800）。在 pai.oneai.host 上实时录制，也可以在 [GitHub Release](https://github.com/noteflowai/pai-engine/releases/tag/demo-physics-2026-10-03) 下载。
 
 1. 目标是节拍 ≤ 5 s（参考单元 5.9 s）。初版把关节速度提到 75 %、围栏内收到 0.12 m。MuJoCo 跑了 10 个种子：节拍 4.6 s 达标，但每个种子肘部都撞到围栏，EvalArc 判定候选丢失了基准通过的检查，结论为拒绝。
 2. 在失败的检查上点“问 AI”。Kiro 2.27.1（claude-opus-5.5）引用 scene-1，把围栏退回 0.30 m，速度保持不变，没有放宽任何要求。复测 4 项全部通过：节拍 4.6 s，比参考单元快 22 %，10/10 个种子成功。失败案例通过绑定的复测关闭。
@@ -18,7 +20,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 [![AI + Blender 设计工厂产线：原生生成、射线实测、AI 修正、复测通过](docs/media/factory-demo.gif)](docs/media/factory-demo.mp4)
 
-**演示 B · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-factory-2026-10-03) 下载。
+**演示 B · AI + Blender 设计工厂产线**：[docs/media/factory-demo.mp4](docs/media/factory-demo.mp4)（约 5 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-engine/releases/tag/demo-factory-2026-10-03) 下载。
 
 1. 用一句话描述 6 工位 CNC 机加工产线（围栏加大到 4.2 m、AGV 通道 2.4 m、厂房 ≤ 650 m²），解析成类型化计划。
 2. Blender 5.2 按 8 个阶段生成整座车间，实时推送到三维视口：柱网桁架、输送线、CNC 加工中心、六轴机器人、安全围栏、货架、AGV、桥式起重机和检测相机，共 181 个对象，带 Cycles 渲染和动画。
@@ -31,7 +33,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 [![从设计到车间：6202 轴承座 H7 孔被拒绝、DFM/DFA、FreeCAD CAM 出 G-code、独立切削仿真、签名交付](docs/media/cam-demo.gif)](docs/media/cam-demo.mp4)
 
-**演示 D · 从设计到车间**：[docs/media/cam-demo.mp4](docs/media/cam-demo.mp4)（约 3.7 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-cam-2026-10-05) 下载。全程只用原生工具，不调用模型。
+**演示 D · 从设计到车间**：[docs/media/cam-demo.mp4](docs/media/cam-demo.mp4)（约 3.7 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-engine/releases/tag/demo-cam-2026-10-05) 下载。全程只用原生工具，不调用模型。
 
 1. 6202 轴承座冻结需求：Ø35 H7 轴承孔（35.000–35.025）、孔四周壁厚 ≥ 5 mm、M8 地脚孔边距 ≥ 1.5 d、外形 ≤ 120 × 40 × 60 mm。
 2. 候选把轴承孔加工成 Ø34.95。CadQuery 逐个特征建模，OCCT B-Rep 实测孔径低于 H7 下限，其余检查都通过；EvalArc 判定丢失 1 项检查，结论为拒绝。
@@ -42,7 +44,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 [![AI 设计轴承座，求解器裁决：维护者授权、真实模型提议、原生检查否决、物理寻优、正式复核、签名发布](docs/media/ai-demo.gif)](docs/media/ai-demo.mp4)
 
-**演示 E · AI 设计轴承座，求解器裁决**：[docs/media/ai-demo.mp4](docs/media/ai-demo.mp4)（约 4 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-ai-2026-10-06) 下载。
+**演示 E · AI 设计轴承座，求解器裁决**：[docs/media/ai-demo.mp4](docs/media/ai-demo.mp4)（约 4 分钟，1440×900），也可以在 [GitHub Release](https://github.com/noteflowai/pai-engine/releases/tag/demo-ai-2026-10-06) 下载。
 
 1. 紧凑化轴承座（底座 88 mm、孔距 76 mm）的地脚孔边距只有 6 mm（要求 ≥ 13.5 mm），被 B-Rep 实测拒绝。
 2. 维护者在总览签发授权（只允许 CAD 评审、最多 3 次）并给出目标。真实模型 Claude 经受控执行器和共享账本被调用一次。执行器无法自动确认模型调用没有副作用，停下等人核对；维护者记录理由后，在同一授权内执行。
@@ -58,7 +60,7 @@ Physical AI 与工业设计的**可核验设计决策**工作台。AI 提出方�
 
 [![生成式工业设计演示：AI 写 CadQuery 代码，原生 B-Rep 检查给出结论](docs/media/demo.gif)](docs/media/demo.mp4)
 
-完整视频：[docs/media/demo.mp4](docs/media/demo.mp4)（约 3 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-design-workbench/releases/tag/demo-2026-10-02) 下载。
+完整视频：[docs/media/demo.mp4](docs/media/demo.mp4)（约 3 分钟，1280×800），也可以在 [GitHub Release](https://github.com/noteflowai/pai-engine/releases/tag/demo-2026-10-02) 下载。
 
 视频里的全部结果都是录制时实时产生的：
 1. NEMA 17 支架轻量化，板厚 4 → 2.5 mm，被原生检查拒绝。
