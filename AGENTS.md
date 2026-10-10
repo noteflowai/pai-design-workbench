@@ -1,4 +1,4 @@
-# PAI Design Workbench
+# PAI Engine (formerly PAI Design Workbench)
 
 - This repo owns the local domain workbench; native tool repos and control runtime retain their responsibilities.
 - Do not write to existing Robot Reel, Radar, EvalArc or NoteFlow production workspaces as a side effect.

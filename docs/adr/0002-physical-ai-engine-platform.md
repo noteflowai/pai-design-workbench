@@ -68,3 +68,8 @@ PAI：领域产品、本体、引擎适配器、核验器与界面。noteflow-au
 - 新写路由必须先定义动作类型；新存储种类必须先定义对象类型；外部集成按本体的 JSON Schema / SHACL 对接。
 - Decider 与 Strands Robots 都是可选引擎：没装就报告不可用，平台行为与之前一致。
 - 托管站点不运行 Decider，直到有人批准 GPU 服务的成本。
+
+## 改名（2026-10-11）
+
+仓库从 `noteflowai/pai-design-workbench` 改为 `noteflowai/pai-engine`。GitHub 对旧地址的 git、网页和 raw 链接自动跳转（已实测）。**有意保留**的内部标识：npm 包名、CDK 栈 `PAIDesignWorkbench`、Cognito 用户池名、资源标签、MCP 服务名、systemd 服务名和本地账本路径。改这些会替换或断开在用的云资源与已签名记录，用户看不到它们，所以不改。
+

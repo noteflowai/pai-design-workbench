@@ -269,7 +269,7 @@ their original identities.
 | 浏览器 | 新增“工厂产线”一组：表单 → 8 个阶段流式进入视口 → 拒绝 → 实测表 → 6/6 相机射线 → 播放动画 → Cycles 渲染图 → “问 AI”生成 `plant-layout` 计划（使用脚本执行器）→ 在专业面板调整；390 px 无溢出 |
 | 单元测试 | 64 组通过（新增 plant 契约、派生厂房尺寸、修正后失败案例仍保留、规则解析器 plant 计划）|
 
-| 云端 CI（[run 37076297416](https://github.com/noteflowai/pai-design-workbench/actions/runs/37076297416)，`0d35427`） | 仓库改为公开后恢复运行：Node 24.21 / 26.10 两个作业和 CDK 检查全部通过；工业用例 25/25（含 P1、P2），浏览器 16 组通过。桌面三平台打包（run 37059789103）也通过 |
+| 云端 CI（[run 37076297416](https://github.com/noteflowai/pai-engine/actions/runs/37076297416)，`0d35427`） | 仓库改为公开后恢复运行：Node 24.21 / 26.10 两个作业和 CDK 检查全部通过；工业用例 25/25（含 P1、P2），浏览器 16 组通过。桌面三平台打包（run 37059789103）也通过 |
 | pai.oneai.host（release `5dff2b8e…6e3d`） | 登录后经 HTTPS API 运行：6 工位候选拒绝（净宽 2.08 m，6/6 相机，1 项回归，145 s）；通道 2.8 m 通过（2.48 m、641.6 m²，145 s）。界面显示实测表、8 个阶段、40 段动画、3 张 Cycles 渲染图；390 px 无溢出，无页面错误。ALB 规则 100/110/默认未变，WordPress 200，目标健康。见 [回执](evidence/deployment-plant.json) |
 
 范围：合成配方，几何规则使用经验值；不含动力学、节拍、照度、安全认证和现场测量。见 [PLANT.md](PLANT.md)。
@@ -389,7 +389,7 @@ their original identities.
 
 ## 0.2.1 发布与云端复核（2026-10-01）
 
-[发布 v0.2.1](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.1)，运行源码 `f610fa1`，发布包 `571b6bd1…e6ba0a`。[该版本 CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36807659122) 三个作业全部通过，包括 39 组检查、14 个工业用例和六条浏览器流程。此版调整界面与运维超时，原生验收规则不变。
+[发布 v0.2.1](https://github.com/noteflowai/pai-engine/releases/tag/v0.2.1)，运行源码 `f610fa1`，发布包 `571b6bd1…e6ba0a`。[该版本 CI](https://github.com/noteflowai/pai-engine/actions/runs/36807659122) 三个作业全部通过，包括 39 组检查、14 个工业用例和六条浏览器流程。此版调整界面与运维超时，原生验收规则不变。
 
 线上重新实际登录 Cognito，验证 1024/1280/1440px 下工作区宽度分别为 616/712/812px，助手位于工作区旁侧；820px 遮罩关闭、390px Esc 与关闭按钮、当前手机阶段自动滚动、无横向溢出、退出返回登录页均通过，页面错误为 0。跨源写入 403，未登录 STEP 下载 302。
 
@@ -410,13 +410,13 @@ their original identities.
 | `test:native` / `test:blender` / `test:cad` / `test:suite` | 全部通过；14 个工业用例与预期一致 |
 | 界面复查 | 1440/1280/1024/768/390 px 逐页无溢出、裁切、遮挡或过小控件 |
 
-线上验收（发布包 `3709ae89…02d9`，[CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36816402095) 三个作业通过）：Cognito 登录后实际执行 CAD 失败 → 反馈 → 复测；关闭反馈前准入 2 项未通过、按钮禁用，关闭后 5 项通过；创建并批准 R1，审批人记录为 Cognito 身份；候选对比矩阵显示 1 项失败；修订需求为 v2 后 R1 自动变为已废止。跨源审批请求 403，未登录访问版本历史重定向到登录，已有反馈与 CAD 文件摘要不变，390 px 无横向溢出，控制台无错误。WordPress 路由 100/110/default 不变、公网 200、目标健康。回执：[线上流程](evidence/deployment-result-v030.json)、[基础设施](evidence/deployment-infra-v030.json)；截图：[发布](evidence/cloud-v030-release.png)、[对比](evidence/cloud-v030-compare.png)、[手机](evidence/cloud-v030-mobile.png)。本轮新增 2 个维护者验收任务（第一次验收在截图步骤超时，已批准的发布保留）；独立参与人数仍为 0。
+线上验收（发布包 `3709ae89…02d9`，[CI](https://github.com/noteflowai/pai-engine/actions/runs/36816402095) 三个作业通过）：Cognito 登录后实际执行 CAD 失败 → 反馈 → 复测；关闭反馈前准入 2 项未通过、按钮禁用，关闭后 5 项通过；创建并批准 R1，审批人记录为 Cognito 身份；候选对比矩阵显示 1 项失败；修订需求为 v2 后 R1 自动变为已废止。跨源审批请求 403，未登录访问版本历史重定向到登录，已有反馈与 CAD 文件摘要不变，390 px 无横向溢出，控制台无错误。WordPress 路由 100/110/default 不变、公网 200、目标健康。回执：[线上流程](evidence/deployment-result-v030.json)、[基础设施](evidence/deployment-infra-v030.json)；截图：[发布](evidence/cloud-v030-release.png)、[对比](evidence/cloud-v030-compare.png)、[手机](evidence/cloud-v030-mobile.png)。本轮新增 2 个维护者验收任务（第一次验收在截图步骤超时，已批准的发布保留）；独立参与人数仍为 0。
 
 截图：[发布](evidence/release-desktop.png)、[候选对比](evidence/release-compare.png)、[手机](evidence/release-mobile.png)。
 
 ## 0.2.2 界面复查发布（2026-10-01）
 
-提交 `c1d790b`，[CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36810805958) 三个作业通过（LTS 作业含 CadQuery、14 个工业用例和 6 组浏览器流程），发布包 `27628f77…e3ed` 经 CDK（仅更新发布包读取授权）和 SSM 原子切换上线，上一发布目录保留。
+提交 `c1d790b`，[CI](https://github.com/noteflowai/pai-engine/actions/runs/36810805958) 三个作业通过（LTS 作业含 CadQuery、14 个工业用例和 6 组浏览器流程），发布包 `27628f77…e3ed` 经 CDK（仅更新发布包读取授权）和 SSM 原子切换上线，上一发布目录保留。
 
 线上实际执行（Cognito 登录后）：
 - 在 CAD 设计通道选择“紧凑化”并提交，原生 B-Rep 几何在 3.2 s 出现在实时视口，18 s 完成；结论为拒绝，只有孔边距失败；STEP 下载摘要与记录一致。
@@ -428,7 +428,7 @@ their original identities.
 
 ## 0.2.0 发布与云端复核（2026-10-01）
 
-[发布 v0.2.0](https://github.com/noteflowai/pai-design-workbench/releases/tag/v0.2.0)，提交 `5d37dab`，发布包 `a217550d…b1daf`。[最终发布 PR CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36806224444) 的 LTS、Current 与基础设施三个作业全部通过；隔离副本也用 Node 24.21.0 完成 39 组检查、真实 Blender/CAD、14 个工业用例和六条浏览器流程。
+[发布 v0.2.0](https://github.com/noteflowai/pai-engine/releases/tag/v0.2.0)，提交 `5d37dab`，发布包 `a217550d…b1daf`。[最终发布 PR CI](https://github.com/noteflowai/pai-engine/actions/runs/36806224444) 的 LTS、Current 与基础设施三个作业全部通过；隔离副本也用 Node 24.21.0 完成 39 组检查、真实 Blender/CAD、14 个工业用例和六条浏览器流程。
 
 线上同功能源码版本实际执行 CAD：轻量化候选仅 min-wall 失败；恢复基准参数、保持需求摘要不变后通过，反馈关闭；原生 B-Rep 实时阶段、工程视图、STEP 下载、390px 布局与控制台检查通过。随后 0.2.0 元数据版本原子切换，47 条文档记录的逐行汇总摘要完全一致，SQLite integrity 为 ok，四份 STEP 摘要与关闭反馈保留。未自动重放任务，旧发布目录仍保留。
 
@@ -452,7 +452,7 @@ their original identities.
 
 ## 线上发布验收（AI 工作室版本）
 
-提交 `4972bb4` 经 [GitHub Actions](https://github.com/noteflowai/pai-design-workbench/actions/runs/36784998513) 三个作业全部通过（LTS 作业含原生、Blender 与 5 组浏览器检查），发布包 `0770c334…b463` 经 CDK（仅更新 S3 读取授权与输出）和受控 SSM 原子切换上线，旧版本保留。实际 Cognito 登录后在 `https://pai.oneai.host`：
+提交 `4972bb4` 经 [GitHub Actions](https://github.com/noteflowai/pai-engine/actions/runs/36784998513) 三个作业全部通过（LTS 作业含原生、Blender 与 5 组浏览器检查），发布包 `0770c334…b463` 经 CDK（仅更新 S3 读取授权与输出）和受控 SSM 原子切换上线，旧版本保留。实际 Cognito 登录后在 `https://pai.oneai.host`：
 
 - 对话生成计划（确定性解析、无模型调用、权限无）→ 确认 → 主机上的 Blender 5.2.2 原生构建；视口从空开始，经共享 ALB 的 SSE 在 1.9 s 出现基准几何，9.7 s 出现候选遮挡物与被阻挡射线，约 20 s 完成；阶段 3/4、Cycles 12/12，阶段 GLB 摘要复核；计划确认记为“与计划一致”。
 - 工厂评审：先冻结标准再评估，12 个种子中 seed 3、11 产出、seed 10 EV 服务失败，结论拒绝；seeds.json 摘要与复核记录一致。
@@ -465,7 +465,7 @@ their original identities.
 
 ## 云端复核
 
-[GitHub Actions 实际运行](https://github.com/noteflowai/pai-design-workbench/actions/runs/36723476548)已成功，线上运行代码为 `1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e`，包含 AWS 登录、长任务轮询与手机退出按钮修复。后续运维助手提交修正 SSM 的 Bash 解释器，不改变线上业务代码。
+[GitHub Actions 实际运行](https://github.com/noteflowai/pai-engine/actions/runs/36723476548)已成功，线上运行代码为 `1c0ae61dec98c8902eaaa7c24995e9ef2f27b75e`，包含 AWS 登录、长任务轮询与手机退出按钮修复。后续运维助手提交修正 SSM 的 Bash 解释器，不改变线上业务代码。
 
 | 运行环境 | 通过的检查 |
 |---|---|
@@ -526,7 +526,7 @@ Blender 和浏览器检查只在 LTS 作业中执行；Current 作业跳过这�
 
 显示网格影响默认 CadQuery 包围盒：对同一保存的 STEP，内存网格化使尺寸从 60×30×50 mm 变为约 60.0000002×30.0034969×50.0008549 mm，体积未变。OCCT `AddOptimal` 显式禁用已有网格与形体容差扩张后，几何包络保持 60×30×50 mm；这仍是名义几何计算，未验证制造公差。
 
-[修正 PR #3](https://github.com/noteflowai/pai-design-workbench/pull/3)加入精确尺寸、STEP 重导入包络一致及精确要求边界的原生检查。[完整 CI](https://github.com/noteflowai/pai-design-workbench/actions/runs/36830499113)通过双 Node 版本、历史记录、Blender、CadQuery、工业用例及桌面／手机／视频工作流。合并提交 `858d7c9` 与测试分支文件树相同。
+[修正 PR #3](https://github.com/noteflowai/pai-engine/pull/3)加入精确尺寸、STEP 重导入包络一致及精确要求边界的原生检查。[完整 CI](https://github.com/noteflowai/pai-engine/actions/runs/36830499113)通过双 Node 版本、历史记录、Blender、CadQuery、工业用例及桌面／手机／视频工作流。合并提交 `858d7c9` 与测试分支文件树相同。
 
 线上已验证：原有 67 条记录与 18 份 STEP 在切换后逐项不变；同一 VPC、ALB、实例与持久卷保持不变；四条路由摘要相同，WordPress 200，匿名入口仍要求 Cognito。已登录的维护者新增一条精确包络 CAD 验收，7 项原生检查通过，下载 STEP 的哈希与回执匹配。1280px 桌面与 390px 手机没有横向溢出，JavaScript 错误为零。
 
