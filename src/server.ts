@@ -9,11 +9,12 @@ import { setImmediate as yieldTick } from "node:timers/promises";
 import { z, ZodError } from "zod";
 import { NativeAdapters, type Adapters } from "./adapters.js";
 import { configuration, type Config } from "./config.js";
-import { Candidate, CreateProject, Id } from "./contracts.js";
+import { CadCodeCheck, Candidate, CreateProject, Id, ReviseProject } from "./contracts.js";
 import { DomainError, sha256 } from "./domain.js";
 import { buildInfo } from "./build-info.js";
+import { deciderConfigured, suggestLane } from "./decider.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
-import { buildPackage, MAX_PACKAGE_BYTES, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
+import { buildPackage, MAX_PACKAGE_BYTES, PackageSubmission, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
 import { solverDataset } from "./dataset.js";
 import { inspectionPlan, recordInspection } from "./inspection.js";
@@ -27,7 +28,7 @@ import { Store } from "./store.js";
 import { reviewScene, type SceneReview } from "./scenes.js";
 import { freezeFactoryCriteria, reviewFactory, REVIEWED_SAMPLE, DEFAULT_FACTORY_CRITERIA, type FactoryReview } from "./factory.js";
 import { LiveBus, type Stamped } from "./live.js";
-import { confirmPlan, createPlan, type AssistantPlan, preflightPlan } from "./assistant.js";
+import { confirmPlan, createPlan, type AssistantPlan, preflightPlan, PreflightStep } from "./assistant.js";
 import { contextView, createAiPlan, createExternalPlan, reconcileAi, resolveHandle } from "./ai.js";
 import { controllerConfigured, controllerTransport, enabledProfiles } from "./controller.js";
 import { computeLifecycle, type LifecycleSnapshot } from "./lifecycle.js";
@@ -43,11 +44,15 @@ import { KIND_STORE, admission, createRelease, decideRelease, supersedeForRevisi
 import { acquireRuntime } from "./runtime-lock.js";
 import { authentication } from "./auth.js";
 import { artifactRoutes } from "./artifacts/routes.js";
+import { ontologyRoutes } from "./ontology/routes.js";
 import { interruptRunning } from "./artifacts/workflows.js";
 import { agentAuthentication, agentRoute, rewriteAgentUrl, type AgentPrincipal } from "./agent-api.js";
 
 export async function createApp(config: Config, adapters: Adapters = new NativeAdapters(config)) {
   const app = Fastify({ logger: false, bodyLimit: 4_000_000, requestTimeout: 120_000, rewriteUrl: rewriteAgentUrl });
+  // Every registered route, so the ontology contract test can prove each write route is exactly one action type.
+  const routes: { method: string; url: string }[] = [];
+  app.addHook("onRoute", r => { for (const method of [r.method].flat()) routes.push({ method, url: r.url }); });
   // Compress JSON and the app shell (the signed-in /api/state is ~2.4 MB of JSON: ~0.1 MB as brotli). Brotli at quality 5
   // keeps a dynamic response cheap to encode; images, video and already-compressed files are left alone. Hijacked
   // live streams (text/event-stream) are not touched.
@@ -162,6 +167,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
     ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
   artifactRoutes(app, { store, config, actor, executeNative, track: job => { const t = job.catch(() => undefined); activeJobs.add(t); void t.finally(() => activeJobs.delete(t)); } });
+  ontologyRoutes(app, store, config, JSON.parse(await readFile(join(config.repository, "tools/runtime-pins.json"), "utf8")), raw => Boolean(agentRoute(raw)));
   app.get("/api/projects/:id/ai-track-record", async request => trackRecord(store, workbench.project(paramId(request.params)).id));
   app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));
   app.get("/api/projects/:id/admission", async request => {
@@ -234,7 +240,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.get("/api/signing/public-key", async () => { const s = await signer(config); return { keyId: s.keyId, algorithm: s.algorithm, publicKeyPem: s.publicKeyPem }; });
   // Packages carry base64 native files (FEA results are several MB): this route alone accepts up to the package cap.
   app.post("/api/packages/verify", { bodyLimit: Math.ceil(MAX_PACKAGE_BYTES * 1.4) + 1_000_000 }, async request => {
-    const body = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).parse(request.body);
+    const body = PackageSubmission.parse(request.body);
     return verifySealedPackage(body.package, body.trustedPublicKeyPem, config.tsaCaFile);
   });
   app.get("/api/dataset/solver", async request => {
@@ -277,7 +283,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.get("/api/tools", async () => toolCatalog);
   app.post("/api/projects", async request => workbench.createProject(request.body));
   app.patch("/api/projects/:id", async request => {
-    const input = CreateProject.extend({ expectedRevision: z.number().int().positive() }).strict().parse(request.body);
+    const input = ReviseProject.parse(request.body);
     const { expectedRevision, ...project } = input;
     const updated = workbench.updateProject(paramId(request.params), expectedRevision, project);
     supersedeForRevision(store, updated, actor(request.headers));
@@ -317,7 +323,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   });
   // Static policy check for the code editor; parses only, never executes.
   app.post("/api/cad/code-check", async request => {
-    const { code } = z.object({ code: z.string().min(1).max(20_000) }).strict().parse(request.body);
+    const { code } = CadCodeCheck.parse(request.body);
     if (!config.cadquery) throw new DomainError("CAD_NOT_CONFIGURED", "CadQuery 未配置", 503);
     const violations = await checkCadCode(config, code);
     return { ok: violations.length === 0, violations };
@@ -410,7 +416,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     if (!review) throw new DomainError("NOT_FOUND", "Factory review not found", 404);
     return review;
   });
-  app.post("/api/assistant/plans", async request => createPlan(store, request.body, Boolean(config.controllerEntrypoint && config.controllerDatabase)));
+  app.post("/api/assistant/plans", async request => createPlan(store, request.body, Boolean(config.controllerEntrypoint && config.controllerDatabase),
+    deciderConfigured(config) ? message => suggestLane(config, message) : undefined));
   app.post("/api/assistant/ai", async (request, reply) =>
     executeNative(reply, request.body, "assistant-plan", "assistant/plans", async () => { const r = await createAiPlan(store, config, request.body, lifecycle, live); return { ...r, state: r.state ?? "done" }; }));
   app.get("/api/assistant/plans/:id", async (request, reply) => {
@@ -451,7 +458,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   app.post("/api/assistant/external-plans", async request => createExternalPlan(store, config, request.body, lifecycle, principals.get(request.raw)));
   app.post("/api/assistant/plans/:id/reconciliation", async request => reconcileAi(store, config, paramId(request.params), request.body, actor(request.headers)));
   app.post("/api/assistant/plans/:id/preflight", async request =>
-    preflightPlan(store, paramId(request.params), z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict().parse(request.body).planId));
+    preflightPlan(store, paramId(request.params), PreflightStep.parse(request.body).planId));
   app.post("/api/assistant/plans/:id/confirmations", async request => confirmPlan(store, paramId(request.params), request.body));
   app.get("/api/scenes/:id", async (request, reply) => {
     const scene = store.get<SceneReview>("scene-review", paramId(request.params));
@@ -459,12 +466,12 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return nativeResponse(scene, reply, "scenes");
   });
   app.get("/api/scenes/:id/files/:which/:file", async (request, reply) => {
-    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "inspection.png", "checks.json", "robot.json", "scene.xml", "scene.usda", "tool.stl", "robot.glb", "newton.json"]) }).parse(request.params);
+    const p = z.object({ id: Id, which: z.enum(["baseline", "candidate"]), file: z.enum(["scene.blend", "scene.glb", "preview.png", "inspection.png", "checks.json", "robot.json", "scene.xml", "scene.usda", "tool.stl", "robot.glb", "newton.json", "robots.json"]) }).parse(request.params);
     const scene = store.get<SceneReview>("scene-review", p.id), name = `${p.which}/${p.file}`;
     if (!scene || scene.state !== "completed" || !scene.files[name]) throw new DomainError("NOT_FOUND", "Completed scene evidence required", 404);
     const content = await readFile(join(config.state, "scenes", p.id, p.which, p.file));
     if (sha256(content) !== scene.files[name]) throw new DomainError("SCENE_FILE_CHANGED", "Native artifact differs from its verified digest", 422);
-    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "inspection.png": "image/png", "checks.json": "application/json", "robot.json": "application/json", "scene.xml": "application/xml", "scene.usda": "model/vnd.usda", "tool.stl": "model/stl", "robot.glb": "model/gltf-binary", "newton.json": "application/json" };
+    const types = { "scene.blend": "application/octet-stream", "scene.glb": "model/gltf-binary", "preview.png": "image/png", "inspection.png": "image/png", "checks.json": "application/json", "robot.json": "application/json", "scene.xml": "application/xml", "scene.usda": "model/vnd.usda", "tool.stl": "model/stl", "robot.glb": "model/gltf-binary", "newton.json": "application/json", "robots.json": "application/json" };
     if (!p.file.endsWith(".png") && !p.file.endsWith(".glb")) reply.header("Content-Disposition", `attachment; filename="${p.which}-${p.file}"`);
     return reply.type(types[p.file]).send(content);
   });
@@ -505,7 +512,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     await app.register(staticPlugin, { root: resolve(config.web), prefix: "/" });
     app.setNotFoundHandler((request, reply) => request.url.startsWith("/api/") ? reply.code(404).send({ error: "NOT_FOUND" }) : reply.sendFile("index.html"));
   } catch { /* API-only mode supports CLI and tests before the web build. */ }
-  return { app, workbench, store };
+  return { app, workbench, store, routes };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const config = configuration();

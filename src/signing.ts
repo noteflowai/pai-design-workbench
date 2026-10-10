@@ -80,6 +80,8 @@ export function verifyManifestSignature(text: string, manifestSha256: string,
 }
 
 export const FileEntry = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative(), contentBase64: z.string() }).strict();
+/** Body of every package verification or import: the package and, optionally, a pinned trusted public key. */
+export const PackageSubmission = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).strict();
 export const ReleasePackage = z.object({
   schema: z.literal("pai-release-package-1"),
   release: z.object({ id: z.string(), number: z.string(), title: z.string(), maturity: z.string(), projectId: z.string(), projectRevision: z.number().int(),

@@ -4,7 +4,7 @@ import { canonical, caseText, decide, DomainError, junit, sha256, validatePanel,
 
 const names = ["review.json", "robot-reel.json", "evalarc.json", "radar.json", "baseline.xml", "current.xml", "case.md", "source-digests.json"] as const;
 const File = z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), content: z.string().max(2_000_000) }).strict();
-const Bundle = z.object({
+export const Bundle = z.object({
   schema: z.literal("pai-workbench-bundle-1"),
   scope: z.literal("retrospective-recorded-simulation"),
   files: z.record(z.string(), File),

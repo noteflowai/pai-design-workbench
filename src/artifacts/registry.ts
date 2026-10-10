@@ -16,7 +16,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { canonical, DomainError, sha256 } from "../domain.js";
 import type { Store } from "../store.js";
-import { FileEntry, signer, signManifest, verifyManifestSignature } from "../signing.js";
+import { FileEntry, PackageSubmission, signer, signManifest, verifyManifestSignature } from "../signing.js";
 import { ArtifactManifest, NO_MODEL, TRANSITIONS, Usage, type ArtifactAdapter, type Lifecycle, type OperationResult } from "./contract.js";
 import { logisticsAdapter } from "./logistics.js";
 
@@ -204,7 +204,7 @@ const claims = (m: ArtifactManifest) => canonical({ ...m, provenance: null });
  * (operations, effects, schemas, limits, dependency pins, scope) must equal what this release's adapter builds.
  */
 export async function importArtifact(store: Store, config: Config, input: unknown, actor: string) {
-  const req = z.object({ package: z.unknown(), trustedPublicKeyPem: z.string().max(4000).optional() }).strict().parse(input);
+  const req = PackageSubmission.parse(input);
   const own = (await signer(config)).publicKeyPem;
   const verified = verifyArtifactPackage(req.package, req.trustedPublicKeyPem ?? own);
   if (!verified.signer.trusted) throw new DomainError("UNTRUSTED_SIGNER", "The package is signed by a key this deployment does not trust; pin the expected public key", 422);

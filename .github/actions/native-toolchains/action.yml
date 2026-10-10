@@ -10,6 +10,7 @@ inputs:
   physics: { description: "Gmsh, CalculiX, Optuna, scikit-learn, MuJoCo and Newton", default: "false" }
   logistics: { description: "Hash-locked OR-Tools", default: "false" }
   cam: { description: "FreeCAD 1.1 CAM (AppImage digest-pinned)", default: "false" }
+  robots: { description: "Strands Robots (hash-locked) + MuJoCo Menagerie at the pinned commit, simulation only", default: "false" }
   browser: { description: "Playwright Chromium and its system libraries", default: "false" }
 runs:
   using: composite
@@ -61,6 +62,10 @@ runs:
       if: inputs.logistics == 'true'
       shell: bash
       run: '"${{ steps.py312.outputs.python-path }}" tools/setup_logistics.py'
+    - name: Strands Robots
+      if: inputs.robots == 'true'
+      shell: bash
+      run: '"${{ steps.py312.outputs.python-path }}" tools/setup_robots.py'
     - name: FreeCAD CAM
       if: inputs.cam == 'true'
       shell: bash

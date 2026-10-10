@@ -15,6 +15,10 @@ export const CreateProject = z.object({
   intendedDecision: z.string().trim().min(5).max(2000),
   requirements: Requirements,
 }).strict();
+/** PATCH /api/projects/:id: the full requirements plus the revision the caller saw (optimistic concurrency). */
+export const ReviseProject = CreateProject.extend({ expectedRevision: z.number().int().positive() }).strict();
+/** POST /api/cad/code-check: static policy check of editor code; parses only, never executes. */
+export const CadCodeCheck = z.object({ code: z.string().min(1).max(20_000) }).strict();
 export const ReviewRequest = z.object({
   requestId: Id,
   projectRevision: z.number().int().positive(),

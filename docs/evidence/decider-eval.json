@@ -1,0 +1,288 @@
+{
+ "schema": "pai-decider-eval-1",
+ "measuredAt": "2026-10-10",
+ "model": "StrandsAgents/strands-decider-2B-qwen3.5-v1-2610",
+ "modelRevision": "216d1ccb46a9e9b036eb9187b248db98480f77d4",
+ "base": "Qwen/Qwen3.5-2B-Base@b1485b2fa6dfa1287294f269f5fb618e03d52d7c",
+ "package": "strands-decider==0.1.0 (torch 2.14.1, transformers 5.19.0)",
+ "server": "strands-decider serve (/v1/systemone)",
+ "question": "choice over 13 workbench lanes + noul 'does this relax a requirement'",
+ "sets": {
+  "real": "18 distinct messages from this project's recorded assistant plans (local maintainer/test traffic, not external users); truth = the tool the plan used",
+  "authored": "21 messages written for this evaluation; biased toward clear phrasing, not a claim about users"
+ },
+ "decider": {
+  "real": {
+   "n": 18,
+   "correct": 13,
+   "accuracy": 0.722
+  },
+  "authored": {
+   "n": 21,
+   "correct": 21,
+   "accuracy": 1.0
+  }
+ },
+ "rules": {
+  "real": {
+   "n": 18,
+   "correct": 13,
+   "accuracy": 0.722
+  },
+  "authored": {
+   "n": 21,
+   "correct": 11,
+   "accuracy": 0.524
+  }
+ },
+ "confidenceAtLeast0_9": {
+  "real": {
+   "answered": 2,
+   "correct": 2
+  },
+  "authored": {
+   "answered": 8,
+   "correct": 8
+  }
+ },
+ "latencyMs": {
+  "gpu-L40S": {
+   "median": 202,
+   "p90": 223
+  },
+  "cpu-8-threads": {
+   "median": 11296
+  },
+  "cpu-2-threads": {
+   "median": 15539
+  }
+ },
+ "cpuGpuAgreement": {
+  "sameChoice": 39,
+  "of": 39,
+  "maxConfidenceDiff": 0.012
+ },
+ "processRssGbCpu": 8.6,
+ "gpuMemoryMb": 4356,
+ "authoredResults": [
+  {
+   "message": "评估 NEMA 17 电机支架轻量化方案，壁厚不低于 3 mm，质量不超过 60 g",
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.33
+  },
+  {
+   "message": "6202 轴承座底座减到 6 mm，看孔边距和受载失圆",
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.789
+  },
+  {
+   "message": "用 CadQuery 代码写一个加强筋更多的支架，再检查壁厚",
+   "truth": "cad-code",
+   "pred": "cad-code",
+   "confidence": 0.897
+  },
+  {
+   "message": "在 2.5 到 4 mm 板厚之间扫描支架设计空间，找最轻可行点",
+   "truth": "cad-sweep",
+   "pred": "cad-sweep",
+   "confidence": 0.918
+  },
+  {
+   "message": "按 60 N 皮带载荷做物理寻优，挠度不超过 0.06 mm，质量越轻越好",
+   "truth": "cad-optimize",
+   "pred": "cad-optimize",
+   "confidence": 0.827
+  },
+  {
+   "message": "生成带遮挡的 Blender 工作单元，占地不超过 10 平方米，包络半径 1.2 m",
+   "truth": "scene-review",
+   "pred": "scene-review",
+   "confidence": 0.967
+  },
+  {
+   "message": "把相机挪开一点，重新检查目标是否可见",
+   "truth": "scene-review",
+   "pred": "scene-review",
+   "confidence": 0.842
+  },
+  {
+   "message": "设计 6 工位 CNC 产线：节距 4.5 m，围栏 4.2 m，通道 2.4 m，相机 2.8 m，3 台 AGV",
+   "truth": "plant-layout",
+   "pred": "plant-layout",
+   "confidence": 0.955
+  },
+  {
+   "message": "产线通道改为 2.8 m，厂房不超过 650 m²",
+   "truth": "plant-layout",
+   "pred": "plant-layout",
+   "confidence": 0.952
+  },
+  {
+   "message": "取放工作单元关节速度提到 75%，节拍不超过 5 秒，看会不会撞围栏",
+   "truth": "robot-cell",
+   "pred": "robot-cell",
+   "confidence": 0.892
+  },
+  {
+   "message": "MuJoCo 里把围栏退回 0.30 m，10 个种子复测",
+   "truth": "robot-cell",
+   "pred": "robot-cell",
+   "confidence": 0.88
+  },
+  {
+   "message": "评审工厂维护与能源方案，EV 充电不低于 70%，车间不超过 25 °C",
+   "truth": "factory",
+   "pred": "factory",
+   "confidence": 0.966
+  },
+  {
+   "message": "工厂能源评审，EV 充电不低于 80%",
+   "truth": "factory",
+   "pred": "factory",
+   "confidence": 0.885
+  },
+  {
+   "message": "Ahmed 车身后倾角改成 12.5°，看阻力系数",
+   "truth": "aero-body",
+   "pred": "aero-body",
+   "confidence": 0.921
+  },
+  {
+   "message": "用 OpenFOAM 跑一下低阻尾部方案",
+   "truth": "aero-body",
+   "pred": "aero-body",
+   "confidence": 0.856
+  },
+  {
+   "message": "复核 SmolVLA 相机偏移那段记录的成功率",
+   "truth": "robot-review",
+   "pred": "robot-review",
+   "confidence": 0.89
+  },
+  {
+   "message": "新建一个任务：电机支架减重 20%",
+   "truth": "create-project",
+   "pred": "create-project",
+   "confidence": 0.766
+  },
+  {
+   "message": "把最低成功率要求改成 0.7",
+   "truth": "update-requirements",
+   "pred": "update-requirements",
+   "confidence": 0.745
+  },
+  {
+   "message": "请用模型提案帮我写诗",
+   "truth": "out-of-scope",
+   "pred": "out-of-scope",
+   "confidence": 0.88
+  },
+  {
+   "message": "今天天气怎么样",
+   "truth": "out-of-scope",
+   "pred": "out-of-scope",
+   "confidence": 0.966
+  },
+  {
+   "message": "帮我订一张去上海的机票",
+   "truth": "out-of-scope",
+   "pred": "out-of-scope",
+   "confidence": 0.966
+  }
+ ],
+ "realResults": [
+  {
+   "truth": "cad-review",
+   "pred": "cad-sweep",
+   "confidence": 0.287
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.287
+  },
+  {
+   "truth": "robot-review",
+   "pred": "out-of-scope",
+   "confidence": 0.406
+  },
+  {
+   "truth": "scene-review",
+   "pred": "scene-review",
+   "confidence": 0.967
+  },
+  {
+   "truth": "plant-layout",
+   "pred": "plant-layout",
+   "confidence": 0.892
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.585
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.382
+  },
+  {
+   "truth": "cad-code",
+   "pred": "cad-code",
+   "confidence": 0.759
+  },
+  {
+   "truth": "cad-review",
+   "pred": "update-requirements",
+   "confidence": 0.301
+  },
+  {
+   "truth": "factory",
+   "pred": "factory",
+   "confidence": 0.974
+  },
+  {
+   "truth": "scene-review",
+   "pred": "scene-review",
+   "confidence": 0.682
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.42
+  },
+  {
+   "truth": "robot-cell",
+   "pred": "robot-cell",
+   "confidence": 0.804
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-review",
+   "confidence": 0.378
+  },
+  {
+   "truth": "cad-code",
+   "pred": "cad-code",
+   "confidence": 0.856
+  },
+  {
+   "truth": "cad-review",
+   "pred": "cad-code",
+   "confidence": 0.286
+  },
+  {
+   "truth": "cad-code",
+   "pred": "cad-code",
+   "confidence": 0.624
+  },
+  {
+   "truth": "cad-review",
+   "pred": "out-of-scope",
+   "confidence": 0.555
+  }
+ ],
+ "scope": "Small local sample; suggestion quality only. Not used for any verdict."
+}

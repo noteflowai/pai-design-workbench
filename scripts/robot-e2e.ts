@@ -47,6 +47,7 @@ try {
   f = await req<Feedback>("PATCH", `/api/feedback/${f.id}`, { expectedRevision: f.revision, status: "closed", reason: "Guard clearance restored; simulation only" });
   // CAD → MJCF/USD: mount the accepted CAD part of this project on the gripper; mass comes from the exact mesh volume.
   let toolReport: unknown = "skipped: CadQuery not configured";
+  let robotsReport: unknown = "skipped: Strands Robots not configured (tools/setup_robots.py)";
   if (config.cadquery) {
     const cad = await req<CadReview>("POST", `/api/projects/${project.id}/cad`, { requestId: randomUUID(), projectRevision: 1, variant: "reference", requirements: DEFAULT_CAD_REQUIREMENTS });
     assert.equal(cad.verdict, "accepted-cad-part", cad.error ?? "CAD review failed");
@@ -67,6 +68,16 @@ try {
       assert.ok("passed" in n && n.passed, JSON.stringify(n));
       assert.ok(n.fkPositionM < 1e-4 && mounted.files["candidate/newton.json"]);
     }
+    if (config.robotsPython && config.robotsAssets) {
+      // Strands Robots loads the official UR5e (pinned Menagerie, offline) and compares it with the simulated arm. A
+      // conformance record: kinematics must agree; the known link-mass difference is reported, not hidden.
+      const r = mounted.robots!;
+      assert.ok("passed" in r, JSON.stringify(r));
+      const check = (id: string) => r.checks.find(c => c.id === id)!;
+      for (const id of ["joints", "joint-limits", "fk-flange", "reach"]) assert.ok(check(id).passed, `${id}: ${JSON.stringify(check(id))}`);
+      assert.ok(mounted.files["candidate/robots.json"] && mounted.receipts.some(x => x.adapter === "strands-robots" && x.exitCode === 0));
+      robotsReport = { strandsRobots: r.strandsRobots, menagerieCommit: r.menagerieCommit, checks: r.checks.map(c => ({ id: c.id, passed: c.passed, observed: c.observed })) };
+    }
     const stl = await app.inject({ url: `/api/scenes/${mounted.id}/files/candidate/tool.stl`, headers: { host } });
     assert.equal(stl.statusCode, 200);
     const refused = await app.inject({ method: "POST", url: `/api/projects/${project.id}/scenes`, headers: { host, "content-type": "application/json" },
@@ -75,7 +86,7 @@ try {
     const wrist = (s: SceneReview) => (s.candidate as unknown as { checks: { id: string; observed: number }[] }).checks.find(c => c.id === "cycle-time")!.observed;
     toolReport = { cadReview: cad.id, brepMassG: t.brepMassG, mujocoMassG: t.mujocoMassG, payloadKg: t.payloadKg, verdict: mounted.verdict, cycle: wrist(mounted), usd: mounted.usd };
   }
-  const report = { schema: "pai-robot-e2e-1", checkedAt: new Date().toISOString(), result: "passed", engine: (first.candidate as { engine?: string }).engine,
+  const report = { schema: "pai-robot-e2e-1", strandsRobots: robotsReport, checkedAt: new Date().toISOString(), result: "passed", engine: (first.candidate as { engine?: string }).engine,
     baseline: { cycle: (first.baseline!.checks.find(c => c.id === "cycle-time") as unknown as { observed: number }).observed, verdictOfBaselineChecks: first.baseline!.checks.map(c => `${c.id}=${c.passed}`) },
     rejected: { cycle: observed(first, "cycle-time").observed, collisionFreeSeeds: observed(first, "collision-free").observed, blocking: first.diff!.blocking_changes },
     fixed: { cycle: observed(fixed, "cycle-time").observed, successRate: observed(fixed, "success-rate").observed, verdict: fixed.verdict }, feedback: f.status, tool: toolReport };

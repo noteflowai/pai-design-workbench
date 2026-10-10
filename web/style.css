@@ -784,3 +784,9 @@ button.switcher-trigger:hover:not(:disabled) { background: var(--sunken); border
 .sw-meta code { font-size: 11px; }
 .sw-state.s-released { color: var(--ok); font-weight: 600; } .sw-state.s-in-review { color: var(--warn); font-weight: 600; }
 @media (max-width: 760px) { .switcher { max-width: none; } .switcher-pop { position: fixed; left: 12px; right: 12px; top: 96px; width: auto; } }
+.decider-note { border-left: 3px solid var(--brand); background: var(--brand-soft); padding: 6px 10px; border-radius: var(--radius-sm); color: var(--ink); }
+.decider-note small { color: var(--ink-3); }
+.crosscheck { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin: 10px 0; }
+.crosscheck h4 { margin: 0 0 4px; font-size: 14px; }
+.crosscheck ul { list-style: none; margin: 6px 0 10px; padding: 0; display: grid; gap: 3px; font-size: 13px; }
+.crosscheck li.ok { color: var(--ok); } .crosscheck li.bad { color: var(--bad); font-weight: 600; }

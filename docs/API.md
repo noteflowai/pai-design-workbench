@@ -96,3 +96,18 @@ Workspace routes behind the same authentication as the browser (ALB + Cognito ho
 | `GET /api/v1/workflow-runs[/:id]` · `GET /api/v1/workflow-runs/:id/data?node=&name=` | Runs with per-node state, receipts and `pai-usage-1`; digest-checked outputs |
 | `POST /api/v1/workflow-runs/:id/decisions` `{node, approve, reason}` · `POST /api/v1/workflow-runs/:id/resume` | Approval; resume after a restart (effect-free nodes only) |
 
+## Ontology and engines (v1)
+
+The platform's semantic model (`pai-ontology-1`, [ADR 0002](adr/0002-physical-ai-engine-platform.md)): object types (one per stored record kind), link types (the records' own reference fields) and action types (exactly one per write route, with the route's Zod schema as JSON Schema). Same authentication as the browser; agents read them under `/api/agent/v1/...` with the `pai-agent/read` scope. Writes stay behind the action routes above.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/v1/ontology` | Object, link and action types with parameter JSON Schemas; `digest` and `ETag` identify the exact model |
+| `GET /api/v1/ontology.ttl` | The same model as OWL 2 classes / object properties and SHACL node shapes (Turtle); classes are PROV-O subclasses |
+| `GET /api/v1/engines` | Native engines with version, availability, where they run, and authority (`verdict`, `conformance` or `suggestion`) |
+| `GET /api/v1/objects` | Stored object types with counts |
+| `GET /api/v1/objects/:type?limit=50&after=<id>` | Paged summaries (id, title, createdAt, state, verdict) |
+| `GET /api/v1/objects/:type/:id` | The object and its outgoing and incoming links (polymorphic links resolved by their discriminator) |
+
+`Engine` is computed from configuration, not stored (`/api/v1/objects/Engine` → 400). Strands Decider suggestions appear on assistant plans as `suggestion` (`authority: "none"`, confidence and threshold recorded); they are never executed.
+

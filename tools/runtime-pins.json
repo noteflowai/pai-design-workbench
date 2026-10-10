@@ -57,5 +57,25 @@
     "sha256": "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434",
     "license": "LGPL-2.1-or-later (separate process)",
     "note": "CAM lane (native/cam_part.py via ocp-freecad-cam 2.0.2, which supports FreeCAD 1.1.x); lock native/cam-requirements.txt."
+  },
+  "strandsRobots": {
+    "version": "0.5.3",
+    "license": "Apache-2.0",
+    "lock": "native/robots-requirements.txt",
+    "menagerie": {
+      "repository": "https://github.com/google-deepmind/mujoco_menagerie",
+      "commit": "bf756430b615819654b640f321c71ba5c3ebeef8",
+      "license": "per-model (UR5e: BSD-3-Clause)"
+    },
+    "note": "Simulation only: mode='real', mesh and remote code are refused; assets are cloned once at setup at this commit and read offline."
+  },
+  "strandsDecider": {
+    "package": "strands-decider==0.1.0",
+    "model": "StrandsAgents/strands-decider-2B-qwen3.5-v1-2610",
+    "modelRevision": "216d1ccb46a9e9b036eb9187b248db98480f77d4",
+    "base": "Qwen/Qwen3.5-2B-Base",
+    "baseRevision": "b1485b2fa6dfa1287294f269f5fb618e03d52d7c",
+    "license": "Apache-2.0",
+    "note": "Served by its own `strands-decider serve`; the workbench calls PAI_DECIDER_URL (loopback/private). Suggestions only, never verdicts."
   }
 }
