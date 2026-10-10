@@ -6,6 +6,7 @@
  * runs, decide its own approval nodes, usage. The tenant is resolved by the server hook from the verified client id; a
  * browser request to a tenant route has no tenant and is refused.
  */
+import type { RecordKind } from "./ontology/kinds.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { Config } from "./config.js";
@@ -14,7 +15,7 @@ import type { Store } from "./store.js";
 import { decideRun, runData, startRun, type WorkflowRun } from "./artifacts/workflows.js";
 import { catalog, checkQuota, offeredWorkflow, offerWorkflow, revokeOffering, TenantRunRequest, tenantRun, tenantUsage, type Offering, type Tenant } from "./tenants.js";
 
-type Execute = <T extends { id: string; state: string }>(reply: FastifyReply, input: unknown, kind: string, route: string, execute: () => Promise<T>) => Promise<T>;
+type Execute = <T extends { id: string; state: string }>(reply: FastifyReply, input: unknown, kind: RecordKind, route: string, execute: () => Promise<T>) => Promise<T>;
 const RunId = z.object({ id: z.string().uuid() });
 const DataQuery = z.object({ node: z.string().regex(/^[a-z][a-z0-9-]{0,30}$/).optional(), name: z.string().regex(/^[a-z][A-Za-z0-9]{0,30}$/) }).strict();
 const UsageQuery = z.object({ since: z.string().regex(/^\d{4}-\d\d-\d\d(T[0-9:.]{2,12}Z)?$/).optional() }).strict();

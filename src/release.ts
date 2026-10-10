@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RecordKind } from "./ontology/kinds.js";
 import { z } from "zod";
 import { Id, type Feedback, type Project } from "./contracts.js";
 import { canonical, DomainError, sha256 } from "./domain.js";
@@ -44,7 +45,7 @@ const SCOPE: Record<EvidenceKind, string> = {
   "aero-body": "稳态 RANS（k-ω SST）两级网格：设计比较用的阻力系数，不是风洞实测",
 };
 type Run = { id: string; projectId: string; projectRevision: number; state: string; verdict?: string; decision?: { verdict: string } };
-export const KIND_STORE: Record<EvidenceKind, string> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review", "aero-body": "aero-review" };
+export const KIND_STORE: Record<EvidenceKind, RecordKind> = { "robot-review": "review", "blender-scene": "scene-review", "cad-part": "cad-review", "factory-twin": "factory-review", "aero-body": "aero-review" };
 
 export function admission(store: Store, project: Project, lifecycle: Lifecycle, kind: EvidenceKind, runId: string): AdmissionCheck[] {
   const run = store.get<Run>(KIND_STORE[kind], runId);

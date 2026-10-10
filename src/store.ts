@@ -1,3 +1,4 @@
+import type { RecordKind } from "./ontology/kinds.js";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
@@ -18,21 +19,21 @@ export class Store {
         request_id TEXT PRIMARY KEY, digest TEXT NOT NULL, run_id TEXT NOT NULL);
     `);
   }
-  get<T>(kind: string, id: string): T | undefined {
+  get<T>(kind: RecordKind, id: string): T | undefined {
     const row = this.db.prepare("SELECT body FROM documents WHERE kind=? AND id=?").get(kind, id) as { body: string } | undefined;
     return row ? JSON.parse(row.body) as T : undefined;
   }
-  list<T>(kind: string): T[] {
+  list<T>(kind: RecordKind): T[] {
     return (this.db.prepare("SELECT body FROM documents WHERE kind=? ORDER BY rowid").all(kind) as { body: string }[])
       .map(row => JSON.parse(row.body) as T);
   }
-  count(kind: string): number {
+  count(kind: RecordKind): number {
     return (this.db.prepare("SELECT count(*) AS n FROM documents WHERE kind=?").get(kind) as { n: number }).n;
   }
-  insert(kind: string, value: { id: string; revision?: number }): void {
+  insert(kind: RecordKind, value: { id: string; revision?: number }): void {
     this.db.prepare("INSERT INTO documents VALUES(?,?,?,?)").run(kind, value.id, value.revision ?? 1, JSON.stringify(value));
   }
-  put(kind: string, value: { id: string; revision?: number }, expectedRevision?: number): void {
+  put(kind: RecordKind, value: { id: string; revision?: number }, expectedRevision?: number): void {
     const revision = value.revision ?? 1;
     const result = expectedRevision === undefined
       ? this.db.prepare("UPDATE documents SET revision=?,body=? WHERE kind=? AND id=?").run(revision, JSON.stringify(value), kind, value.id)
@@ -40,7 +41,7 @@ export class Store {
         .run(revision, JSON.stringify(value), kind, value.id, expectedRevision);
     if (result.changes !== 1) throw new DomainError("REVISION_CONFLICT", "Record changed; reload before editing");
   }
-  claim(requestId: string, digest: string, record: { id: string }, kind = "review"): string {
+  claim(requestId: string, digest: string, record: { id: string }, kind: RecordKind = "review"): string {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const existing = this.db.prepare("SELECT digest,run_id FROM requests WHERE request_id=?").get(requestId) as { digest: string; run_id: string } | undefined;
@@ -58,7 +59,7 @@ export class Store {
     return row?.run_id;
   }
   interruptPending(): void {
-    for (const kind of ["review", "proposal", "scene-review", "cad-review", "cad-sweep", "cad-optimize", "assistant-plan"]) for (const record of this.list<{ id: string; state: string; error?: string }>(kind)) {
+    for (const kind of <RecordKind[]>["review", "proposal", "scene-review", "cad-review", "cad-sweep", "cad-optimize", "assistant-plan"]) for (const record of this.list<{ id: string; state: string; error?: string }>(kind)) {
       if (record.state === "running") {
         record.state = "interrupted"; record.error = "Process restarted. Retained identity; no automatic command replay.";
         this.put(kind, record);

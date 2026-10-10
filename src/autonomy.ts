@@ -10,6 +10,7 @@
  *   - each execution is recorded on the plan as a confirmation `by: grant:<id>` and on the grant as a run.
  * Verdicts still come only from the native solvers; releases still need the release gate and a maintainer.
  */
+import type { RecordKind } from "./ontology/kinds.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Config } from "./config.js";
@@ -26,14 +27,14 @@ import { reviewAero } from "./aero.js";
 /** Native lanes a grant may cover (each one only measures; none changes requirements or decides releases). */
 export const AUTONOMOUS_TOOLS = ["cad-review", "cad-code", "cad-optimize", "robot-cell", "plant-layout", "aero-body"] as const;
 export type AutonomousTool = (typeof AUTONOMOUS_TOOLS)[number];
-const KIND: Record<AutonomousTool, string> = { "cad-review": "cad-review", "cad-code": "cad-review", "cad-optimize": "cad-optimize",
+const KIND: Record<AutonomousTool, RecordKind> = { "cad-review": "cad-review", "cad-code": "cad-review", "cad-optimize": "cad-optimize",
   "robot-cell": "scene-review", "plant-layout": "scene-review", "aero-body": "aero-review" };
 export const CreateGrant = z.object({
   tools: z.array(z.enum(AUTONOMOUS_TOOLS)).min(1).max(AUTONOMOUS_TOOLS.length),
   maxRuns: z.number().int().min(1).max(20), hours: z.number().min(0.25).max(72).default(8),
   note: z.string().trim().max(500).optional(),
 }).strict();
-export interface GrantRun { planId: string; stepId: string; tool: AutonomousTool; recordKind: string; recordId: string; at: string; by: string }
+export interface GrantRun { planId: string; stepId: string; tool: AutonomousTool; recordKind: RecordKind; recordId: string; at: string; by: string }
 export interface AutonomyGrant {
   id: string; projectId: string; revision: number; tools: AutonomousTool[]; maxRuns: number; runs: GrantRun[];
   createdAt: string; expiresAt: string; createdBy: string; note?: string; revokedAt?: string; revokedBy?: string;
@@ -64,7 +65,7 @@ type Deps = { store: Store; config: Config; live?: LiveBus; project: (id: string
  * Execute one plan step under a grant. Returns once the native record exists (the run continues in the background,
  * exactly like a hosted 202), so callers poll the record. Throws, with nothing started, on any rule violation.
  */
-export async function runUnderGrant(deps: Deps, planId: string, input: unknown, by: string): Promise<{ recordKind: string; recordId: string; state: string; grant: { id: string; runsLeft: number } }> {
+export async function runUnderGrant(deps: Deps, planId: string, input: unknown, by: string): Promise<{ recordKind: RecordKind; recordId: string; state: string; grant: { id: string; runsLeft: number } }> {
   const { store } = deps;
   const req = RunUnderGrant.parse(input);
   const grant = store.get<AutonomyGrant>("autonomy-grant", req.grantId);

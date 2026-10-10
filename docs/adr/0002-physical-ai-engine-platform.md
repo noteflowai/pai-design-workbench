@@ -73,3 +73,4 @@ PAI：领域产品、本体、引擎适配器、核验器与界面。noteflow-au
 
 仓库从 `noteflowai/pai-design-workbench` 改为 `noteflowai/pai-engine`。GitHub 对旧地址的 git、网页和 raw 链接自动跳转（已实测）。**有意保留**的内部标识：npm 包名、CDK 栈 `PAIDesignWorkbench`、Cognito 用户池名、资源标签、MCP 服务名、systemd 服务名和本地账本路径。改这些会替换或断开在用的云资源与已签名记录，用户看不到它们，所以不改。
 
+后续：本体从"旁边"移到核心，见 [ADR 0003](0003-ontology-kernel-plugins.md)。

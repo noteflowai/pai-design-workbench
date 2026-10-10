@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { RecordKind } from "../src/ontology/kinds.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ const plan = (id: string, extra: object) => ({ id, requestId: id, projectId: "p"
 test("the track record counts only what native records decided about executed AI proposals", async () => {
   const dir = await mkdtemp(join(tmpdir(), "pai-track-"));
   const store = new Store(join(dir, "s.sqlite"));
-  const put = (kind: string, value: object) => store.insert(kind, value as { id: string });
+  const put = (kind: RecordKind, value: object) => store.insert(kind, value as { id: string });
   try {
     put("cad-review", { id: "c1", projectId: "p", state: "completed", verdict: "accepted-cad-part", request: { variant: "pillow-block", requirements: {} } });
     put("cad-review", { id: "c2", projectId: "p", state: "completed", verdict: "rejected", request: { variant: "parametric", requirements: {} },

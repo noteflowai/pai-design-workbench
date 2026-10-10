@@ -1,4 +1,5 @@
 import Fastify, { type FastifyReply } from "fastify";
+import type { RecordKind } from "./ontology/kinds.js";
 import staticPlugin from "@fastify/static";
 import compress from "@fastify/compress";
 import { constants as zlib } from "node:zlib";
@@ -121,7 +122,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
     return record;
   };
   const executeNative = async <T extends { id: string; state: string }>(
-    reply: FastifyReply, input: unknown, kind: string, route: string, execute: () => Promise<T>,
+    reply: FastifyReply, input: unknown, kind: RecordKind, route: string, execute: () => Promise<T>,
   ) => {
     const requestId = Id.parse((input as Record<string, unknown>)?.requestId);
     const operation = execute();
@@ -159,10 +160,10 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   /** Reads each record kind once per call (read-only); /api/state used to parse every kind again for every project. */
   const snapshotReader = (): Pick<Store, "list" | "get"> => {
     const memo = new Map<string, unknown[]>();
-    return { list: <T>(kind: string) => { if (!memo.has(kind)) memo.set(kind, store.list(kind)); return memo.get(kind) as T[]; }, get: (kind, id) => store.get(kind, id) };
+    return { list: <T>(kind: RecordKind) => { if (!memo.has(kind)) memo.set(kind, store.list(kind)); return memo.get(kind) as T[]; }, get: (kind, id) => store.get(kind, id) };
   };
   const lifecycle = (project: Project, from: Pick<Store, "list"> = store) => {
-    const mine = <T extends { projectId?: string }>(kind: string) => from.list<T>(kind).filter(x => x.projectId === project.id);
+    const mine = <T extends { projectId?: string }>(kind: RecordKind) => from.list<T>(kind).filter(x => x.projectId === project.id);
     const campaigns = mine<Campaign>("campaign"), ids = new Set(campaigns.map(c => c.id));
     const releases = mine<Release>("release");
     const snapshot: LifecycleSnapshot = { project, releases, reviews: mine<Review>("review"), scenes: mine<SceneReview>("scene-review"), cads: mine<CadReview>("cad-review"), aeros: mine<AeroReview>("aero-review"),

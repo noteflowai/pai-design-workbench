@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RecordKind } from "./ontology/kinds.js";
 import { z } from "zod";
 import { CreateProject, Id, ReviewRequest, type Project, type CandidateId } from "./contracts.js";
 import type { Suggestion } from "./decider.js";
@@ -46,9 +47,9 @@ export interface AssistantPlan {
     /** The maintainer's judgment, and how the executor settled each unknown-effect attempt (its ledger, its checks). */
     reconciliation?: { reason: string; at: string; actor: string; settlements?: { attemptId: string; profile: string; state: string; blockers?: string[] }[] };
   };
-  answer?: { text: string; citations: { handle: string; kind: string; id: string; label: string }[] };
+  answer?: { text: string; citations: { handle: string; kind: RecordKind; id: string; label: string }[] };
   finishedAt?: string;
-  confirmations: { planId: string; recordKind: string; recordId: string; at: string; match: "as-proposed" | "edited-before-execution" }[];
+  confirmations: { planId: string; recordKind: RecordKind; recordId: string; at: string; match: "as-proposed" | "edited-before-execution" }[];
 }
 export const PreflightStep = z.object({ planId: z.string().regex(/^p[0-9]{1,2}$/) }).strict();
 export const ConfirmPlan = z.object({
