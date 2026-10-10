@@ -13,6 +13,8 @@ import { CadCodeCheck, Candidate, CreateProject, Id, ReviseProject } from "./con
 import { DomainError, sha256 } from "./domain.js";
 import { buildInfo } from "./build-info.js";
 import { deciderConfigured, suggestLane } from "./decider.js";
+import { tenantOfClient, type Tenant } from "./tenants.js";
+import { tenantRoutes } from "./tenant-routes.js";
 import { makeBundle, verifyBundle } from "./bundle.js";
 import { buildPackage, MAX_PACKAGE_BYTES, PackageSubmission, ReleasePackage, signer, verifySealedPackage } from "./signing.js";
 import { archive, timestamp, type Archive } from "./seal.js";
@@ -67,6 +69,7 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const streams = new Set<() => void>();
   const authenticated = authentication(config), agentAuthenticated = agentAuthentication(config);
   const principals = new WeakMap<object, AgentPrincipal>();
+  const tenantOf = new WeakMap<object, Tenant>();
   const activeJobs = new Set<Promise<unknown>>();
   app.addHook("preClose", async () => { for (const end of [...streams]) end(); await Promise.allSettled([...activeJobs]); });
   app.addHook("onClose", async () => { store.close(); await release(); });
@@ -86,7 +89,14 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
       if (request.headers.origin || request.headers.cookie) return reply.code(403).send({ error: "AGENT_ROUTE_BROWSER" });
       const principal = await agentAuthenticated(request.headers, agent.scope);
       if (!principal) return reply.code(401).send({ error: "AGENT_AUTHENTICATION_REQUIRED" });
-      principals.set(request.raw, principal);
+      // Tenants and workspace agents never cross: a tenant client gets only tenant routes, a workspace agent none of them.
+      // Loopback without a pool names the tenant in a header (local development and tests only).
+      const local = !principal.verified && !config.publicOrigin;
+      const header = request.headers["x-pai-tenant"];
+      const tenant = local ? config.tenants?.find(t => t.id === header) : tenantOfClient(config, principal.clientId);
+      if (agent.scope === "tenant" ? !tenant : Boolean(tenant)) return reply.code(403).send({ error: "TENANT_BOUNDARY" });
+      principals.set(request.raw, { ...principal, scope: agent.scope });
+      if (tenant) tenantOf.set(request.raw, tenant);
       return;
     }
     if (!healthCheck && !await authenticated(request.headers)) return reply.code(401).send({ error: "AUTHENTICATION_REQUIRED" });
@@ -167,6 +177,8 @@ export async function createApp(config: Config, adapters: Adapters = new NativeA
   const actor = (headers: Record<string, unknown>) => config.albAuth && typeof headers["x-amzn-oidc-identity"] === "string"
     ? `cognito:${String(headers["x-amzn-oidc-identity"]).slice(0, 64)}` : "local-maintainer";
   artifactRoutes(app, { store, config, actor, executeNative, track: job => { const t = job.catch(() => undefined); activeJobs.add(t); void t.finally(() => activeJobs.delete(t)); } });
+  tenantRoutes(app, { store, config, actor, executeNative, tenant: raw => tenantOf.get(raw as object),
+    track: job => { const t = job.catch(() => undefined); activeJobs.add(t); void t.finally(() => activeJobs.delete(t)); } });
   ontologyRoutes(app, store, config, JSON.parse(await readFile(join(config.repository, "tools/runtime-pins.json"), "utf8")), raw => Boolean(agentRoute(raw)));
   app.get("/api/projects/:id/ai-track-record", async request => trackRecord(store, workbench.project(paramId(request.params)).id));
   app.get("/api/projects/:id/versions", async request => workbench.versions(paramId(request.params)));

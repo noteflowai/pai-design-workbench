@@ -124,3 +124,13 @@ Codex / Claude 的回答按执行器规则总是"影响未知"。维护者在工
 
 - **Release signing:** each approved release can be downloaded as a signed package (`GET /api/releases/:id/package`). The package contains the evidence record, every native file whose digest is in the record, the release decision, and a manifest signed by the KMS key `alias/pai-workbench/release-signing` (ECC_NIST_P256, ECDSA_SHA_256). The private key never leaves KMS, and the instance role can only call `Sign` and `GetPublicKey`. Verify offline with `npm run verify:package -- package.json key.pem`; the public key comes from `GET /api/signing/public-key`. A package is reported as trusted only when its signing key matches the key you pass in.
 - **Runtime pins:** `tools/runtime-pins.json` records only the executor commit and its archive digest. The Kiro CLI version, the Kiro archive digests and the npm adapters are pinned inside the executor. The installer reads them from there and creates stable `executor` and `kiro` links, so the Dockerfiles and the service unit never name a version. Node comes from the same pins file.
+
+## 邀请租户（ADR 0002 §5）
+
+1. 在 `infra/cdk.context.json` 加 `"tenants": "[{\"id\":\"<租户>\",\"maxConcurrentRuns\":2,\"maxRunsPerDay\":50}]"`，`npm run diff` 应只新增该租户的 Cognito 客户端、密钥和 ALB 规则里的 client id；然后部署并执行 `apply-release`（把输出 `Tenants` 写进 `PAI_TENANTS`）。
+2. 维护者在 `POST /api/v1/offerings` 把一个**全部制品已发布**的流程提供给该租户。
+3. 运维者读取 `TenantSecretArn<租户>` 的密钥，经安全渠道交给租户；租户用 client credentials（scope `pai-agent/tenant`）调用 `/api/agent/v1/tenant/...`。
+4. 结束：撤销提供；从 context 删除租户并部署会删除它的客户端和密钥。
+
+不收费：用量只记录（`pai-usage-1`），没有价格版本。
+

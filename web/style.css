@@ -790,3 +790,5 @@ button.switcher-trigger:hover:not(:disabled) { background: var(--sunken); border
 .crosscheck h4 { margin: 0 0 4px; font-size: 14px; }
 .crosscheck ul { list-style: none; margin: 6px 0 10px; padding: 0; display: grid; gap: 3px; font-size: 13px; }
 .crosscheck li.ok { color: var(--ok); } .crosscheck li.bad { color: var(--bad); font-weight: 600; }
+.offers { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.offers li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

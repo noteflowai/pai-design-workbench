@@ -37,8 +37,7 @@ chown -R pai:pai "$RELEASE"
 cd "$RELEASE"
 runuser -u pai -- python3 tools/setup_node.py
 NODE_VERSION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['node']['version'])" "$PAI_RELEASE/tools/runtime-pins.json")
-# Persistent path, not through the release's .state symlink: the unit outlives every release directory.
-NODE_BIN="/var/lib/pai/data/state/tools/node-v$NODE_VERSION-linux-x64/bin"
+NODE_BIN="$RELEASE/.state/tools/node-v$NODE_VERSION-linux-x64/bin"
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm ci
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm run setup:demo
 runuser -u pai -- env PATH="$NODE_BIN:$PATH" npm run setup:native

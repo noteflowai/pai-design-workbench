@@ -69,13 +69,28 @@ if [ -n "${PAI_SIGNING_KMS_KEY_ID:-}" ]; then
   printf 'PAI_SIGNING_KMS_KEY_ID=%s\n' "$PAI_SIGNING_KMS_KEY_ID" >> /etc/pai/runtime.env
 fi
 # Machine-agent API settings come from stack outputs; keep the file's other lines unchanged.
+# Invite-only tenants from the stack output (JSON; an empty list means none); validated again by the workbench at start.
+if [ -n "${PAI_TENANTS+x}" ]; then
+  # Single-quoted so both systemd EnvironmentFile and `. runtime.env` (hosted e2e) keep the JSON intact.
+  case "$PAI_TENANTS" in *"'"*) echo "PAI_TENANTS must not contain single quotes" >&2; exit 1 ;; esac
+  sed -i '/^PAI_TENANTS=/d' /etc/pai/runtime.env
+  if [ -n "$PAI_TENANTS" ] && [ "$PAI_TENANTS" != "[]" ]; then printf "PAI_TENANTS='%s'\n" "$PAI_TENANTS" >> /etc/pai/runtime.env; fi
+fi
 if [ -n "${PAI_AGENT_USER_POOL_ID:-}" ] && [ -n "${PAI_AGENT_CLIENT_ID:-}" ]; then
   sed -i '/^PAI_AGENT_USER_POOL_ID=/d;/^PAI_AGENT_CLIENT_IDS=/d' /etc/pai/runtime.env
   printf 'PAI_AGENT_USER_POOL_ID=%s\nPAI_AGENT_CLIENT_IDS=%s\n' "$PAI_AGENT_USER_POOL_ID" "$PAI_AGENT_CLIENT_ID" >> /etc/pai/runtime.env
 fi
-# The service must not start node from inside a release directory (they are pruned below).
-if systemctl cat pai-workbench.service | grep -E '^ExecStart=/opt/pai/releases/' >/dev/null && [ ! -f /etc/systemd/system/pai-workbench.service.d/10-node-path.conf ]; then
-  echo "pai-workbench.service starts node from a release directory; add the node-path drop-in before pruning" >&2; exit 1
+# The service runs node from persistent state, never from a release directory (those are pruned below). bootstrap.sh is
+# part of the instance's user data, so changing it would replace the instance; this drop-in fixes the unit instead.
+DROPIN=/etc/systemd/system/pai-workbench.service.d/10-node-path.conf
+WANT="[Service]
+Environment=PATH=$NODE_BIN:/usr/local/bin:/usr/bin:/bin
+ExecStart=
+ExecStart=$NODE_BIN/node --env-file-if-exists=.state/demo.env dist/src/server.js"
+if [ "$(cat "$DROPIN" 2>/dev/null)" != "$WANT" ]; then
+  install -d /etc/systemd/system/pai-workbench.service.d
+  printf '%s\n' "$WANT" > "$DROPIN"
+  systemctl daemon-reload
 fi
 PREVIOUS=$(readlink -f /opt/pai/current)
 systemctl stop pai-workbench.service

@@ -49,7 +49,7 @@ elif args.action in ("send", "apply-release"):
         variables = {"PAI_RELEASE_HASH": outputs["ReleaseHash"], "PAI_ASSET_BUCKET": outputs["ReleaseBucket"],
                      "PAI_ASSET_KEY": outputs["ReleaseKey"], "PAI_EXECUTOR_KEY": outputs.get("ExecutorKey", ""),
                      "PAI_AI_KEYS_ARN": outputs.get("AiKeysArn", ""),
-                     "PAI_AGENT_USER_POOL_ID": outputs.get("AgentUserPoolId", ""), "PAI_AGENT_CLIENT_ID": outputs.get("AgentClientId", ""),
+                     "PAI_AGENT_USER_POOL_ID": outputs.get("AgentUserPoolId", ""), "PAI_AGENT_CLIENT_ID": outputs.get("AgentClientId", ""), "PAI_TENANTS": outputs.get("Tenants", ""),
                      "PAI_SIGNING_KMS_KEY_ID": outputs.get("SigningKeyId", ""),
                      # Archiving writes COMPLIANCE-locked objects that nobody can delete early: opt in explicitly.
                      "PAI_PACKAGE_ARCHIVE_BUCKET": outputs.get("PackageArchiveBucket", "") if os.environ.get("PAI_ENABLE_PACKAGE_ARCHIVE") == "1" else "",

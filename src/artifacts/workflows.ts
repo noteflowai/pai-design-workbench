@@ -128,7 +128,8 @@ export function saveWorkflow(store: Store, input: unknown, actor: string): Workf
 export const StartRun = z.object({ requestId: z.string().uuid(), workflow: z.string(), inputs: z.record(z.string(), z.unknown()) }).strict();
 type Deps = { store: Store; config: Config };
 
-export async function startRun(d: Deps, input: unknown, actor: string): Promise<WorkflowRun> {
+/** `tenant` defaults to the maintainer workspace; tenant runs come only through src/tenants.ts. */
+export async function startRun(d: Deps, input: unknown, actor: string, tenant = "workspace"): Promise<WorkflowRun> {
   const req = StartRun.parse(input);
   const w = d.store.get<Workflow>("workflow", req.workflow);
   if (!w) throw new DomainError("NOT_FOUND", `Workflow ${req.workflow} not found`, 404);
@@ -139,12 +140,18 @@ export async function startRun(d: Deps, input: unknown, actor: string): Promise<
     if (problems.length) throw new DomainError("INVALID_INPUT", `${name} (${spec.schema}): ${problems.join("; ")}`, 422);
   }
   for (const extra of Object.keys(req.inputs)) if (!w.definition.inputs[extra]) throw new DomainError("INVALID_INPUT", `Workflow ${w.id} has no input ${extra}`, 422);
-  const run: WorkflowRun = { id: randomUUID(), revision: 1, tenant: w.tenant, requestId: req.requestId, workflowId: w.id, workflowDigest: w.digest,
+  const run: WorkflowRun = { id: randomUUID(), revision: 1, tenant, requestId: req.requestId, workflowId: w.id, workflowDigest: w.digest,
     inputDigest: sha256(JSON.stringify(req.inputs)), state: "running", nodes: Object.fromEntries(order.map(id => [id, { state: "pending" as NodeState }])),
     artifacts: Object.fromEntries(Object.values(artifacts).map(a => [a.id, a.digest])),
     createdAt: new Date().toISOString(), createdBy: actor };
-  const claimed = d.store.claim(req.requestId, sha256(canonical({ kind: "workflow-run", workflow: w.id, inputs: req.inputs })), run, "workflow-run");
-  if (claimed !== run.id) return d.store.get<WorkflowRun>("workflow-run", claimed)!;
+  // The tenant is part of the request identity: reusing another tenant's requestId is a conflict, never its run.
+  const identity = tenant === "workspace" ? { kind: "workflow-run", workflow: w.id, inputs: req.inputs } : { kind: "workflow-run", tenant, workflow: w.id, inputs: req.inputs };
+  const claimed = d.store.claim(req.requestId, sha256(canonical(identity)), run, "workflow-run");
+  if (claimed !== run.id) {
+    const existing = d.store.get<WorkflowRun>("workflow-run", claimed)!;
+    if (existing.tenant !== tenant) throw new DomainError("REQUEST_CONFLICT", "Request identity cannot be reused for different inputs");
+    return existing;
+  }
   await writeData(d.config, run.id, "input", req.inputs);
   return advance(d, run.id);
 }

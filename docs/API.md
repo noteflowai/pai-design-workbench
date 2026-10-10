@@ -111,3 +111,20 @@ The platform's semantic model (`pai-ontology-1`, [ADR 0002](adr/0002-physical-ai
 
 `Engine` is computed from configuration, not stored (`/api/v1/objects/Engine` → 400). Strands Decider suggestions appear on assistant plans as `suggestion` (`authority: "none"`, confidence and threshold recorded); they are never executed.
 
+## Tenants (v1, invite-only)
+
+A tenant is an OAuth client-credentials app client with the single scope `pai-agent/tenant` (created per tenant by the stack from the deployment context `tenants`). It reaches only these routes under `/api/agent`; workspace agent scopes never reach them and the tenant scope reaches nothing else.
+
+| Route (tenant) | Purpose |
+|---|---|
+| `GET /api/agent/v1/tenant/catalog` | Workflows offered to this tenant (all artifacts released), with inputs and quotas |
+| `POST /api/agent/v1/tenant/runs` `{requestId, workflow, inputs}` | Start a run. Quotas are checked first (429 `QUOTA_CONCURRENT` / `QUOTA_DAILY`, no record); a repeated `requestId` returns the same run; another tenant's `requestId` conflicts (409) |
+| `GET /api/agent/v1/tenant/runs` · `/runs/:id` · `/runs/:id/data?node=&name=` | Own runs and outputs only (others are 404) |
+| `POST /api/agent/v1/tenant/runs/:id/decisions` `{node, approve, reason}` | Decide an approval node of an own run |
+| `GET /api/agent/v1/tenant/usage?since=` | Summed `pai-usage-1`; `priceVersion: null`, `billed: false` |
+
+| Route (maintainer) | Purpose |
+|---|---|
+| `GET /api/v1/tenants` | Configured tenants, quotas and usage (no client ids) |
+| `GET /api/v1/offerings` · `POST /api/v1/offerings` `{workflow, tenants, reason}` · `POST /api/v1/offerings/:id/revoke` `{reason}` | Offer a workflow (at its digest) to tenants; revoke |
+

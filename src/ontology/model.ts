@@ -29,6 +29,7 @@ import { KIND_STORE, ReleaseDecision, ReleaseRequest } from "../release.js";
 import { CreateArtifact, Transition } from "../artifacts/registry.js";
 import { PackageSubmission } from "../signing.js";
 import { Bundle } from "../bundle.js";
+import { OfferWorkflow, RevokeOffering, TenantRunRequest } from "../tenants.js";
 import { Decision as RunDecision, StartRun, WorkflowDefinition } from "../artifacts/workflows.js";
 
 export const ONTOLOGY_SCHEMA = "pai-ontology-1";
@@ -56,7 +57,7 @@ export interface ActionType {
   id: string; label: string; method: "POST" | "PATCH"; route: string;
   /** Object types written (empty for verify-only actions). */ writes: string[]; effect: Effect;
   /** Who may submit it: a signed-in maintainer, an agent with a scope, or autonomy within a grant. */
-  submitters: ("maintainer" | "agent:propose" | "agent:run" | "agent:read")[];
+  submitters: ("maintainer" | "agent:propose" | "agent:run" | "agent:read" | "tenant")[];
   /** Starts native tools or a model; such runs are claimed by requestId and never replayed automatically. */
   native?: boolean;
   /** Parameters: the route's own input schema. */ parameters?: z.ZodType;
@@ -90,6 +91,7 @@ export const OBJECT_TYPES: ObjectType[] = [
   T("ArtifactFile", "artifact-file", "制品文件", "Entity", "id", "A file of an artifact version, identified by digest.", ["sha256"], true),
   T("Workflow", "workflow", "流程", "Plan", "id", "Typed JSON business process over exact artifact versions (pai-workflow-1).", ["tenant"]),
   T("WorkflowRun", "workflow-run", "流程运行", "Activity", "id", "One run: per-node outputs, receipts and pai-usage-1; no automatic retry.", ["workflowId", "state", "tenant"]),
+  T("Offering", "offering", "对外提供", "Entity", "workflowId", "A maintainer's offer of one workflow (at its digest) to invite-only tenants; revocable.", ["workflowId", "workflowDigest", "tenants", "state", "createdAt"]),
   T("Engine", null, "原生引擎", "Agent", "name", "A native solver or model the platform runs (computed from configuration and pins; not stored).", ["name", "version", "available"]),
 ];
 
@@ -110,6 +112,7 @@ export const LINK_TYPES: LinkType[] = [
   L("AutopilotRun.grant", "AutopilotRun", "grantId", "AutonomyGrant", "wasAssociatedWith"),
   L("ReleaseSeal.release", "ReleaseSeal", "releaseId", "Release", "wasDerivedFrom"),
   L("WorkflowRun.workflow", "WorkflowRun", "workflowId", "Workflow", "used"),
+  L("Offering.workflow", "Offering", "workflowId", "Workflow", "used"),
 ];
 
 const A = (id: string, label: string, method: ActionType["method"], route: string, writes: string[], effect: Effect,
@@ -159,6 +162,10 @@ export const ACTION_TYPES: ActionType[] = [
   A("saveWorkflow", "保存流程", "POST", "/api/v1/workflows", ["Workflow"], "create", M, WorkflowDefinition),
   A("startWorkflowRun", "运行流程", "POST", "/api/v1/workflow-runs", ["WorkflowRun"], "execute-native", M, StartRun, true),
   A("decideWorkflowStep", "人工确认节点", "POST", "/api/v1/workflow-runs/:id/decisions", ["WorkflowRun"], "execute-native", M, RunDecision, true),
+  A("offerWorkflow", "向租户提供流程", "POST", "/api/v1/offerings", ["Offering"], "create", M, OfferWorkflow),
+  A("revokeOffering", "撤销对外提供", "POST", "/api/v1/offerings/:id/revoke", ["Offering"], "transition", M, RevokeOffering),
+  A("startTenantRun", "租户运行流程", "POST", "/api/v1/tenant/runs", ["WorkflowRun"], "execute-native", ["tenant"], TenantRunRequest, true),
+  A("decideTenantRunStep", "租户确认节点", "POST", "/api/v1/tenant/runs/:id/decisions", ["WorkflowRun"], "execute-native", ["tenant"], RunDecision, true),
   A("resumeWorkflowRun", "恢复流程", "POST", "/api/v1/workflow-runs/:id/resume", ["WorkflowRun"], "execute-native", M, undefined, true),
 ];
 
